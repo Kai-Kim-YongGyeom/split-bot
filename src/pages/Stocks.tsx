@@ -20,8 +20,8 @@ function StockModal({
     code: initialData?.code || '',
     name: initialData?.name || '',
     buy_amount: initialData?.buy_amount || 100000,
-    split_rates: initialData?.split_rates || [5, 5, 5, 5, 5],
-    target_rates: initialData?.target_rates || [5, 5, 5, 5, 5],
+    split_rates: initialData?.split_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+    target_rates: initialData?.target_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
   });
 
   if (!isOpen) return null;
@@ -71,46 +71,88 @@ function StockModal({
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">물타기 비율 (%)</label>
+            <label className="block text-sm text-gray-400 mb-1">물타기 비율 (%) - 2~10차</label>
             <div className="grid grid-cols-5 gap-2">
-              {formData.split_rates.map((rate, i) => (
-                <input
-                  key={i}
-                  type="number"
-                  value={rate}
-                  onChange={e => {
-                    const newRates = [...formData.split_rates];
-                    newRates[i] = Number(e.target.value);
-                    setFormData({ ...formData, split_rates: newRates });
-                  }}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
-                  min="1"
-                  max="50"
-                />
+              {formData.split_rates.slice(0, 5).map((rate, i) => (
+                <div key={i} className="relative">
+                  <span className="absolute -top-2 left-1 text-xs text-gray-500">{i + 2}차</span>
+                  <input
+                    type="number"
+                    value={rate}
+                    onChange={e => {
+                      const newRates = [...formData.split_rates];
+                      newRates[i] = Number(e.target.value);
+                      setFormData({ ...formData, split_rates: newRates });
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm mt-1"
+                    min="1"
+                    max="50"
+                  />
+                </div>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-1">1~5차 물타기 하락률</p>
+            <div className="grid grid-cols-5 gap-2 mt-3">
+              {formData.split_rates.slice(5, 10).map((rate, i) => (
+                <div key={i + 5} className="relative">
+                  <span className="absolute -top-2 left-1 text-xs text-gray-500">{i + 7}차</span>
+                  <input
+                    type="number"
+                    value={rate}
+                    onChange={e => {
+                      const newRates = [...formData.split_rates];
+                      newRates[i + 5] = Number(e.target.value);
+                      setFormData({ ...formData, split_rates: newRates });
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm mt-1"
+                    min="1"
+                    max="50"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">N-1차 대비 하락률 (예: 5% → 이전 차수 대비 5% 하락 시 매수)</p>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">목표 수익률 (%)</label>
+            <label className="block text-sm text-gray-400 mb-1">목표 수익률 (%) - 1~10차</label>
             <div className="grid grid-cols-5 gap-2">
-              {formData.target_rates.map((rate, i) => (
-                <input
-                  key={i}
-                  type="number"
-                  value={rate}
-                  onChange={e => {
-                    const newRates = [...formData.target_rates];
-                    newRates[i] = Number(e.target.value);
-                    setFormData({ ...formData, target_rates: newRates });
-                  }}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
-                  min="1"
-                  max="50"
-                />
+              {formData.target_rates.slice(0, 5).map((rate, i) => (
+                <div key={i} className="relative">
+                  <span className="absolute -top-2 left-1 text-xs text-gray-500">{i + 1}차</span>
+                  <input
+                    type="number"
+                    value={rate}
+                    onChange={e => {
+                      const newRates = [...formData.target_rates];
+                      newRates[i] = Number(e.target.value);
+                      setFormData({ ...formData, target_rates: newRates });
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm mt-1"
+                    min="1"
+                    max="50"
+                  />
+                </div>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-1">1~5차 목표 수익률</p>
+            <div className="grid grid-cols-5 gap-2 mt-3">
+              {formData.target_rates.slice(5, 10).map((rate, i) => (
+                <div key={i + 5} className="relative">
+                  <span className="absolute -top-2 left-1 text-xs text-gray-500">{i + 6}차</span>
+                  <input
+                    type="number"
+                    value={rate}
+                    onChange={e => {
+                      const newRates = [...formData.target_rates];
+                      newRates[i + 5] = Number(e.target.value);
+                      setFormData({ ...formData, target_rates: newRates });
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm mt-1"
+                    min="1"
+                    max="50"
+                  />
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-1">각 차수별 목표 수익률 (예: 5% → 해당 차수 매수가 대비 5% 상승 시 매도)</p>
           </div>
           <div className="flex gap-3 pt-4">
             <button
