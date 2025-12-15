@@ -1,28 +1,113 @@
-import { useState } from 'react';
-import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle, Power, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+
+interface BotConfig {
+  id: string;
+  is_running: boolean;
+  kis_account_no: string | null;
+  telegram_chat_id: string | null;
+  telegram_enabled: boolean;
+  default_buy_amount: number;
+}
 
 export function Settings() {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [settings, setSettings] = useState({
-    // 한투 API
-    kisAppKey: '',
-    kisAppSecret: '',
-    kisAccountNo: '',
-    kisIsReal: true,
-    // 텔레그램
-    telegramBotToken: '',
-    telegramChatId: '',
-    telegramEnabled: true,
-    // 봇 설정
-    defaultBuyAmount: 100000,
-  });
+  const [error, setError] = useState<string | null>(null);
+  const [config, setConfig] = useState<BotConfig | null>(null);
 
-  const handleSave = () => {
-    // 설정은 실제로 .env 파일이나 봇 서버에 저장해야 함
-    // 여기서는 알림만 표시
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  // DB에서 설정 로드
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  const loadConfig = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('bot_config')
+      .select('*')
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      setError('설정을 불러오는데 실패했습니다.');
+      console.error(error);
+    } else if (data) {
+      setConfig(data);
+    } else {
+      // 설정이 없으면 기본값 생성
+      const { data: newConfig } = await supabase
+        .from('bot_config')
+        .insert([{
+          is_running: false,
+          telegram_enabled: true,
+          default_buy_amount: 100000,
+        }])
+        .select()
+        .single();
+      if (newConfig) setConfig(newConfig);
+    }
+    setLoading(false);
   };
+
+  const handleSave = async () => {
+    if (!config) return;
+
+    setSaving(true);
+    setError(null);
+
+    const { error } = await supabase
+      .from('bot_config')
+      .update({
+        kis_account_no: config.kis_account_no,
+        telegram_chat_id: config.telegram_chat_id,
+        telegram_enabled: config.telegram_enabled,
+        default_buy_amount: config.default_buy_amount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', config.id);
+
+    setSaving(false);
+
+    if (error) {
+      setError('저장에 실패했습니다.');
+      console.error(error);
+    } else {
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    }
+  };
+
+  const toggleBot = async () => {
+    if (!config) return;
+
+    const newStatus = !config.is_running;
+
+    const { error } = await supabase
+      .from('bot_config')
+      .update({
+        is_running: newStatus,
+        last_started_at: newStatus ? new Date().toISOString() : config.last_started_at,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', config.id);
+
+    if (error) {
+      setError('봇 상태 변경에 실패했습니다.');
+      console.error(error);
+    } else {
+      setConfig({ ...config, is_running: newStatus });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -35,78 +120,81 @@ export function Settings() {
         </div>
       )}
 
+      {error && (
+        <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-red-400" />
+          <p className="text-red-400">{error}</p>
+        </div>
+      )}
+
+      {/* 봇 상태 제어 */}
+      <div className={`rounded-lg border p-6 ${
+        config?.is_running
+          ? 'bg-green-900/20 border-green-700'
+          : 'bg-gray-800 border-gray-700'
+      }`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`p-3 rounded-full ${
+              config?.is_running ? 'bg-green-600' : 'bg-gray-600'
+            }`}>
+              <Power className="w-6 h-6" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold">
+                봇 상태: {config?.is_running ? '실행 중' : '중지됨'}
+              </h2>
+              <p className="text-gray-400 text-sm">
+                {config?.is_running
+                  ? '실시간 시세 모니터링 및 자동 매매 활성화'
+                  : '봇이 중지 상태입니다. 매매가 실행되지 않습니다.'
+                }
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={toggleBot}
+            className={`px-6 py-3 rounded-lg font-bold transition ${
+              config?.is_running
+                ? 'bg-red-600 hover:bg-red-500'
+                : 'bg-green-600 hover:bg-green-500'
+            }`}
+          >
+            {config?.is_running ? '봇 중지' : '봇 시작'}
+          </button>
+        </div>
+      </div>
+
       {/* 안내 */}
       <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4 flex items-start gap-3">
         <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
         <div>
-          <p className="text-yellow-400 font-medium">중요 안내</p>
+          <p className="text-yellow-400 font-medium">서버 설정 필요</p>
           <p className="text-yellow-200/70 text-sm mt-1">
-            API 키와 같은 민감한 정보는 봇 서버의 <code className="bg-gray-700 px-1 rounded">.env</code> 파일에서 직접 설정해야 합니다.
-            이 페이지는 설정 참조용입니다.
+            API 키(APP_KEY, APP_SECRET)는 보안상 서버의 <code className="bg-gray-700 px-1 rounded">.env</code> 파일에서 설정해야 합니다.
+            아래 설정은 DB에 저장되어 봇이 참조합니다.
           </p>
         </div>
       </div>
 
-      {/* 한투 API 설정 */}
+      {/* 계좌 설정 */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
         <div className="flex items-center gap-3 mb-4">
           <Key className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-bold">한국투자증권 API</h2>
+          <h2 className="text-lg font-bold">계좌 설정</h2>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">APP KEY</label>
-            <input
-              type="password"
-              value={settings.kisAppKey}
-              onChange={e => setSettings({ ...settings, kisAppKey: e.target.value })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-              placeholder="한투 개발자센터에서 발급"
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">APP SECRET</label>
-            <input
-              type="password"
-              value={settings.kisAppSecret}
-              onChange={e => setSettings({ ...settings, kisAppSecret: e.target.value })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-              placeholder="한투 개발자센터에서 발급"
-            />
-          </div>
-          <div>
             <label className="block text-sm text-gray-400 mb-1">계좌번호</label>
             <input
               type="text"
-              value={settings.kisAccountNo}
-              onChange={e => setSettings({ ...settings, kisAccountNo: e.target.value })}
+              value={config?.kis_account_no || ''}
+              onChange={e => setConfig(config ? { ...config, kis_account_no: e.target.value } : null)}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
               placeholder="12345678-01"
             />
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="text-sm text-gray-400">투자 모드:</label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="mode"
-                checked={!settings.kisIsReal}
-                onChange={() => setSettings({ ...settings, kisIsReal: false })}
-                className="accent-blue-500"
-              />
-              <span>모의투자</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name="mode"
-                checked={settings.kisIsReal}
-                onChange={() => setSettings({ ...settings, kisIsReal: true })}
-                className="accent-blue-500"
-              />
-              <span className="text-red-400">실전투자</span>
-            </label>
+            <p className="text-xs text-gray-500 mt-1">한국투자증권 계좌번호 (예: 12345678-01)</p>
           </div>
         </div>
       </div>
@@ -123,34 +211,24 @@ export function Settings() {
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={settings.telegramEnabled}
-                onChange={e => setSettings({ ...settings, telegramEnabled: e.target.checked })}
+                checked={config?.telegram_enabled || false}
+                onChange={e => setConfig(config ? { ...config, telegram_enabled: e.target.checked } : null)}
                 className="accent-blue-500 w-4 h-4"
               />
               <span>텔레그램 알림 사용</span>
             </label>
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Bot Token</label>
-            <input
-              type="password"
-              value={settings.telegramBotToken}
-              onChange={e => setSettings({ ...settings, telegramBotToken: e.target.value })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-              placeholder="@BotFather에서 발급"
-              disabled={!settings.telegramEnabled}
-            />
-          </div>
-          <div>
             <label className="block text-sm text-gray-400 mb-1">Chat ID</label>
             <input
               type="text"
-              value={settings.telegramChatId}
-              onChange={e => setSettings({ ...settings, telegramChatId: e.target.value })}
+              value={config?.telegram_chat_id || ''}
+              onChange={e => setConfig(config ? { ...config, telegram_chat_id: e.target.value } : null)}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-              placeholder="getUpdates API로 확인"
-              disabled={!settings.telegramEnabled}
+              placeholder="123456789"
+              disabled={!config?.telegram_enabled}
             />
+            <p className="text-xs text-gray-500 mt-1">텔레그램 봇에게 메시지 후 getUpdates API로 확인</p>
           </div>
         </div>
       </div>
@@ -159,7 +237,7 @@ export function Settings() {
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
         <div className="flex items-center gap-3 mb-4">
           <Server className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-bold">봇 설정</h2>
+          <h2 className="text-lg font-bold">매매 설정</h2>
         </div>
 
         <div className="space-y-4">
@@ -167,8 +245,8 @@ export function Settings() {
             <label className="block text-sm text-gray-400 mb-1">기본 매수 금액</label>
             <input
               type="number"
-              value={settings.defaultBuyAmount}
-              onChange={e => setSettings({ ...settings, defaultBuyAmount: Number(e.target.value) })}
+              value={config?.default_buy_amount || 100000}
+              onChange={e => setConfig(config ? { ...config, default_buy_amount: Number(e.target.value) } : null)}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
             />
             <p className="text-xs text-gray-500 mt-1">종목별 설정이 없을 때 사용되는 기본값</p>
@@ -176,34 +254,26 @@ export function Settings() {
         </div>
       </div>
 
-      {/* .env 예시 */}
+      {/* 서버 .env 안내 */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-        <h2 className="text-lg font-bold mb-4">.env 파일 예시</h2>
+        <h2 className="text-lg font-bold mb-4">서버 .env 파일 (직접 설정)</h2>
         <pre className="bg-gray-900 rounded p-4 text-sm overflow-x-auto">
-{`# 한국투자증권 API
-KIS_APP_KEY=your_app_key
-KIS_APP_SECRET=your_app_secret
-KIS_ACCOUNT_NO=12345678-01
+{`# 한국투자증권 API (보안상 서버에서만 설정)
+KIS_APP_KEY=발급받은_앱키
+KIS_APP_SECRET=발급받은_시크릿
 KIS_IS_REAL=True
 
-# Supabase (split-bot 전용)
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your_anon_key
-
-# 텔레그램
-TELEGRAM_BOT_TOKEN=your_bot_token
-TELEGRAM_CHAT_ID=your_chat_id
-
-# 기본 매수 금액
-DEFAULT_BUY_AMOUNT=100000`}
+# 텔레그램 봇 토큰 (보안상 서버에서만 설정)
+TELEGRAM_BOT_TOKEN=봇토큰`}
         </pre>
       </div>
 
       <button
         onClick={handleSave}
-        className="flex items-center gap-2 px-6 py-3 bg-blue-600 rounded-lg hover:bg-blue-500 transition"
+        disabled={saving}
+        className="flex items-center gap-2 px-6 py-3 bg-blue-600 rounded-lg hover:bg-blue-500 transition disabled:opacity-50"
       >
-        <Save className="w-4 h-4" />
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         설정 저장
       </button>
     </div>
