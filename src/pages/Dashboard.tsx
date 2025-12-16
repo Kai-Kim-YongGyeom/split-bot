@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useStocks } from '../hooks/useStocks';
-import { TrendingUp, TrendingDown, Activity, Package, DollarSign, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, Package, DollarSign, Target, Server } from 'lucide-react';
 import type { StockWithPurchases } from '../types';
 import { getBotConfig } from '../lib/api';
 
@@ -134,11 +134,32 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
   const [botRunning, setBotRunning] = useState<boolean | null>(null);
+  const [serverAlive, setServerAlive] = useState<boolean | null>(null);
+  const [lastHeartbeat, setLastHeartbeat] = useState<string | null>(null);
 
   useEffect(() => {
-    getBotConfig().then(config => {
-      setBotRunning(config?.is_running ?? false);
-    });
+    const checkStatus = () => {
+      getBotConfig().then(config => {
+        setBotRunning(config?.is_running ?? false);
+
+        // 하트비트 체크 (60초 이내면 서버 살아있음)
+        const heartbeat = config?.last_heartbeat;
+        setLastHeartbeat(heartbeat);
+        if (heartbeat) {
+          const lastTime = new Date(heartbeat).getTime();
+          const now = Date.now();
+          const diffSec = (now - lastTime) / 1000;
+          setServerAlive(diffSec < 60);
+        } else {
+          setServerAlive(false);
+        }
+      });
+    };
+
+    checkStatus();
+    // 30초마다 상태 체크
+    const interval = setInterval(checkStatus, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {
@@ -213,13 +234,27 @@ export function Dashboard() {
 
         <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
           <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${serverAlive ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
+              <Server className={`w-5 h-5 ${serverAlive ? 'text-green-400' : 'text-red-400'}`} />
+            </div>
+            <div>
+              <p className="text-gray-400 text-sm">서버 상태</p>
+              <p className={`text-xl font-bold ${serverAlive ? 'text-green-400' : 'text-red-400'}`}>
+                {serverAlive === null ? '로딩...' : serverAlive ? '정상' : '오프라인'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg ${botRunning ? 'bg-green-900/50' : 'bg-gray-700'}`}>
               <Activity className={`w-5 h-5 ${botRunning ? 'text-green-400' : 'text-gray-400'}`} />
             </div>
             <div>
-              <p className="text-gray-400 text-sm">봇 상태</p>
+              <p className="text-gray-400 text-sm">자동매매</p>
               <p className={`text-xl font-bold ${botRunning ? 'text-green-400' : 'text-gray-400'}`}>
-                {botRunning === null ? '로딩...' : botRunning ? '실행 중' : '중지됨'}
+                {botRunning === null ? '로딩...' : botRunning ? '활성화' : '비활성화'}
               </p>
             </div>
           </div>

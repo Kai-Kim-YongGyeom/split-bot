@@ -210,6 +210,15 @@ class SplitBot:
                 status = self.get_status()
                 await notifier.send_status(status)
 
+    async def send_heartbeat(self) -> None:
+        """하트비트 전송 (30초마다)"""
+        while self._running:
+            try:
+                supabase.update_heartbeat()
+            except Exception as e:
+                print(f"[Bot] 하트비트 실패: {e}")
+            await asyncio.sleep(30)
+
     async def reload_stocks_periodically(self) -> None:
         """주기적으로 새 종목 확인 및 구독 (30초마다)"""
         while self._running:
@@ -386,6 +395,10 @@ class SplitBot:
         # 새 종목 감지 태스크 (30초마다)
         reload_stocks_task = asyncio.create_task(self.reload_stocks_periodically())
 
+        # 하트비트 태스크 (30초마다)
+        heartbeat_task = asyncio.create_task(self.send_heartbeat())
+        print("[Bot] 하트비트 활성화 (30초 간격)")
+
         try:
             # WebSocket 연결 (메인 루프)
             await kis_ws.connect(
@@ -398,6 +411,7 @@ class SplitBot:
             status_task.cancel()
             buy_request_task.cancel()
             reload_stocks_task.cancel()
+            heartbeat_task.cancel()
             kis_ws.stop()
             await bot_handler.stop()
             print("[Bot] 종료 완료")

@@ -245,6 +245,24 @@ class SupabaseClient:
             return result[0]
         return None
 
+    def update_heartbeat(self) -> bool:
+        """봇 하트비트 업데이트 (30초마다 호출)"""
+        if not self.is_configured:
+            return False
+
+        config = self.get_bot_config()
+        if not config:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "bot_config",
+            data={"last_heartbeat": datetime.now().isoformat()},
+            params={"id": f"eq.{config['id']}"},
+        )
+
+        return "error" not in result
+
     # ==================== 매수 요청 (bot_buy_requests) ====================
 
     def get_pending_buy_requests(self) -> list[dict]:
