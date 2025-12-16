@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle, Power, Loader2 } from 'lucide-react';
+import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle, Power, Loader2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface BotConfig {
   id: string;
   is_running: boolean;
+  kis_app_key: string | null;
+  kis_app_secret: string | null;
   kis_account_no: string | null;
+  kis_is_real: boolean;
+  telegram_bot_token: string | null;
   telegram_chat_id: string | null;
   telegram_enabled: boolean;
   default_buy_amount: number;
@@ -17,6 +21,8 @@ export function Settings() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [config, setConfig] = useState<BotConfig | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
+  const [showToken, setShowToken] = useState(false);
 
   // DB에서 설정 로드
   useEffect(() => {
@@ -41,6 +47,7 @@ export function Settings() {
         .from('bot_config')
         .insert([{
           is_running: false,
+          kis_is_real: false,
           telegram_enabled: true,
           default_buy_amount: 100000,
         }])
@@ -60,7 +67,11 @@ export function Settings() {
     const { error } = await supabase
       .from('bot_config')
       .update({
+        kis_app_key: config.kis_app_key,
+        kis_app_secret: config.kis_app_secret,
         kis_account_no: config.kis_account_no,
+        kis_is_real: config.kis_is_real,
+        telegram_bot_token: config.telegram_bot_token,
         telegram_chat_id: config.telegram_chat_id,
         telegram_enabled: config.telegram_enabled,
         default_buy_amount: config.default_buy_amount,
@@ -88,7 +99,7 @@ export function Settings() {
       .from('bot_config')
       .update({
         is_running: newStatus,
-        last_started_at: newStatus ? new Date().toISOString() : config.last_started_at,
+        last_started_at: newStatus ? new Date().toISOString() : undefined,
         updated_at: new Date().toISOString(),
       })
       .eq('id', config.id);
@@ -165,26 +176,43 @@ export function Settings() {
         </div>
       </div>
 
-      {/* 안내 */}
-      <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4 flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
-        <div>
-          <p className="text-yellow-400 font-medium">서버 설정 필요</p>
-          <p className="text-yellow-200/70 text-sm mt-1">
-            API 키(APP_KEY, APP_SECRET)는 보안상 서버의 <code className="bg-gray-700 px-1 rounded">.env</code> 파일에서 설정해야 합니다.
-            아래 설정은 DB에 저장되어 봇이 참조합니다.
-          </p>
-        </div>
-      </div>
-
-      {/* 계좌 설정 */}
+      {/* 한국투자증권 API 설정 */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
         <div className="flex items-center gap-3 mb-4">
           <Key className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-bold">계좌 설정</h2>
+          <h2 className="text-lg font-bold">한국투자증권 API</h2>
         </div>
 
         <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">APP KEY</label>
+            <input
+              type="text"
+              value={config?.kis_app_key || ''}
+              onChange={e => setConfig(config ? { ...config, kis_app_key: e.target.value } : null)}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 font-mono text-sm"
+              placeholder="PSxxxxxxxxxxxxxxxxxxxxxxxx"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">APP SECRET</label>
+            <div className="relative">
+              <input
+                type={showSecret ? 'text' : 'password'}
+                value={config?.kis_app_secret || ''}
+                onChange={e => setConfig(config ? { ...config, kis_app_secret: e.target.value } : null)}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 pr-10 font-mono text-sm"
+                placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSecret(!showSecret)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">계좌번호</label>
             <input
@@ -194,8 +222,28 @@ export function Settings() {
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
               placeholder="12345678-01"
             />
-            <p className="text-xs text-gray-500 mt-1">한국투자증권 계좌번호 (예: 12345678-01)</p>
           </div>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={config?.kis_is_real || false}
+                onChange={e => setConfig(config ? { ...config, kis_is_real: e.target.checked } : null)}
+                className="accent-blue-500 w-4 h-4"
+              />
+              <span>실전투자 모드</span>
+            </label>
+            <span className={`text-xs px-2 py-1 rounded ${
+              config?.kis_is_real
+                ? 'bg-red-900/50 text-red-400'
+                : 'bg-blue-900/50 text-blue-400'
+            }`}>
+              {config?.kis_is_real ? '실전' : '모의'}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500">
+            KIS Developers (https://apiportal.koreainvestment.com)에서 발급
+          </p>
         </div>
       </div>
 
@@ -219,6 +267,26 @@ export function Settings() {
             </label>
           </div>
           <div>
+            <label className="block text-sm text-gray-400 mb-1">Bot Token</label>
+            <div className="relative">
+              <input
+                type={showToken ? 'text' : 'password'}
+                value={config?.telegram_bot_token || ''}
+                onChange={e => setConfig(config ? { ...config, telegram_bot_token: e.target.value } : null)}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 pr-10 font-mono text-sm"
+                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                disabled={!config?.telegram_enabled}
+              />
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          <div>
             <label className="block text-sm text-gray-400 mb-1">Chat ID</label>
             <input
               type="text"
@@ -228,12 +296,14 @@ export function Settings() {
               placeholder="123456789"
               disabled={!config?.telegram_enabled}
             />
-            <p className="text-xs text-gray-500 mt-1">텔레그램 봇에게 메시지 후 getUpdates API로 확인</p>
           </div>
+          <p className="text-xs text-gray-500">
+            @BotFather로 봇 생성 후 토큰 발급, Chat ID는 봇에게 메시지 후 getUpdates API로 확인
+          </p>
         </div>
       </div>
 
-      {/* 봇 설정 */}
+      {/* 매매 설정 */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
         <div className="flex items-center gap-3 mb-4">
           <Server className="w-5 h-5 text-blue-400" />
@@ -254,18 +324,21 @@ export function Settings() {
         </div>
       </div>
 
-      {/* 서버 .env 안내 */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-        <h2 className="text-lg font-bold mb-4">서버 .env 파일 (직접 설정)</h2>
-        <pre className="bg-gray-900 rounded p-4 text-sm overflow-x-auto">
-{`# 한국투자증권 API (보안상 서버에서만 설정)
-KIS_APP_KEY=발급받은_앱키
-KIS_APP_SECRET=발급받은_시크릿
-KIS_IS_REAL=True
-
-# 텔레그램 봇 토큰 (보안상 서버에서만 설정)
-TELEGRAM_BOT_TOKEN=봇토큰`}
-        </pre>
+      {/* 서버 필수 설정 안내 */}
+      <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
+          <div>
+            <p className="text-yellow-400 font-medium">서버 .env 필수 설정</p>
+            <p className="text-yellow-200/70 text-sm mt-1">
+              봇 서버의 <code className="bg-gray-700 px-1 rounded">.env</code> 파일에 아래 2개만 설정하면 됩니다:
+            </p>
+            <pre className="bg-gray-900 rounded p-3 text-sm mt-2 overflow-x-auto">
+{`SUPABASE_URL=https://sfxydmwyhlkdusesqkbg.supabase.co
+SUPABASE_KEY=수파베이스_아논키`}
+            </pre>
+          </div>
+        </div>
       </div>
 
       <button
