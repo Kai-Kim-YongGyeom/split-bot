@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useStocks } from '../hooks/useStocks';
-import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search } from 'lucide-react';
 import type { StockWithPurchases, StockFormData, PurchaseFormData } from '../types';
 import * as api from '../lib/api';
+import { searchStocks, type StockInfo } from '../data/stocks';
 
 // 종목 추가/수정 모달
 function StockModal({
@@ -24,7 +25,39 @@ function StockModal({
     target_rates: initialData?.target_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
   });
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (searchQuery.length >= 1) {
+      const results = searchStocks(searchQuery);
+      setSearchResults(results);
+      setShowDropdown(results.length > 0);
+    } else {
+      setSearchResults([]);
+      setShowDropdown(false);
+    }
+  }, [searchQuery]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (!isOpen) return null;
+
+  const handleSelectStock = (stock: StockInfo) => {
+    setFormData({ ...formData, code: stock.code, name: stock.name });
+    setSearchQuery('');
+    setShowDropdown(false);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,32 +66,66 @@ function StockModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700">
+      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700 max-h-[90vh] overflow-y-auto">
         <h2 className="text-xl font-bold mb-4">
           {initialData ? '종목 수정' : '종목 추가'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">종목 코드</label>
-            <input
-              type="text"
-              value={formData.code}
-              onChange={e => setFormData({ ...formData, code: e.target.value })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-              placeholder="005930"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">종목명</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={e => setFormData({ ...formData, name: e.target.value })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-              placeholder="삼성전자"
-              required
-            />
+          {/* 종목 검색 */}
+          {!initialData && (
+            <div className="relative" ref={dropdownRef}>
+              <label className="block text-sm text-gray-400 mb-1">종목 검색</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 pl-10"
+                  placeholder="종목명 또는 코드 검색..."
+                />
+              </div>
+              {showDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-gray-700 border border-gray-600 rounded shadow-lg max-h-60 overflow-y-auto">
+                  {searchResults.map(stock => (
+                    <button
+                      key={stock.code}
+                      type="button"
+                      onClick={() => handleSelectStock(stock)}
+                      className="w-full px-3 py-2 text-left hover:bg-gray-600 flex justify-between items-center"
+                    >
+                      <span>{stock.name}</span>
+                      <span className="text-gray-400 text-sm">{stock.code}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">종목 코드</label>
+              <input
+                type="text"
+                value={formData.code}
+                onChange={e => setFormData({ ...formData, code: e.target.value })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                placeholder="005930"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">종목명</label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                placeholder="삼성전자"
+                required
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">회당 매수 금액</label>
