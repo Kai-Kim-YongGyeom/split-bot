@@ -135,7 +135,6 @@ export function Dashboard() {
   const { stocks, loading, error } = useStocks();
   const [botRunning, setBotRunning] = useState<boolean | null>(null);
   const [serverAlive, setServerAlive] = useState<boolean | null>(null);
-  const [lastHeartbeat, setLastHeartbeat] = useState<string | null>(null);
 
   useEffect(() => {
     const checkStatus = () => {
@@ -144,7 +143,6 @@ export function Dashboard() {
 
         // 하트비트 체크 (60초 이내면 서버 살아있음)
         const heartbeat = config?.last_heartbeat;
-        setLastHeartbeat(heartbeat);
         if (heartbeat) {
           const lastTime = new Date(heartbeat).getTime();
           const now = Date.now();

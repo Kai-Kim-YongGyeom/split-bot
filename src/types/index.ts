@@ -33,6 +33,7 @@ export interface BotConfig {
   kis_account_no: string;
   telegram_enabled: boolean;
   last_started_at?: string;
+  last_heartbeat?: string;
   created_at: string;
   updated_at: string;
 }
