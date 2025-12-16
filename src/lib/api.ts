@@ -189,10 +189,16 @@ function botConfigToUserSettingsUpdate(updates: Partial<BotConfig>): Record<stri
   const dbUpdates: Record<string, unknown> = {};
 
   if (updates.kis_app_key !== undefined) {
-    dbUpdates.app_key_encrypted = updates.kis_app_key ? encrypt(updates.kis_app_key) : null;
+    console.log('[API] kis_app_key 입력값:', updates.kis_app_key?.substring(0, 10) + '...');
+    const encrypted = updates.kis_app_key ? encrypt(updates.kis_app_key) : null;
+    console.log('[API] 암호화 결과:', encrypted?.substring(0, 20) + '...');
+    dbUpdates.app_key_encrypted = encrypted;
   }
   if (updates.kis_app_secret !== undefined) {
-    dbUpdates.app_secret_encrypted = updates.kis_app_secret ? encrypt(updates.kis_app_secret) : null;
+    console.log('[API] kis_app_secret 입력값:', updates.kis_app_secret?.substring(0, 10) + '...');
+    const encrypted = updates.kis_app_secret ? encrypt(updates.kis_app_secret) : null;
+    console.log('[API] 암호화 결과:', encrypted?.substring(0, 20) + '...');
+    dbUpdates.app_secret_encrypted = encrypted;
   }
   if (updates.kis_account_no !== undefined) {
     dbUpdates.account_no = updates.kis_account_no;

@@ -13,9 +13,12 @@ export function encrypt(text: string): string {
   if (!text) return '';
   try {
     const key = getEncryptionKey();
-    return CryptoJS.AES.encrypt(text, key).toString();
+    console.log('[Crypto] encrypt - key exists:', !!key, 'key length:', key?.length);
+    const encrypted = CryptoJS.AES.encrypt(text, key).toString();
+    console.log('[Crypto] encrypt - result:', encrypted?.substring(0, 20) + '...');
+    return encrypted;
   } catch (e) {
-    console.error('암호화 실패:', e);
+    console.error('[Crypto] 암호화 실패:', e);
     return '';
   }
 }
