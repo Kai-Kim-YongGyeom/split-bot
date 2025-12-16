@@ -279,37 +279,59 @@ class SupabaseClient:
         return self.add_purchase(stock.id, purchase)
 
 
-    # ==================== 봇 설정 (bot_config) ====================
+    # ==================== 봇 설정 (user_settings) ====================
 
-    def get_bot_config(self) -> Optional[dict]:
-        """봇 설정 조회"""
+    def get_user_settings(self, user_id: str = None) -> Optional[dict]:
+        """사용자 설정 조회"""
         if not self.is_configured:
             return None
 
-        result = self._request(
-            "GET",
-            "bot_config",
-            params={"select": "*", "limit": "1"},
-        )
+        params = {"select": "*", "limit": "1"}
+        if user_id:
+            params["user_id"] = f"eq.{user_id}"
+
+        result = self._request("GET", "user_settings", params=params)
 
         if isinstance(result, list) and len(result) > 0:
             return result[0]
         return None
 
-    def update_heartbeat(self) -> bool:
+    def update_heartbeat(self, user_id: str = None) -> bool:
         """봇 heartbeat 업데이트 (서버 상태 체크용)"""
         if not self.is_configured:
             return False
 
-        config = self.get_bot_config()
-        if not config:
+        # user_id가 없으면 Config에서 가져옴
+        if not user_id:
+            from config import Config
+            user_id = Config.USER_ID
+
+        if not user_id:
             return False
 
         result = self._request(
             "PATCH",
-            "bot_config",
+            "user_settings",
             data={"last_heartbeat": datetime.now().isoformat()},
-            params={"id": f"eq.{config['id']}"},
+            params={"user_id": f"eq.{user_id}"},
+        )
+
+        return "error" not in result
+
+    def update_bot_running(self, user_id: str, is_running: bool) -> bool:
+        """봇 실행 상태 업데이트"""
+        if not self.is_configured or not user_id:
+            return False
+
+        data = {"is_running": is_running}
+        if is_running:
+            data["last_started_at"] = datetime.now().isoformat()
+
+        result = self._request(
+            "PATCH",
+            "user_settings",
+            data=data,
+            params={"user_id": f"eq.{user_id}"},
         )
 
         return "error" not in result
