@@ -207,7 +207,7 @@ export function Settings() {
             </span>
           </div>
           <p className="text-xs text-gray-500">
-            KIS Developers (https://apiportal.koreainvestment.com)에서 발급
+            KIS Developers에서 발급 (선택사항 - 실제 매매 시에만 필요)
           </p>
         </div>
       </div>
@@ -263,7 +263,7 @@ export function Settings() {
             />
           </div>
           <p className="text-xs text-gray-500">
-            @BotFather로 봇 생성 후 토큰 발급, Chat ID는 봇에게 메시지 후 getUpdates API로 확인
+            선택사항 - 알림 받고 싶을 때만 설정
           </p>
         </div>
       </div>
@@ -289,19 +289,22 @@ export function Settings() {
         </div>
       </div>
 
-      {/* 서버 필수 설정 안내 */}
-      <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-3 md:p-4">
+      {/* 서버 설정 안내 */}
+      <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 md:p-4">
         <div className="flex items-start gap-2 md:gap-3">
-          <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+          <Server className="w-4 h-4 md:w-5 md:h-5 text-blue-400 mt-0.5 flex-shrink-0" />
           <div className="min-w-0">
-            <p className="text-yellow-400 font-medium text-sm md:text-base">서버 .env 필수 설정</p>
-            <p className="text-yellow-200/70 text-xs md:text-sm mt-1">
-              봇 서버의 <code className="bg-gray-700 px-1 rounded">.env</code> 파일에 아래 2개만 설정하면 됩니다:
+            <p className="text-blue-400 font-medium text-sm md:text-base">봇 서버 연결</p>
+            <p className="text-blue-200/70 text-xs md:text-sm mt-1">
+              봇 서버는 DB 연결만 필요합니다. API 키는 이 웹에서 등록하면 DB를 통해 공유됩니다.
             </p>
             <pre className="bg-gray-900 rounded p-2 md:p-3 text-xs md:text-sm mt-2 overflow-x-auto">
-{`SUPABASE_URL=https://sfxydmwyhlkdusesqkbg.supabase.co
-SUPABASE_KEY=수파베이스_아논키`}
+{`SUPABASE_URL=https://xxxxx.supabase.co
+SUPABASE_KEY=service_role_키`}
             </pre>
+            <p className="text-blue-200/50 text-xs mt-2">
+              * 다중 사용자 지원을 위해 service_role 키 사용 필요
+            </p>
           </div>
         </div>
       </div>
