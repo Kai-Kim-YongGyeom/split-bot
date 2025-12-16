@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Bot, ListOrdered, Settings, Activity, LogOut, BarChart3, ClipboardList, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 const navItems = [
-  { path: '/', label: '대시보드', icon: Activity },
-  { path: '/stocks', label: '종목 관리', icon: ListOrdered },
-  { path: '/kpi', label: 'KPI', icon: BarChart3 },
-  { path: '/orders', label: '주문내역', icon: ClipboardList },
-  { path: '/settings', label: '설정', icon: Settings },
+  { path: '/', label: '대시보드', emoji: '📊' },
+  { path: '/stocks', label: '종목 관리', emoji: '📋' },
+  { path: '/kpi', label: 'KPI', emoji: '📈' },
+  { path: '/orders', label: '주문내역', emoji: '🛒' },
+  { path: '/settings', label: '설정', emoji: '⚙️' },
 ];
 
 export function Layout() {
@@ -27,14 +27,14 @@ export function Layout() {
         <div className="max-w-6xl mx-auto px-4 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 md:gap-3">
-              <Bot className="w-7 h-7 md:w-8 md:h-8 text-blue-400" />
+              <span className="text-2xl md:text-3xl">🤖</span>
               <h1 className="text-lg md:text-xl font-bold">Split Bot</h1>
             </div>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-4">
               <nav className="flex gap-2">
-                {navItems.map(({ path, label, icon: Icon }) => {
+                {navItems.map(({ path, label, emoji }) => {
                   const isActive = location.pathname === path;
                   return (
                     <Link
@@ -46,7 +46,7 @@ export function Layout() {
                           : 'text-gray-400 hover:bg-gray-700 hover:text-white'
                       }`}
                     >
-                      <Icon className="w-4 h-4" />
+                      <span>{emoji}</span>
                       <span>{label}</span>
                     </Link>
                   );
@@ -59,7 +59,7 @@ export function Layout() {
                   className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                   title="로그아웃"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <span>🚪</span>
                 </button>
               </div>
             </div>
@@ -78,7 +78,7 @@ export function Layout() {
         {mobileMenuOpen && (
           <div className="md:hidden border-t border-gray-700 bg-gray-800">
             <nav className="px-4 py-2 space-y-1">
-              {navItems.map(({ path, label, icon: Icon }) => {
+              {navItems.map(({ path, label, emoji }) => {
                 const isActive = location.pathname === path;
                 return (
                   <Link
@@ -91,7 +91,7 @@ export function Layout() {
                         : 'text-gray-400 hover:bg-gray-700 hover:text-white'
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
+                    <span className="text-lg">{emoji}</span>
                     <span className="text-base">{label}</span>
                   </Link>
                 );
@@ -107,7 +107,7 @@ export function Layout() {
                   }}
                   className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                 >
-                  <LogOut className="w-4 h-4" />
+                  <span>🚪</span>
                   <span>로그아웃</span>
                 </button>
               </div>
@@ -124,7 +124,7 @@ export function Layout() {
       {/* Footer - Hidden on mobile */}
       <footer className="hidden md:block bg-gray-800 border-t border-gray-700 py-4">
         <div className="max-w-6xl mx-auto px-4 text-center text-gray-500 text-sm">
-          Split Bot - 자동 물타기 매매 봇
+          🤖 Split Bot - 자동 물타기 매매 봇
         </div>
       </footer>
     </div>
