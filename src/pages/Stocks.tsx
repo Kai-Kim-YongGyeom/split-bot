@@ -5,6 +5,11 @@ import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, Syn
 import * as api from '../lib/api';
 import { searchStocks, type StockInfo } from '../data/stocks';
 
+// 숫자 입력 시 포커스되면 전체 선택
+const handleNumberFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+  e.target.select();
+};
+
 // 종목 추가/수정 모달
 function StockModal({
   isOpen,
@@ -17,7 +22,7 @@ function StockModal({
   onSubmit: (data: StockFormData) => void;
   initialData?: StockWithPurchases;
 }) {
-  const [formData, setFormData] = useState<StockFormData>({
+  const getInitialFormData = (): StockFormData => ({
     code: initialData?.code || '',
     name: initialData?.name || '',
     buy_amount: initialData?.buy_amount || 100000,
@@ -27,10 +32,18 @@ function StockModal({
     stop_loss_rate: initialData?.stop_loss_rate || 0,
   });
 
+  const [formData, setFormData] = useState<StockFormData>(getInitialFormData());
+
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // initialData가 변경되면 폼 데이터 리셋
+  useEffect(() => {
+    setFormData(getInitialFormData());
+    setSearchQuery('');
+  }, [initialData, isOpen]);
 
   useEffect(() => {
     if (searchQuery.length >= 1) {
@@ -134,8 +147,9 @@ function StockModal({
               <label className="block text-sm text-gray-400 mb-1">회당 매수 금액</label>
               <input
                 type="number"
-                value={formData.buy_amount}
-                onChange={e => setFormData({ ...formData, buy_amount: Number(e.target.value) })}
+                value={formData.buy_amount || ''}
+                onChange={e => setFormData({ ...formData, buy_amount: Number(e.target.value) || 0 })}
+                onFocus={handleNumberFocus}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
                 required
               />
@@ -144,8 +158,9 @@ function StockModal({
               <label className="block text-sm text-gray-400 mb-1">손절 비율 (%)</label>
               <input
                 type="number"
-                value={formData.stop_loss_rate}
-                onChange={e => setFormData({ ...formData, stop_loss_rate: Number(e.target.value) })}
+                value={formData.stop_loss_rate || ''}
+                onChange={e => setFormData({ ...formData, stop_loss_rate: Number(e.target.value) || 0 })}
+                onFocus={handleNumberFocus}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
                 placeholder="0 (비활성화)"
                 min="0"
@@ -187,12 +202,13 @@ function StockModal({
                     <span className="text-xs text-gray-500 mb-1">{i + 2}차</span>
                     <input
                       type="number"
-                      value={rate}
+                      value={rate || ''}
                       onChange={e => {
                         const newRates = [...formData.split_rates];
-                        newRates[i] = Number(e.target.value);
+                        newRates[i] = Number(e.target.value) || 0;
                         setFormData({ ...formData, split_rates: newRates });
                       }}
+                      onFocus={handleNumberFocus}
                       className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
                       min="1"
                       max="50"
@@ -207,12 +223,13 @@ function StockModal({
                       <span className="text-xs text-gray-500 mb-1">{i + 7}차</span>
                       <input
                         type="number"
-                        value={rate}
+                        value={rate || ''}
                         onChange={e => {
                           const newRates = [...formData.split_rates];
-                          newRates[i + 5] = Number(e.target.value);
+                          newRates[i + 5] = Number(e.target.value) || 0;
                           setFormData({ ...formData, split_rates: newRates });
                         }}
+                        onFocus={handleNumberFocus}
                         className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
                         min="1"
                         max="50"
@@ -233,12 +250,13 @@ function StockModal({
                   <span className="text-xs text-gray-500 mb-1">{i + 1}차</span>
                   <input
                     type="number"
-                    value={rate}
+                    value={rate || ''}
                     onChange={e => {
                       const newRates = [...formData.target_rates];
-                      newRates[i] = Number(e.target.value);
+                      newRates[i] = Number(e.target.value) || 0;
                       setFormData({ ...formData, target_rates: newRates });
                     }}
+                    onFocus={handleNumberFocus}
                     className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
                     min="1"
                     max="50"
@@ -253,12 +271,13 @@ function StockModal({
                     <span className="text-xs text-gray-500 mb-1">{i + 6}차</span>
                     <input
                       type="number"
-                      value={rate}
+                      value={rate || ''}
                       onChange={e => {
                         const newRates = [...formData.target_rates];
-                        newRates[i + 5] = Number(e.target.value);
+                        newRates[i + 5] = Number(e.target.value) || 0;
                         setFormData({ ...formData, target_rates: newRates });
                       }}
+                      onFocus={handleNumberFocus}
                       className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
                       min="1"
                       max="50"
@@ -324,7 +343,8 @@ function PurchaseModal({
             <input
               type="number"
               value={formData.price || ''}
-              onChange={e => setFormData({ ...formData, price: Number(e.target.value) })}
+              onChange={e => setFormData({ ...formData, price: Number(e.target.value) || 0 })}
+              onFocus={handleNumberFocus}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
               placeholder="10000"
               required
@@ -335,7 +355,8 @@ function PurchaseModal({
             <input
               type="number"
               value={formData.quantity || ''}
-              onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) })}
+              onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) || 0 })}
+              onFocus={handleNumberFocus}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
               placeholder="10"
               required
@@ -419,8 +440,9 @@ function EditPurchaseModal({
               <label className="block text-sm text-gray-400 mb-1">차수</label>
               <input
                 type="number"
-                value={formData.round}
-                onChange={e => setFormData({ ...formData, round: Number(e.target.value) })}
+                value={formData.round || ''}
+                onChange={e => setFormData({ ...formData, round: Number(e.target.value) || 0 })}
+                onFocus={handleNumberFocus}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
                 min="1"
                 max="10"
@@ -442,8 +464,9 @@ function EditPurchaseModal({
             <label className="block text-sm text-gray-400 mb-1">매수가</label>
             <input
               type="number"
-              value={formData.price}
-              onChange={e => setFormData({ ...formData, price: Number(e.target.value) })}
+              value={formData.price || ''}
+              onChange={e => setFormData({ ...formData, price: Number(e.target.value) || 0 })}
+              onFocus={handleNumberFocus}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
               required
             />
@@ -452,8 +475,9 @@ function EditPurchaseModal({
             <label className="block text-sm text-gray-400 mb-1">수량</label>
             <input
               type="number"
-              value={formData.quantity}
-              onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) })}
+              value={formData.quantity || ''}
+              onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) || 0 })}
+              onFocus={handleNumberFocus}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
               required
             />
