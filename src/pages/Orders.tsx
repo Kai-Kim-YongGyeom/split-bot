@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, ShoppingCart, TrendingUp, XCircle, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { BuyRequest, SellRequest } from '../lib/api';
+import type { BuyRequest, SellRequest } from '../types';
 
 type TabType = 'buy' | 'sell';
 

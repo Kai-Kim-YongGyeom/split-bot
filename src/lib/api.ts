@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Stock, Purchase, BotConfig, StockFormData, PurchaseFormData } from '../types';
+import type { Stock, Purchase, BotConfig, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult } from '../types';
 
 // ==================== 유저 ID 헬퍼 ====================
 
@@ -252,20 +252,6 @@ export async function getAllStocksWithPurchases() {
 
 // ==================== 매수 요청 (bot_buy_requests) ====================
 
-export interface BuyRequest {
-  id: string;
-  stock_id: string;
-  stock_code: string;
-  stock_name: string;
-  quantity: number | null;
-  price: number;
-  order_type: 'market' | 'limit';
-  status: 'pending' | 'executed' | 'failed' | 'cancelled';
-  result_message: string | null;
-  created_at: string;
-  executed_at: string | null;
-}
-
 export async function createBuyRequest(
   stockId: string,
   stockCode: string,
@@ -331,20 +317,6 @@ export async function cancelBuyRequest(id: string): Promise<boolean> {
 
 // ==================== 매도 요청 (bot_sell_requests) ====================
 
-export interface SellRequest {
-  id: string;
-  stock_id: string;
-  stock_code: string;
-  stock_name: string;
-  purchase_id: string;
-  round: number;
-  quantity: number;
-  status: 'pending' | 'executed' | 'failed' | 'cancelled';
-  result_message: string | null;
-  created_at: string;
-  executed_at: string | null;
-}
-
 export async function createSellRequest(
   stockId: string,
   stockCode: string,
@@ -393,4 +365,115 @@ export async function cancelSellRequest(id: string): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+// ==================== 동기화 (bot_sync_requests) ====================
+
+export async function createSyncRequest(syncDays: number = 30): Promise<SyncRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('bot_sync_requests')
+    .insert([{
+      user_id: userId,
+      sync_days: syncDays,
+      status: 'pending',
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating sync request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getLatestSyncRequest(): Promise<SyncRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('bot_sync_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching sync request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getSyncResults(syncRequestId: string): Promise<SyncResult[]> {
+  const { data, error } = await supabase
+    .from('bot_sync_results')
+    .select('*')
+    .eq('sync_request_id', syncRequestId)
+    .order('trade_date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching sync results:', error);
+    return [];
+  }
+  return data || [];
+}
+
+// ==================== 매수 기록 수동 관리 ====================
+
+export async function updatePurchaseManual(
+  id: string,
+  updates: { price?: number; quantity?: number; round?: number; date?: string }
+): Promise<boolean> {
+  const { error } = await supabase
+    .from('bot_purchases')
+    .update(updates)
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error updating purchase:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function createPurchaseManual(
+  stockId: string,
+  round: number,
+  price: number,
+  quantity: number,
+  date: string
+): Promise<Purchase | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('bot_purchases')
+    .insert([{
+      stock_id: stockId,
+      round,
+      price,
+      quantity,
+      date,
+      status: 'holding',
+      user_id: userId,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating purchase:', error);
+    return null;
+  }
+  return data;
 }

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStocks } from '../hooks/useStocks';
-import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp } from 'lucide-react';
-import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase } from '../types';
+import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp, RefreshCw, X } from 'lucide-react';
+import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult } from '../types';
 import * as api from '../lib/api';
 import { searchStocks, type StockInfo } from '../data/stocks';
 
@@ -372,6 +372,116 @@ function PurchaseModal({
   );
 }
 
+// 매수 기록 수정 모달
+function EditPurchaseModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  purchase,
+  stockName,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (id: string, updates: { price?: number; quantity?: number; round?: number; date?: string }) => void;
+  purchase: Purchase;
+  stockName: string;
+}) {
+  const [formData, setFormData] = useState({
+    price: purchase.price,
+    quantity: purchase.quantity,
+    round: purchase.round,
+    date: purchase.date,
+  });
+
+  useEffect(() => {
+    setFormData({
+      price: purchase.price,
+      quantity: purchase.quantity,
+      round: purchase.round,
+      date: purchase.date,
+    });
+  }, [purchase]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit(purchase.id, formData);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+      <div className="bg-gray-800 rounded-t-2xl md:rounded-lg p-4 md:p-6 w-full md:max-w-md border-t md:border border-gray-700">
+        <h2 className="text-lg md:text-xl font-bold mb-4">{stockName} - {purchase.round}차 매수 수정</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">차수</label>
+              <input
+                type="number"
+                value={formData.round}
+                onChange={e => setFormData({ ...formData, round: Number(e.target.value) })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+                min="1"
+                max="10"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">매수일</label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={e => setFormData({ ...formData, date: e.target.value })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+                required
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">매수가</label>
+            <input
+              type="number"
+              value={formData.price}
+              onChange={e => setFormData({ ...formData, price: Number(e.target.value) })}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">수량</label>
+            <input
+              type="number"
+              value={formData.quantity}
+              onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) })}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+              required
+            />
+          </div>
+          <div className="bg-gray-700/50 rounded p-3 text-sm text-gray-400">
+            총 매수금액: <span className="text-white font-bold">{(formData.price * formData.quantity).toLocaleString()}원</span>
+          </div>
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-3 md:py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition text-base"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-4 py-3 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-base"
+            >
+              저장
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // 종목 카드 컴포넌트 (모바일 친화적)
 function StockCard({
   stock,
@@ -393,7 +503,18 @@ function StockCard({
   const [buySuccess, setBuySuccess] = useState(false);
   const [sellingPurchaseId, setSellingPurchaseId] = useState<string | null>(null);
   const [sellSuccess, setSellSuccess] = useState<string | null>(null);
+  const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const holdingPurchases = stock.purchases.filter(p => p.status === 'holding');
+
+  const handleEditPurchase = async (id: string, updates: { price?: number; quantity?: number; round?: number; date?: string }) => {
+    const success = await api.updatePurchaseManual(id, updates);
+    if (success) {
+      setEditingPurchase(null);
+      onRefresh();
+    } else {
+      alert('수정 실패. 다시 시도해주세요.');
+    }
+  };
 
   const handleDeletePurchase = async (purchaseId: string) => {
     if (confirm('이 매수 기록을 삭제하시겠습니까?')) {
@@ -598,6 +719,13 @@ function StockCard({
                               )}
                             </button>
                             <button
+                              onClick={() => setEditingPurchase(purchase)}
+                              className="p-1.5 text-gray-500 hover:text-blue-400 hover:bg-blue-900/20 rounded"
+                              title="수정"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={() => handleDeletePurchase(purchase.id)}
                               className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded"
                               title="삭제"
@@ -616,6 +744,287 @@ function StockCard({
           </div>
         </div>
       )}
+
+      {editingPurchase && (
+        <EditPurchaseModal
+          isOpen={true}
+          onClose={() => setEditingPurchase(null)}
+          onSubmit={handleEditPurchase}
+          purchase={editingPurchase}
+          stockName={stock.name}
+        />
+      )}
+    </div>
+  );
+}
+
+// 상수 정의
+const SYNC_POLL_INTERVAL_MS = 2000;
+const SYNC_TIMEOUT_MS = 120000;
+
+// 동기화 모달
+function SyncModal({
+  isOpen,
+  onClose,
+  stocks,
+  onRefresh,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  stocks: StockWithPurchases[];
+  onRefresh: () => void;
+}) {
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'requesting' | 'processing' | 'completed' | 'failed'>('idle');
+  const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
+  const [syncMessage, setSyncMessage] = useState('');
+  const [syncDays, setSyncDays] = useState(30);
+
+  // cleanup을 위한 refs
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusRef = useRef<string>('idle');
+
+  // 상태 변경 시 ref도 업데이트
+  useEffect(() => {
+    statusRef.current = syncStatus;
+  }, [syncStatus]);
+
+  // cleanup 함수
+  const cleanup = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  // 모달이 닫히거나 컴포넌트 언마운트 시 cleanup
+  useEffect(() => {
+    if (!isOpen) {
+      cleanup();
+    }
+    return () => cleanup();
+  }, [isOpen]);
+
+  const handleSync = async () => {
+    // 기존 타이머 정리
+    cleanup();
+
+    setSyncStatus('requesting');
+    setSyncResults([]);
+    setSyncMessage('');
+
+    const request = await api.createSyncRequest(syncDays);
+    if (!request) {
+      setSyncStatus('failed');
+      setSyncMessage('동기화 요청 생성 실패');
+      return;
+    }
+
+    setSyncStatus('processing');
+    setSyncMessage('봇에서 체결내역을 조회하고 있습니다...');
+
+    // 폴링으로 결과 확인
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const latestRequest = await api.getLatestSyncRequest();
+        if (latestRequest) {
+          if (latestRequest.status === 'completed') {
+            cleanup();
+            setSyncStatus('completed');
+            setSyncMessage(latestRequest.result_message || '완료');
+            const results = await api.getSyncResults(latestRequest.id);
+            setSyncResults(results);
+          } else if (latestRequest.status === 'failed') {
+            cleanup();
+            setSyncStatus('failed');
+            setSyncMessage(latestRequest.result_message || '실패');
+          }
+        }
+      } catch (err) {
+        console.error('Sync polling error:', err);
+      }
+    }, SYNC_POLL_INTERVAL_MS);
+
+    // 2분 타임아웃
+    timeoutRef.current = setTimeout(() => {
+      cleanup();
+      // ref를 사용하여 현재 상태 확인 (클로저 문제 해결)
+      if (statusRef.current === 'processing') {
+        setSyncStatus('failed');
+        setSyncMessage('타임아웃 - 봇 서버가 응답하지 않습니다.');
+      }
+    }, SYNC_TIMEOUT_MS);
+  };
+
+  // 매수 내역과 실제 체결내역 비교
+  const compareWithPurchases = (results: SyncResult[]) => {
+    const buyResults = results.filter(r => r.side === 'buy');
+    const comparison: {
+      result: SyncResult;
+      matchedPurchase?: Purchase;
+      stock?: StockWithPurchases;
+      status: 'matched' | 'unmatched' | 'extra';
+    }[] = [];
+
+    for (const result of buyResults) {
+      const stock = stocks.find(s => s.code === result.stock_code);
+      if (!stock) {
+        comparison.push({ result, status: 'unmatched' });
+        continue;
+      }
+
+      // 동일 종목의 매수기록 중 유사한 것 찾기
+      const matchedPurchase = stock.purchases.find(p =>
+        p.status === 'holding' &&
+        Math.abs(p.price - result.price) < result.price * 0.01 && // 1% 오차
+        p.quantity === result.quantity
+      );
+
+      if (matchedPurchase) {
+        comparison.push({ result, matchedPurchase, stock, status: 'matched' });
+      } else {
+        comparison.push({ result, stock, status: 'unmatched' });
+      }
+    }
+
+    return comparison;
+  };
+
+  if (!isOpen) return null;
+
+  const comparison = compareWithPurchases(syncResults);
+  const unmatchedCount = comparison.filter(c => c.status === 'unmatched').length;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+      <div className="bg-gray-800 rounded-t-2xl md:rounded-lg p-4 md:p-6 w-full md:max-w-2xl border-t md:border border-gray-700 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg md:text-xl font-bold">계좌 동기화</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* 동기화 요청 */}
+        {syncStatus === 'idle' && (
+          <div className="space-y-4">
+            <p className="text-gray-400 text-sm">
+              증권사 계좌의 실제 체결내역을 조회하여 봇 DB와 비교합니다.
+            </p>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-gray-400">조회 기간:</label>
+              <select
+                value={syncDays}
+                onChange={e => setSyncDays(Number(e.target.value))}
+                className="bg-gray-700 border border-gray-600 rounded px-3 py-2"
+              >
+                <option value={7}>7일</option>
+                <option value={14}>14일</option>
+                <option value={30}>30일</option>
+                <option value={60}>60일</option>
+                <option value={90}>90일</option>
+              </select>
+            </div>
+            <button
+              onClick={handleSync}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 rounded-lg hover:bg-blue-500 transition"
+            >
+              <RefreshCw className="w-4 h-4" />
+              동기화 시작
+            </button>
+          </div>
+        )}
+
+        {/* 처리 중 */}
+        {(syncStatus === 'requesting' || syncStatus === 'processing') && (
+          <div className="flex flex-col items-center justify-center py-8">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
+            <p className="text-gray-400">{syncMessage}</p>
+          </div>
+        )}
+
+        {/* 실패 */}
+        {syncStatus === 'failed' && (
+          <div className="space-y-4">
+            <div className="bg-red-900/20 border border-red-800 rounded-lg p-4">
+              <p className="text-red-400">{syncMessage}</p>
+            </div>
+            <button
+              onClick={() => setSyncStatus('idle')}
+              className="w-full px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
+
+        {/* 결과 */}
+        {syncStatus === 'completed' && (
+          <div className="space-y-4">
+            <div className="bg-green-900/20 border border-green-800 rounded-lg p-3">
+              <p className="text-green-400 text-sm">{syncMessage}</p>
+              {unmatchedCount > 0 && (
+                <p className="text-yellow-400 text-sm mt-1">
+                  {unmatchedCount}건의 불일치 발견
+                </p>
+              )}
+            </div>
+
+            {comparison.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                <h3 className="font-bold text-sm">매수 내역 비교</h3>
+                {comparison.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded text-sm ${
+                      item.status === 'matched'
+                        ? 'bg-green-900/20 border border-green-800'
+                        : 'bg-yellow-900/20 border border-yellow-800'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-bold">{item.result.stock_name}</span>
+                        <span className="text-gray-400 ml-2">{item.result.stock_code}</span>
+                      </div>
+                      <span className={item.status === 'matched' ? 'text-green-400' : 'text-yellow-400'}>
+                        {item.status === 'matched' ? '일치' : '불일치'}
+                      </span>
+                    </div>
+                    <div className="text-gray-400 mt-1">
+                      {item.result.trade_date} | {item.result.quantity}주 @ {item.result.price.toLocaleString()}원
+                    </div>
+                    {item.status === 'unmatched' && item.stock && (
+                      <p className="text-yellow-300 text-xs mt-1">
+                        → 종목 관리에서 수동으로 매수 기록을 추가/수정하세요
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setSyncStatus('idle')}
+                className="flex-1 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+              >
+                다시 조회
+              </button>
+              <button
+                onClick={() => { onRefresh(); onClose(); }}
+                className="flex-1 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -625,6 +1034,7 @@ export function Stocks() {
   const [showModal, setShowModal] = useState(false);
   const [editingStock, setEditingStock] = useState<StockWithPurchases | undefined>();
   const [purchaseModal, setPurchaseModal] = useState<{ stockId: string; stockName: string } | null>(null);
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   const handleSubmit = async (data: StockFormData) => {
     if (editingStock) {
@@ -670,16 +1080,26 @@ export function Stocks() {
     <div className="space-y-4 md:space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-xl md:text-2xl font-bold">종목 관리</h1>
-        <button
-          onClick={() => {
-            setEditingStock(undefined);
-            setShowModal(true);
-          }}
-          className="flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-sm md:text-base"
-        >
-          <Plus className="w-4 h-4" />
-          <span className="hidden md:inline">종목 </span>추가
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSyncModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition text-sm"
+            title="계좌 동기화"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span className="hidden md:inline">동기화</span>
+          </button>
+          <button
+            onClick={() => {
+              setEditingStock(undefined);
+              setShowModal(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-sm md:text-base"
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden md:inline">종목 </span>추가
+          </button>
+        </div>
       </div>
 
       {stocks.length === 0 ? (
@@ -729,6 +1149,13 @@ export function Stocks() {
           stockName={purchaseModal.stockName}
         />
       )}
+
+      <SyncModal
+        isOpen={showSyncModal}
+        onClose={() => setShowSyncModal(false)}
+        stocks={stocks}
+        onRefresh={refetch}
+      />
     </div>
   );
 }
