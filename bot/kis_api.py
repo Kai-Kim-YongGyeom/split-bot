@@ -349,6 +349,7 @@ class KisAPI:
             체결내역 리스트
         """
         if not self.is_configured:
+            print("[KIS] API 미설정 - 체결내역 조회 불가")
             return []
 
         # 기본값 설정
@@ -357,12 +358,15 @@ class KisAPI:
         if not start_date:
             start_date = (datetime.now() - timedelta(days=30)).strftime("%Y%m%d")
 
+        print(f"[KIS] 체결내역 조회: {start_date} ~ {end_date}")
+
         url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-daily-ccld"
 
         tr_id = "TTTC8001R" if self.is_real else "VTTC8001R"
         headers = self._get_headers(tr_id)
 
         acct_no, acct_suffix = self._parse_account()
+        print(f"[KIS] 계좌번호 파싱: {acct_no}-{acct_suffix}")
 
         all_orders = []
         ctx_area_fk100 = ""
@@ -392,11 +396,14 @@ class KisAPI:
                 response.raise_for_status()
                 result = response.json()
 
+                print(f"[KIS] API 응답 코드: {result.get('rt_cd')}, 메시지: {result.get('msg1', '')}")
+
                 if result.get("rt_cd") != "0":
                     print(f"[KIS] 체결내역 조회 실패: {result.get('msg1', '')}")
                     break
 
                 orders = result.get("output1", [])
+                print(f"[KIS] 조회된 주문 수: {len(orders)}")
                 for order in orders:
                     # 체결 수량이 있는 것만
                     tot_ccld_qty = int(order.get("tot_ccld_qty", 0))
@@ -429,6 +436,7 @@ class KisAPI:
         except requests.exceptions.RequestException as e:
             print(f"[KIS] 체결내역 조회 오류: {e}")
 
+        print(f"[KIS] 최종 체결내역: {len(all_orders)}건")
         return all_orders
 
     def get_current_price(self, stock_code: str) -> int:
