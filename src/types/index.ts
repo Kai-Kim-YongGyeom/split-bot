@@ -5,6 +5,7 @@ export interface Stock {
   name: string;
   is_active: boolean;
   buy_amount: number;
+  max_rounds: number; // 최대 차수 (1~10)
   split_rates: number[];
   target_rates: number[];
   stop_loss_rate: number;
@@ -55,6 +56,7 @@ export interface StockFormData {
   code: string;
   name: string;
   buy_amount: number;
+  max_rounds: number; // 최대 차수 (1~10)
   split_rates: number[];
   target_rates: number[];
   stop_loss_rate: number;

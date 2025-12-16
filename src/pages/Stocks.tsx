@@ -21,6 +21,7 @@ function StockModal({
     code: initialData?.code || '',
     name: initialData?.name || '',
     buy_amount: initialData?.buy_amount || 100000,
+    max_rounds: initialData?.max_rounds || 10,
     split_rates: initialData?.split_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
     target_rates: initialData?.target_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
     stop_loss_rate: initialData?.stop_loss_rate || 0,
@@ -153,51 +154,81 @@ function StockModal({
               <p className="text-xs text-gray-500 mt-1">0이면 비활성화</p>
             </div>
           </div>
+
+          {/* 최대 차수 선택 */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">물타기 비율 (%) - 2~10차</label>
-            <div className="grid grid-cols-5 gap-1.5 md:gap-2">
-              {formData.split_rates.slice(0, 5).map((rate, i) => (
-                <div key={i} className="flex flex-col items-center">
-                  <span className="text-xs text-gray-500 mb-1">{i + 2}차</span>
-                  <input
-                    type="number"
-                    value={rate}
-                    onChange={e => {
-                      const newRates = [...formData.split_rates];
-                      newRates[i] = Number(e.target.value);
-                      setFormData({ ...formData, split_rates: newRates });
-                    }}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
-                    min="1"
-                    max="50"
-                  />
-                </div>
+            <label className="block text-sm text-gray-400 mb-2">최대 차수 (1~10차)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {Array.from({ length: 10 }, (_, i) => i + 1).map(round => (
+                <button
+                  key={round}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, max_rounds: round })}
+                  className={`w-9 h-9 rounded-lg font-bold text-sm transition ${
+                    formData.max_rounds >= round
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+                  }`}
+                >
+                  {round}
+                </button>
               ))}
             </div>
-            <div className="grid grid-cols-5 gap-1.5 md:gap-2 mt-2">
-              {formData.split_rates.slice(5, 10).map((rate, i) => (
-                <div key={i + 5} className="flex flex-col items-center">
-                  <span className="text-xs text-gray-500 mb-1">{i + 7}차</span>
-                  <input
-                    type="number"
-                    value={rate}
-                    onChange={e => {
-                      const newRates = [...formData.split_rates];
-                      newRates[i + 5] = Number(e.target.value);
-                      setFormData({ ...formData, split_rates: newRates });
-                    }}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
-                    min="1"
-                    max="50"
-                  />
-                </div>
-              ))}
-            </div>
+            <p className="text-xs text-gray-500 mt-1">클릭한 차수까지만 물타기 진행</p>
           </div>
+
+          {/* 물타기 비율 - max_rounds가 2 이상일 때만 표시 */}
+          {formData.max_rounds >= 2 && (
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">물타기 비율 (%) - 2~{formData.max_rounds}차</label>
+              <div className="grid grid-cols-5 gap-1.5 md:gap-2">
+                {formData.split_rates.slice(0, Math.min(formData.max_rounds - 1, 5)).map((rate, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500 mb-1">{i + 2}차</span>
+                    <input
+                      type="number"
+                      value={rate}
+                      onChange={e => {
+                        const newRates = [...formData.split_rates];
+                        newRates[i] = Number(e.target.value);
+                        setFormData({ ...formData, split_rates: newRates });
+                      }}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
+                      min="1"
+                      max="50"
+                    />
+                  </div>
+                ))}
+              </div>
+              {formData.max_rounds > 6 && (
+                <div className="grid grid-cols-5 gap-1.5 md:gap-2 mt-2">
+                  {formData.split_rates.slice(5, formData.max_rounds - 1).map((rate, i) => (
+                    <div key={i + 5} className="flex flex-col items-center">
+                      <span className="text-xs text-gray-500 mb-1">{i + 7}차</span>
+                      <input
+                        type="number"
+                        value={rate}
+                        onChange={e => {
+                          const newRates = [...formData.split_rates];
+                          newRates[i + 5] = Number(e.target.value);
+                          setFormData({ ...formData, split_rates: newRates });
+                        }}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
+                        min="1"
+                        max="50"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 목표 수익률 */}
           <div>
-            <label className="block text-sm text-gray-400 mb-2">목표 수익률 (%) - 1~10차</label>
+            <label className="block text-sm text-gray-400 mb-2">목표 수익률 (%) - 1~{formData.max_rounds}차</label>
             <div className="grid grid-cols-5 gap-1.5 md:gap-2">
-              {formData.target_rates.slice(0, 5).map((rate, i) => (
+              {formData.target_rates.slice(0, Math.min(formData.max_rounds, 5)).map((rate, i) => (
                 <div key={i} className="flex flex-col items-center">
                   <span className="text-xs text-gray-500 mb-1">{i + 1}차</span>
                   <input
@@ -215,25 +246,27 @@ function StockModal({
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-5 gap-1.5 md:gap-2 mt-2">
-              {formData.target_rates.slice(5, 10).map((rate, i) => (
-                <div key={i + 5} className="flex flex-col items-center">
-                  <span className="text-xs text-gray-500 mb-1">{i + 6}차</span>
-                  <input
-                    type="number"
-                    value={rate}
-                    onChange={e => {
-                      const newRates = [...formData.target_rates];
-                      newRates[i + 5] = Number(e.target.value);
-                      setFormData({ ...formData, target_rates: newRates });
-                    }}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
-                    min="1"
-                    max="50"
-                  />
-                </div>
-              ))}
-            </div>
+            {formData.max_rounds > 5 && (
+              <div className="grid grid-cols-5 gap-1.5 md:gap-2 mt-2">
+                {formData.target_rates.slice(5, formData.max_rounds).map((rate, i) => (
+                  <div key={i + 5} className="flex flex-col items-center">
+                    <span className="text-xs text-gray-500 mb-1">{i + 6}차</span>
+                    <input
+                      type="number"
+                      value={rate}
+                      onChange={e => {
+                        const newRates = [...formData.target_rates];
+                        newRates[i + 5] = Number(e.target.value);
+                        setFormData({ ...formData, target_rates: newRates });
+                      }}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
+                      min="1"
+                      max="50"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="flex gap-3 pt-4">
             <button
@@ -438,7 +471,7 @@ function StockCard({
               {stock.is_active ? '활성' : '비활성'}
             </span>
             <span className="text-xs text-gray-400 bg-gray-700/50 px-2 py-0.5 rounded">
-              {holdingPurchases.length}차
+              {holdingPurchases.length}/{stock.max_rounds || 10}차
             </span>
           </div>
         </div>
