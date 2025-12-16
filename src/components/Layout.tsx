@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
+import { getBotConfig, updateBotConfig } from '../lib/api';
 
 const navItems = [
   { path: '/', label: '대시보드', emoji: '📊' },
@@ -15,9 +16,52 @@ export function Layout() {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [botRunning, setBotRunning] = useState<boolean | null>(null);
+  const [serverAlive, setServerAlive] = useState<boolean | null>(null);
+  const [toggling, setToggling] = useState(false);
 
   const handleNavClick = () => {
     setMobileMenuOpen(false);
+  };
+
+  // 봇 상태 및 서버 상태 체크
+  useEffect(() => {
+    const checkStatus = async () => {
+      const config = await getBotConfig();
+      if (config) {
+        setBotRunning(config.is_running);
+        // 하트비트 체크 (60초 이내면 서버 살아있음)
+        const heartbeat = config.last_heartbeat;
+        if (heartbeat) {
+          const lastTime = new Date(heartbeat).getTime();
+          const now = Date.now();
+          const diffSec = (now - lastTime) / 1000;
+          setServerAlive(diffSec < 60);
+        } else {
+          setServerAlive(false);
+        }
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const toggleBot = async () => {
+    if (toggling) return;
+    setToggling(true);
+
+    const newStatus = !botRunning;
+    const success = await updateBotConfig({
+      is_running: newStatus,
+      ...(newStatus && { last_started_at: new Date().toISOString() }),
+    });
+
+    if (success) {
+      setBotRunning(newStatus);
+    }
+    setToggling(false);
   };
 
   return (
@@ -53,6 +97,26 @@ export function Layout() {
                 })}
               </nav>
               <div className="flex items-center gap-3 pl-4 border-l border-gray-700">
+                {/* Server Status Dot */}
+                <div
+                  className={`w-3 h-3 rounded-full ${
+                    serverAlive === null ? 'bg-gray-500' : serverAlive ? 'bg-green-500' : 'bg-red-500'
+                  }`}
+                  title={serverAlive ? '서버 정상' : '서버 오프라인'}
+                />
+                {/* Bot Toggle */}
+                <button
+                  onClick={toggleBot}
+                  disabled={toggling}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${
+                    botRunning
+                      ? 'bg-green-600 hover:bg-green-500'
+                      : 'bg-gray-600 hover:bg-gray-500'
+                  } ${toggling ? 'opacity-50' : ''}`}
+                  title={botRunning ? '봇 실행중 - 클릭하여 중지' : '봇 중지됨 - 클릭하여 시작'}
+                >
+                  {botRunning ? 'ON' : 'OFF'}
+                </button>
                 <span className="text-gray-400 text-sm">{user?.email}</span>
                 <button
                   onClick={signOut}
@@ -64,13 +128,36 @@ export function Layout() {
               </div>
             </div>
 
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
-            >
-              {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
+            {/* Mobile: Status + Toggle + Menu Button */}
+            <div className="flex md:hidden items-center gap-2">
+              {/* Server Status Dot */}
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  serverAlive === null ? 'bg-gray-500' : serverAlive ? 'bg-green-500' : 'bg-red-500'
+                }`}
+                title={serverAlive ? '서버 정상' : '서버 오프라인'}
+              />
+              {/* Bot Toggle */}
+              <button
+                onClick={toggleBot}
+                disabled={toggling}
+                className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${
+                  botRunning
+                    ? 'bg-green-600 hover:bg-green-500'
+                    : 'bg-gray-600 hover:bg-gray-500'
+                } ${toggling ? 'opacity-50' : ''}`}
+                title={botRunning ? '봇 실행중 - 클릭하여 중지' : '봇 중지됨 - 클릭하여 시작'}
+              >
+                {botRunning ? 'ON' : 'OFF'}
+              </button>
+              {/* Menu Button */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+            </div>
           </div>
         </div>
 
