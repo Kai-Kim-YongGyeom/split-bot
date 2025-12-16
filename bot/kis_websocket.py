@@ -1,0 +1,227 @@
+"""한국투자증권 WebSocket 실시간 시세 모듈"""
+import json
+import asyncio
+from typing import Callable, Optional
+from datetime import datetime
+import websockets
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+import base64
+import requests
+
+from config import Config
+
+
+class KisWebSocket:
+    """한국투자증권 실시간 시세 WebSocket"""
+
+    def __init__(self):
+        self.ws_url = Config.KIS_WS_URL
+        self.app_key = Config.KIS_APP_KEY
+        self.app_secret = Config.KIS_APP_SECRET
+        self.is_real = Config.KIS_IS_REAL
+
+        self._ws: Optional[websockets.WebSocketClientProtocol] = None
+        self._approval_key: Optional[str] = None
+        self._subscribed_codes: set[str] = set()
+        self._price_callback: Optional[Callable] = None
+        self._running = False
+
+        # AES 복호화 키 (WebSocket 응답 복호화용)
+        self._aes_key: Optional[bytes] = None
+        self._aes_iv: Optional[bytes] = None
+
+    def _get_approval_key(self) -> str:
+        """WebSocket 접속 승인키 발급"""
+        url = f"{Config.KIS_BASE_URL}/oauth2/Approval"
+        data = {
+            "grant_type": "client_credentials",
+            "appkey": self.app_key,
+            "secretkey": self.app_secret,
+        }
+
+        response = requests.post(url, json=data)
+        result = response.json()
+
+        if "approval_key" in result:
+            print(f"[WS] 승인키 발급 완료")
+            return result["approval_key"]
+        raise Exception(f"승인키 발급 실패: {result}")
+
+    def _decrypt_data(self, encrypted_data: str) -> str:
+        """AES 복호화 (실시간 데이터)"""
+        if not self._aes_key or not self._aes_iv:
+            return encrypted_data
+
+        try:
+            cipher = AES.new(self._aes_key, AES.MODE_CBC, self._aes_iv)
+            decrypted = unpad(
+                cipher.decrypt(base64.b64decode(encrypted_data)),
+                AES.block_size
+            )
+            return decrypted.decode("utf-8")
+        except Exception:
+            return encrypted_data
+
+    def _parse_realtime_data(self, data: str) -> Optional[dict]:
+        """실시간 체결가 데이터 파싱"""
+        # 데이터 형식: 0|H0STCNT0|004|005930^...
+        parts = data.split("|")
+        if len(parts) < 4:
+            return None
+
+        # 암호화 여부
+        is_encrypted = parts[0] == "1"
+        tr_id = parts[1]
+
+        # 체결가 데이터만 처리
+        if tr_id != "H0STCNT0":
+            return None
+
+        body = parts[3]
+        if is_encrypted:
+            body = self._decrypt_data(body)
+
+        # ^ 구분자로 분리
+        fields = body.split("^")
+        if len(fields) < 20:
+            return None
+
+        try:
+            return {
+                "code": fields[0],           # 종목코드
+                "time": fields[1],           # 체결시간
+                "price": int(fields[2]),     # 현재가
+                "change": int(fields[4]),    # 전일대비
+                "change_rate": float(fields[5]),  # 등락률
+                "volume": int(fields[12]),   # 누적거래량
+            }
+        except (ValueError, IndexError):
+            return None
+
+    async def connect(self, on_price: Callable[[dict], None]) -> None:
+        """WebSocket 연결 및 실시간 시세 수신
+
+        Args:
+            on_price: 시세 수신 콜백 함수 (dict 인자)
+        """
+        self._price_callback = on_price
+        self._approval_key = self._get_approval_key()
+        self._running = True
+
+        print(f"[WS] 연결 시도: {self.ws_url}")
+
+        while self._running:
+            try:
+                async with websockets.connect(
+                    self.ws_url,
+                    ping_interval=30,
+                    ping_timeout=10,
+                ) as ws:
+                    self._ws = ws
+                    print("[WS] 연결 성공")
+
+                    # 기존 구독 종목 재구독
+                    for code in self._subscribed_codes:
+                        await self._subscribe(code)
+
+                    # 메시지 수신 루프
+                    async for message in ws:
+                        await self._handle_message(message)
+
+            except websockets.ConnectionClosed as e:
+                print(f"[WS] 연결 종료: {e}")
+            except Exception as e:
+                print(f"[WS] 오류: {e}")
+
+            if self._running:
+                print("[WS] 5초 후 재연결...")
+                await asyncio.sleep(5)
+
+    async def _handle_message(self, message: str) -> None:
+        """메시지 처리"""
+        # JSON 응답 (구독 확인 등)
+        if message.startswith("{"):
+            data = json.loads(message)
+            header = data.get("header", {})
+            tr_id = header.get("tr_id", "")
+
+            # 구독 응답
+            if tr_id == "H0STCNT0":
+                body = data.get("body", {})
+                if "output" in body:
+                    out = body["output"]
+                    # AES 키 저장
+                    if "key" in out and "iv" in out:
+                        self._aes_key = out["key"].encode()
+                        self._aes_iv = out["iv"].encode()
+                print(f"[WS] 구독 응답: {body.get('msg1', '')}")
+            return
+
+        # 실시간 데이터 (| 구분자)
+        if "|" in message:
+            price_data = self._parse_realtime_data(message)
+            if price_data and self._price_callback:
+                self._price_callback(price_data)
+
+    async def _subscribe(self, stock_code: str) -> None:
+        """종목 시세 구독"""
+        if not self._ws:
+            return
+
+        message = {
+            "header": {
+                "approval_key": self._approval_key,
+                "custtype": "P",
+                "tr_type": "1",  # 1: 등록
+                "content-type": "utf-8",
+            },
+            "body": {
+                "input": {
+                    "tr_id": "H0STCNT0",  # 실시간 체결가
+                    "tr_key": stock_code,
+                }
+            }
+        }
+
+        await self._ws.send(json.dumps(message))
+        print(f"[WS] 구독 요청: {stock_code}")
+
+    async def subscribe(self, stock_code: str) -> None:
+        """종목 구독 추가"""
+        self._subscribed_codes.add(stock_code)
+        if self._ws:
+            await self._subscribe(stock_code)
+
+    async def unsubscribe(self, stock_code: str) -> None:
+        """종목 구독 해제"""
+        self._subscribed_codes.discard(stock_code)
+
+        if not self._ws:
+            return
+
+        message = {
+            "header": {
+                "approval_key": self._approval_key,
+                "custtype": "P",
+                "tr_type": "2",  # 2: 해제
+                "content-type": "utf-8",
+            },
+            "body": {
+                "input": {
+                    "tr_id": "H0STCNT0",
+                    "tr_key": stock_code,
+                }
+            }
+        }
+
+        await self._ws.send(json.dumps(message))
+        print(f"[WS] 구독 해제: {stock_code}")
+
+    def stop(self) -> None:
+        """WebSocket 종료"""
+        self._running = False
+
+
+# 싱글톤 인스턴스
+kis_ws = KisWebSocket()
