@@ -23,6 +23,15 @@ class KisAPI:
         self._access_token: Optional[str] = None
         self._token_expires: Optional[datetime] = None
 
+    def reload_config(self) -> None:
+        """Config에서 설정 다시 로드 (DB 로드 후 호출 필요)"""
+        self.base_url = Config.KIS_BASE_URL
+        self.app_key = Config.KIS_APP_KEY
+        self.app_secret = Config.KIS_APP_SECRET
+        self.account_no = Config.KIS_ACCOUNT_NO
+        self.is_real = Config.KIS_IS_REAL
+        # 토큰은 초기화하지 않음 (이미 발급받은 경우 유지)
+
     @property
     def is_configured(self) -> bool:
         """API 키 설정 여부"""

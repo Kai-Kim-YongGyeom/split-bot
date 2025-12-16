@@ -574,6 +574,9 @@ class SplitBot:
             print("        .env 파일의 SUPABASE_URL, SUPABASE_KEY를 확인하세요.")
             return
 
+        # KIS API에 설정 반영 (싱글톤 인스턴스에 DB 로드된 설정 적용)
+        kis_api.reload_config()
+
         # KIS API 설정 확인 (선택사항)
         if not Config.validate_kis():
             print("[Warning] 한투 API 설정이 없습니다.")
