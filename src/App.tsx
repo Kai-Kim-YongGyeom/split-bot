@@ -7,6 +7,7 @@ import { Orders } from './pages/Orders';
 import { Settings } from './pages/Settings';
 import { AuthModal } from './components/AuthModal';
 import { useAuth } from './hooks/useAuth';
+import { BotStatusProvider } from './contexts/BotStatusContext';
 import { Loader2 } from 'lucide-react';
 
 function App() {
@@ -28,17 +29,19 @@ function App() {
 
   // 로그인 됨
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Dashboard />} />
-          <Route path="stocks" element={<Stocks />} />
-          <Route path="kpi" element={<KPI />} />
-          <Route path="orders" element={<Orders />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+    <BotStatusProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="stocks" element={<Stocks />} />
+            <Route path="kpi" element={<KPI />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </BotStatusProvider>
   );
 }
 

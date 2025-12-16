@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import type { Stock, Purchase, BotConfig, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult } from '../types';
+import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult } from '../types';
+import { encrypt, decrypt } from '../utils/crypto';
 
 // ==================== 유저 ID 헬퍼 ====================
 
@@ -160,23 +161,81 @@ export async function deletePurchase(id: string): Promise<boolean> {
   return true;
 }
 
-// ==================== 봇 설정 (bot_config) ====================
+// ==================== 봇 설정 (user_settings) ====================
+
+// UserSettings(DB) → BotConfig(프론트엔드) 변환 (복호화 포함)
+function userSettingsToBotConfig(settings: UserSettings): BotConfig {
+  return {
+    id: settings.id,
+    user_id: settings.user_id,
+    is_running: settings.is_running,
+    kis_app_key: settings.app_key_encrypted ? decrypt(settings.app_key_encrypted) : null,
+    kis_app_secret: settings.app_secret_encrypted ? decrypt(settings.app_secret_encrypted) : null,
+    kis_account_no: settings.account_no || null,
+    kis_is_real: !settings.is_demo,  // is_demo 반전
+    telegram_bot_token: settings.telegram_bot_token || null,
+    telegram_chat_id: settings.telegram_chat_id || null,
+    telegram_enabled: settings.telegram_enabled,
+    default_buy_amount: settings.default_buy_amount,
+    last_started_at: settings.last_started_at,
+    last_heartbeat: settings.last_heartbeat,
+    created_at: settings.created_at,
+    updated_at: settings.updated_at,
+  };
+}
+
+// BotConfig 업데이트 값 → UserSettings DB 값 변환 (암호화 포함)
+function botConfigToUserSettingsUpdate(updates: Partial<BotConfig>): Record<string, unknown> {
+  const dbUpdates: Record<string, unknown> = {};
+
+  if (updates.kis_app_key !== undefined) {
+    dbUpdates.app_key_encrypted = updates.kis_app_key ? encrypt(updates.kis_app_key) : null;
+  }
+  if (updates.kis_app_secret !== undefined) {
+    dbUpdates.app_secret_encrypted = updates.kis_app_secret ? encrypt(updates.kis_app_secret) : null;
+  }
+  if (updates.kis_account_no !== undefined) {
+    dbUpdates.account_no = updates.kis_account_no;
+  }
+  if (updates.kis_is_real !== undefined) {
+    dbUpdates.is_demo = !updates.kis_is_real;  // kis_is_real 반전
+  }
+  if (updates.is_running !== undefined) {
+    dbUpdates.is_running = updates.is_running;
+  }
+  if (updates.telegram_bot_token !== undefined) {
+    dbUpdates.telegram_bot_token = updates.telegram_bot_token;
+  }
+  if (updates.telegram_chat_id !== undefined) {
+    dbUpdates.telegram_chat_id = updates.telegram_chat_id;
+  }
+  if (updates.telegram_enabled !== undefined) {
+    dbUpdates.telegram_enabled = updates.telegram_enabled;
+  }
+  if (updates.default_buy_amount !== undefined) {
+    dbUpdates.default_buy_amount = updates.default_buy_amount;
+  }
+
+  return dbUpdates;
+}
 
 export async function getBotConfig(): Promise<BotConfig | null> {
   const userId = await getCurrentUserId();
   if (!userId) return null;
 
   const { data, error } = await supabase
-    .from('bot_config')
+    .from('user_settings')
     .select('*')
     .eq('user_id', userId)
     .single();
 
   if (error && error.code !== 'PGRST116') {
-    console.error('Error fetching bot config:', error);
+    console.error('Error fetching user settings:', error);
     return null;
   }
-  return data;
+
+  if (!data) return null;
+  return userSettingsToBotConfig(data as UserSettings);
 }
 
 export async function createBotConfig(): Promise<BotConfig | null> {
@@ -184,22 +243,22 @@ export async function createBotConfig(): Promise<BotConfig | null> {
   if (!userId) return null;
 
   const { data, error } = await supabase
-    .from('bot_config')
+    .from('user_settings')
     .insert([{
       user_id: userId,
       is_running: false,
-      kis_is_real: false,
-      telegram_enabled: true,
+      is_demo: true,  // 기본값: 모의투자
+      telegram_enabled: false,
       default_buy_amount: 100000,
     }])
     .select()
     .single();
 
   if (error) {
-    console.error('Error creating bot config:', error);
+    console.error('Error creating user settings:', error);
     return null;
   }
-  return data;
+  return userSettingsToBotConfig(data as UserSettings);
 }
 
 export async function getOrCreateBotConfig(): Promise<BotConfig | null> {
@@ -211,19 +270,23 @@ export async function getOrCreateBotConfig(): Promise<BotConfig | null> {
 }
 
 export async function updateBotConfig(updates: Partial<BotConfig>): Promise<boolean> {
-  const config = await getBotConfig();
-  if (!config) {
-    console.error('No bot config found');
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
     return false;
   }
 
+  // BotConfig → UserSettings 변환
+  const dbUpdates = botConfigToUserSettingsUpdate(updates);
+  dbUpdates.updated_at = new Date().toISOString();
+
   const { error } = await supabase
-    .from('bot_config')
-    .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', config.id);
+    .from('user_settings')
+    .update(dbUpdates)
+    .eq('user_id', userId);
 
   if (error) {
-    console.error('Error updating bot config:', error);
+    console.error('Error updating user settings:', error);
     return false;
   }
   return true;

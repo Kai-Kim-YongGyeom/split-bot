@@ -30,15 +30,34 @@ export interface Purchase {
   created_at: string;
 }
 
-// 봇 설정
+// 봇 설정 (user_settings 테이블)
+export interface UserSettings {
+  id: string;
+  user_id: string;
+  is_running: boolean;
+  app_key_encrypted?: string | null;    // 암호화된 APP KEY
+  app_secret_encrypted?: string | null; // 암호화된 APP SECRET
+  account_no?: string | null;
+  is_demo: boolean;                      // true=모의, false=실전
+  telegram_bot_token?: string | null;
+  telegram_chat_id?: string | null;
+  telegram_enabled: boolean;
+  default_buy_amount?: number;
+  last_started_at?: string;
+  last_heartbeat?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// 프론트엔드용 봇 설정 (복호화된 값)
 export interface BotConfig {
   id: string;
-  user_id?: string;
+  user_id: string;
   is_running: boolean;
-  kis_app_key?: string | null;
-  kis_app_secret?: string | null;
+  kis_app_key?: string | null;          // 복호화된 APP KEY
+  kis_app_secret?: string | null;       // 복호화된 APP SECRET
   kis_account_no?: string | null;
-  kis_is_real?: boolean;
+  kis_is_real: boolean;                  // true=실전, false=모의
   telegram_bot_token?: string | null;
   telegram_chat_id?: string | null;
   telegram_enabled: boolean;

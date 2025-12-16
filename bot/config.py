@@ -41,8 +41,8 @@ class Config:
     # 매수 설정
     DEFAULT_BUY_AMOUNT: int = int(os.getenv("DEFAULT_BUY_AMOUNT", "100000"))
 
-    # user_id (토큰 공유용)
-    USER_ID: Optional[str] = None
+    # user_id (토큰 공유용) - .env에서 지정 가능
+    USER_ID: Optional[str] = os.getenv("USER_ID", None)
 
     # DB 로드 여부
     _loaded_from_db: bool = False
@@ -62,12 +62,14 @@ class Config:
                 "Authorization": f"Bearer {cls.SUPABASE_KEY}",
             }
 
-            # user_settings에서 KIS API 설정 조회 (첫 번째 사용자)
-            response = requests.get(
-                f"{cls.SUPABASE_URL}/rest/v1/user_settings?select=*&limit=1",
-                headers=headers,
-                timeout=10,
-            )
+            # user_settings에서 KIS API 설정 조회
+            # USER_ID가 .env에 지정되어 있으면 해당 유저만, 아니면 첫 번째 유저
+            url = f"{cls.SUPABASE_URL}/rest/v1/user_settings?select=*"
+            if cls.USER_ID:
+                url += f"&user_id=eq.{cls.USER_ID}"
+            url += "&limit=1"
+
+            response = requests.get(url, headers=headers, timeout=10)
 
             if response.status_code != 200:
                 print(f"[Config] user_settings 로드 실패: {response.status_code}")

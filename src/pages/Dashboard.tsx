@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
 import { useStocks } from '../hooks/useStocks';
 import { TrendingUp, TrendingDown, Activity, Package, DollarSign, Target, Server } from 'lucide-react';
 import type { StockWithPurchases } from '../types';
-import { getBotConfig } from '../lib/api';
+import { useBotStatus } from '../contexts/BotStatusContext';
 
 function StockCard({ stock }: { stock: StockWithPurchases }) {
   const holdingPurchases = stock.purchases.filter(p => p.status === 'holding');
@@ -133,32 +132,7 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
-  const [botRunning, setBotRunning] = useState<boolean | null>(null);
-  const [serverAlive, setServerAlive] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    const checkStatus = () => {
-      getBotConfig().then(config => {
-        setBotRunning(config?.is_running ?? false);
-
-        // 하트비트 체크 (60초 이내면 서버 살아있음)
-        const heartbeat = config?.last_heartbeat;
-        if (heartbeat) {
-          const lastTime = new Date(heartbeat).getTime();
-          const now = Date.now();
-          const diffSec = (now - lastTime) / 1000;
-          setServerAlive(diffSec < 60);
-        } else {
-          setServerAlive(false);
-        }
-      });
-    };
-
-    checkStatus();
-    // 30초마다 상태 체크
-    const interval = setInterval(checkStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const { botRunning, serverAlive } = useBotStatus();
 
   if (loading) {
     return (

@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
-import { getBotConfig, updateBotConfig } from '../lib/api';
+import { useBotStatus } from '../contexts/BotStatusContext';
 
 const navItems = [
   { path: '/', label: '대시보드', emoji: '📊' },
@@ -16,52 +16,10 @@ export function Layout() {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [botRunning, setBotRunning] = useState<boolean | null>(null);
-  const [serverAlive, setServerAlive] = useState<boolean | null>(null);
-  const [toggling, setToggling] = useState(false);
+  const { botRunning, serverAlive, toggling, toggleBot } = useBotStatus();
 
   const handleNavClick = () => {
     setMobileMenuOpen(false);
-  };
-
-  // 봇 상태 및 서버 상태 체크
-  useEffect(() => {
-    const checkStatus = async () => {
-      const config = await getBotConfig();
-      if (config) {
-        setBotRunning(config.is_running);
-        // 하트비트 체크 (60초 이내면 서버 살아있음)
-        const heartbeat = config.last_heartbeat;
-        if (heartbeat) {
-          const lastTime = new Date(heartbeat).getTime();
-          const now = Date.now();
-          const diffSec = (now - lastTime) / 1000;
-          setServerAlive(diffSec < 60);
-        } else {
-          setServerAlive(false);
-        }
-      }
-    };
-
-    checkStatus();
-    const interval = setInterval(checkStatus, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const toggleBot = async () => {
-    if (toggling) return;
-    setToggling(true);
-
-    const newStatus = !botRunning;
-    const success = await updateBotConfig({
-      is_running: newStatus,
-      ...(newStatus && { last_started_at: new Date().toISOString() }),
-    });
-
-    if (success) {
-      setBotRunning(newStatus);
-    }
-    setToggling(false);
   };
 
   return (
