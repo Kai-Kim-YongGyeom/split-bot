@@ -28,6 +28,13 @@ class KisAPI:
         """API 키 설정 여부"""
         return all([self.app_key, self.app_secret, self.account_no])
 
+    def _parse_account(self) -> tuple[str, str]:
+        """계좌번호 파싱 (앞8자리, 뒤2자리)"""
+        if "-" in self.account_no:
+            return self.account_no.split("-")
+        else:
+            return self.account_no[:8], self.account_no[8:]
+
     @property
     def access_token(self) -> str:
         """액세스 토큰 (자동 갱신)"""
@@ -128,7 +135,7 @@ class KisAPI:
         tr_id = "TTTC8908R" if self.is_real else "VTTC8908R"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = self._parse_account()
         params = {
             "CANO": acct_no,
             "ACNT_PRDT_CD": acct_suffix,
@@ -163,7 +170,7 @@ class KisAPI:
         tr_id = "TTTC8434R" if self.is_real else "VTTC8434R"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = self._parse_account()
         params = {
             "CANO": acct_no,
             "ACNT_PRDT_CD": acct_suffix,
@@ -229,7 +236,7 @@ class KisAPI:
         tr_id = "TTTC0802U" if self.is_real else "VTTC0802U"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = self._parse_account()
 
         # 주문 구분: 00=지정가, 01=시장가
         ord_dvsn = "00" if price > 0 else "01"
@@ -289,7 +296,7 @@ class KisAPI:
         tr_id = "TTTC0801U" if self.is_real else "VTTC0801U"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = self._parse_account()
 
         ord_dvsn = "00" if price > 0 else "01"
         ord_price = str(price) if price > 0 else "0"
@@ -355,7 +362,7 @@ class KisAPI:
         tr_id = "TTTC8001R" if self.is_real else "VTTC8001R"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = self._parse_account()
 
         all_orders = []
         ctx_area_fk100 = ""
