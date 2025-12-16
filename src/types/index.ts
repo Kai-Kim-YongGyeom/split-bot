@@ -7,6 +7,7 @@ export interface Stock {
   buy_amount: number;
   split_rates: number[];
   target_rates: number[];
+  stop_loss_rate: number;
   created_at: string;
   updated_at: string;
 }
@@ -48,6 +49,7 @@ export interface StockFormData {
   buy_amount: number;
   split_rates: number[];
   target_rates: number[];
+  stop_loss_rate: number;
 }
 
 // 매수 폼

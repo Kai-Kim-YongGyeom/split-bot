@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Stocks } from './pages/Stocks';
+import { KPI } from './pages/KPI';
+import { Orders } from './pages/Orders';
 import { Settings } from './pages/Settings';
 import { AuthModal } from './components/AuthModal';
 import { useAuth } from './hooks/useAuth';
@@ -31,6 +33,8 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="stocks" element={<Stocks />} />
+          <Route path="kpi" element={<KPI />} />
+          <Route path="orders" element={<Orders />} />
           <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>

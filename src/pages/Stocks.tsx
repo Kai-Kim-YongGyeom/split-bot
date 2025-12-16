@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStocks } from '../hooks/useStocks';
-import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search } from 'lucide-react';
-import type { StockWithPurchases, StockFormData, PurchaseFormData } from '../types';
+import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp } from 'lucide-react';
+import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase } from '../types';
 import * as api from '../lib/api';
 import { searchStocks, type StockInfo } from '../data/stocks';
 
@@ -23,6 +23,7 @@ function StockModal({
     buy_amount: initialData?.buy_amount || 100000,
     split_rates: initialData?.split_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
     target_rates: initialData?.target_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+    stop_loss_rate: initialData?.stop_loss_rate || 0,
   });
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -127,15 +128,30 @@ function StockModal({
               />
             </div>
           </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">회당 매수 금액</label>
-            <input
-              type="number"
-              value={formData.buy_amount}
-              onChange={e => setFormData({ ...formData, buy_amount: Number(e.target.value) })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
-              required
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">회당 매수 금액</label>
+              <input
+                type="number"
+                value={formData.buy_amount}
+                onChange={e => setFormData({ ...formData, buy_amount: Number(e.target.value) })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">손절 비율 (%)</label>
+              <input
+                type="number"
+                value={formData.stop_loss_rate}
+                onChange={e => setFormData({ ...formData, stop_loss_rate: Number(e.target.value) })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                placeholder="0 (비활성화)"
+                min="0"
+                max="100"
+              />
+              <p className="text-xs text-gray-500 mt-1">0이면 비활성화, 평단 대비</p>
+            </div>
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-2">물타기 비율 (%) - 2~10차</label>
@@ -344,12 +360,38 @@ function StockRow({
   const [expanded, setExpanded] = useState(false);
   const [buying, setBuying] = useState(false);
   const [buySuccess, setBuySuccess] = useState(false);
+  const [sellingPurchaseId, setSellingPurchaseId] = useState<string | null>(null);
+  const [sellSuccess, setSellSuccess] = useState<string | null>(null);
   const holdingPurchases = stock.purchases.filter(p => p.status === 'holding');
 
   const handleDeletePurchase = async (purchaseId: string) => {
     if (confirm('이 매수 기록을 삭제하시겠습니까?')) {
       await api.deletePurchase(purchaseId);
       onRefresh();
+    }
+  };
+
+  const handleSellRequest = async (purchase: Purchase) => {
+    if (!confirm(`${stock.name} ${purchase.round}차 ${purchase.quantity}주를 시장가 매도하시겠습니까?`)) {
+      return;
+    }
+
+    setSellingPurchaseId(purchase.id);
+    const result = await api.createSellRequest(
+      stock.id,
+      stock.code,
+      stock.name,
+      purchase.id,
+      purchase.round,
+      purchase.quantity
+    );
+    setSellingPurchaseId(null);
+
+    if (result) {
+      setSellSuccess(purchase.id);
+      setTimeout(() => setSellSuccess(null), 3000);
+    } else {
+      alert('매도 요청 실패. 다시 시도해주세요.');
     }
   };
 
@@ -502,12 +544,30 @@ function StockRow({
                         {purchase.status === 'holding' ? '보유' : '매도'}
                       </span>
                       {purchase.status === 'holding' && (
-                        <button
-                          onClick={() => handleDeletePurchase(purchase.id)}
-                          className="text-gray-500 hover:text-red-400"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                        <>
+                          {sellSuccess === purchase.id && (
+                            <span className="text-xs text-green-400">요청완료</span>
+                          )}
+                          <button
+                            onClick={() => handleSellRequest(purchase)}
+                            disabled={sellingPurchaseId === purchase.id}
+                            className="text-orange-400 hover:text-orange-300 disabled:opacity-50"
+                            title="즉시 매도"
+                          >
+                            {sellingPurchaseId === purchase.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <TrendingUp className="w-3 h-3" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleDeletePurchase(purchase.id)}
+                            className="text-gray-500 hover:text-red-400"
+                            title="삭제"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

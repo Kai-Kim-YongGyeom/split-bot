@@ -202,6 +202,7 @@ class SupabaseClient:
             # split_rates, target_rates는 배열로 저장됨
             split_rates = stock_data.get("split_rates") or [5.0] * 5
             target_rates = stock_data.get("target_rates") or [5.0] * 5
+            stop_loss_rate = stock_data.get("stop_loss_rate") or 0.0
 
             stock = StockConfig(
                 id=stock_data["id"],
@@ -211,6 +212,7 @@ class SupabaseClient:
                 buy_amount=stock_data.get("buy_amount", Config.DEFAULT_BUY_AMOUNT),
                 split_rates=split_rates,
                 target_rates=target_rates,
+                stop_loss_rate=stop_loss_rate,
                 purchases=purchases,
             )
             result.append(stock)
@@ -278,6 +280,47 @@ class SupabaseClient:
         result = self._request(
             "PATCH",
             "bot_buy_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
+        )
+
+        return "error" not in result
+
+    # ==================== 매도 요청 (bot_sell_requests) ====================
+
+    def get_pending_sell_requests(self) -> list[dict]:
+        """대기 중인 매도 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "bot_sell_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_sell_request(self, request_id: str, status: str, message: str = "") -> bool:
+        """매도 요청 상태 업데이트"""
+        if not self.is_configured:
+            return False
+
+        data = {
+            "status": status,
+            "result_message": message,
+            "executed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        result = self._request(
+            "PATCH",
+            "bot_sell_requests",
             data=data,
             params={"id": f"eq.{request_id}"},
         )

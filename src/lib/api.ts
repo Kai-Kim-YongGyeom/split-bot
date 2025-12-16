@@ -259,3 +259,62 @@ export async function cancelBuyRequest(id: string): Promise<boolean> {
   }
   return true;
 }
+
+// ==================== 매도 요청 (bot_sell_requests) ====================
+
+export interface SellRequest {
+  id: string;
+  stock_id: string;
+  stock_code: string;
+  stock_name: string;
+  purchase_id: string;
+  round: number;
+  quantity: number;
+  status: 'pending' | 'executed' | 'failed' | 'cancelled';
+  result_message: string | null;
+  created_at: string;
+  executed_at: string | null;
+}
+
+export async function createSellRequest(
+  stockId: string,
+  stockCode: string,
+  stockName: string,
+  purchaseId: string,
+  round: number,
+  quantity: number
+): Promise<SellRequest | null> {
+  const { data, error } = await supabase
+    .from('bot_sell_requests')
+    .insert([{
+      stock_id: stockId,
+      stock_code: stockCode,
+      stock_name: stockName,
+      purchase_id: purchaseId,
+      round,
+      quantity,
+      status: 'pending',
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating sell request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function cancelSellRequest(id: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('bot_sell_requests')
+    .update({ status: 'cancelled' })
+    .eq('id', id)
+    .eq('status', 'pending');
+
+  if (error) {
+    console.error('Error cancelling sell request:', error);
+    return false;
+  }
+  return true;
+}

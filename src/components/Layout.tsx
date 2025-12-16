@@ -1,10 +1,12 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Bot, ListOrdered, Settings, Activity, LogOut } from 'lucide-react';
+import { Bot, ListOrdered, Settings, Activity, LogOut, BarChart3, ClipboardList } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 
 const navItems = [
   { path: '/', label: '대시보드', icon: Activity },
   { path: '/stocks', label: '종목 관리', icon: ListOrdered },
+  { path: '/kpi', label: 'KPI', icon: BarChart3 },
+  { path: '/orders', label: '주문내역', icon: ClipboardList },
   { path: '/settings', label: '설정', icon: Settings },
 ];
 

@@ -1,0 +1,18 @@
+[Unit]
+Description=Split Bot - Auto Trading Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ygyeom821
+WorkingDirectory=/home/ygyeom821/repo/bot
+Environment=PATH=/home/ygyeom821/repo/bot/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/home/ygyeom821/repo/bot/venv/bin/python main.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+EnvironmentFile=-/home/ygyeom821/repo/bot/.env
+
+[Install]
+WantedBy=multi-user.target
