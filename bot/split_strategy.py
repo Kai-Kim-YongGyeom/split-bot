@@ -115,10 +115,15 @@ class StockConfig:
         """목표가 도달한 매도 가능 차수들
 
         각 차수별로 해당 차수 매수가 기준 목표가 도달 여부 체크
+        1차수는 매도 대상에서 제외 (원금 보존)
         """
         sellable = []
 
         for purchase in self.holding_purchases:
+            # 1차수는 자동 매도 제외
+            if purchase.round == 1:
+                continue
+
             # 해당 차수의 목표 상승률
             rate_idx = min(purchase.round - 1, len(self.target_rates) - 1)
             target_rate = self.target_rates[rate_idx]
