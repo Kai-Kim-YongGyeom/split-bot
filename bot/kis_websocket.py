@@ -132,6 +132,11 @@ class KisWebSocket:
             if self._running:
                 print("[WS] 5초 후 재연결...")
                 await asyncio.sleep(5)
+                # 재연결 시 승인키 갱신
+                try:
+                    self._approval_key = self._get_approval_key()
+                except Exception as e:
+                    print(f"[WS] 승인키 갱신 실패: {e}")
 
     async def _handle_message(self, message: str) -> None:
         """메시지 처리"""
