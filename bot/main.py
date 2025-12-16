@@ -210,6 +210,25 @@ class SplitBot:
                 status = self.get_status()
                 await notifier.send_status(status)
 
+    async def reload_stocks_periodically(self) -> None:
+        """주기적으로 새 종목 확인 및 구독 (30초마다)"""
+        while self._running:
+            await asyncio.sleep(30)
+
+            # 현재 구독 중인 종목 코드
+            current_codes = set(strategy.stocks.keys())
+
+            # DB에서 종목 다시 로드
+            self.load_stocks_from_db()
+
+            # 새로 추가된 종목 구독
+            new_codes = set(strategy.stocks.keys()) - current_codes
+            for code in new_codes:
+                await kis_ws.subscribe(code)
+                stock = strategy.get_stock(code)
+                print(f"[Bot] 새 종목 감지: {stock.name} ({code})")
+                print(f"[WS] 구독: {code}")
+
     async def process_buy_requests(self) -> None:
         """웹에서 요청한 매수 처리 (10초마다)"""
         while self._running:
@@ -329,8 +348,8 @@ class SplitBot:
 
         if not strategy.stocks:
             print("[Bot] 감시할 종목이 없습니다.")
-            print("      웹에서 종목을 추가하고 1차 매수를 해주세요.")
-            return
+            print("      웹에서 종목을 추가하면 자동으로 감지됩니다.")
+            print()
 
         # 초기 봇 상태 확인
         self._bot_enabled = self.check_bot_enabled()
@@ -364,6 +383,9 @@ class SplitBot:
         # 웹 매수 요청 처리 태스크
         buy_request_task = asyncio.create_task(self.process_buy_requests())
 
+        # 새 종목 감지 태스크 (30초마다)
+        reload_stocks_task = asyncio.create_task(self.reload_stocks_periodically())
+
         try:
             # WebSocket 연결 (메인 루프)
             await kis_ws.connect(
@@ -375,6 +397,7 @@ class SplitBot:
             self._running = False
             status_task.cancel()
             buy_request_task.cancel()
+            reload_stocks_task.cancel()
             kis_ws.stop()
             await bot_handler.stop()
             print("[Bot] 종료 완료")
