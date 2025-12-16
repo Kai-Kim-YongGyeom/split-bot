@@ -4,7 +4,9 @@ import CryptoJS from 'crypto-js';
 const getEncryptionKey = (): string => {
   const key = import.meta.env.VITE_ENCRYPTION_KEY;
   if (!key) {
-    throw new Error('암호화 키 환경변수가 설정되지 않았습니다.');
+    console.error('[Crypto] VITE_ENCRYPTION_KEY 환경변수가 설정되지 않았습니다!');
+    console.error('[Crypto] import.meta.env:', import.meta.env);
+    return '';
   }
   return key;
 };
@@ -14,6 +16,10 @@ export function encrypt(text: string): string {
   try {
     const key = getEncryptionKey();
     console.log('[Crypto] encrypt - key exists:', !!key, 'key length:', key?.length);
+    if (!key) {
+      console.error('[Crypto] 암호화 키가 없어서 암호화 불가');
+      return '';
+    }
     const encrypted = CryptoJS.AES.encrypt(text, key).toString();
     console.log('[Crypto] encrypt - result:', encrypted?.substring(0, 20) + '...');
     return encrypted;
