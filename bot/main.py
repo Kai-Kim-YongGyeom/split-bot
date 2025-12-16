@@ -112,6 +112,12 @@ class SplitBot:
         if buy_result.get("action") == "buy":
             await self.execute_buy(buy_result)
 
+        # 손절 조건 체크 (비활성화)
+        # stop_loss_result = strategy.check_stop_loss_condition(code, price)
+        # if stop_loss_result:
+        #     await self.execute_stop_loss(stop_loss_result)
+        #     return  # 손절 후 다른 조건 체크 안함
+
         # 매도 조건 체크 (여러 차수 동시 가능)
         sell_results = strategy.check_sell_condition(code, price)
         for sell_result in sell_results:
@@ -125,37 +131,44 @@ class SplitBot:
         round_num = result["round"]
         prev_price = result.get("prev_price", 0)
 
+        # 주문 처리 중 플래그 설정 (중복 주문 방지)
+        stock.set_order_pending("buy", round_num)
+
         print(f"[Bot] 매수 시도: {stock.name} {quantity}주 @ {price:,}원 ({round_num}차)")
         print(f"      이전 차수 가격: {prev_price:,}원 → 현재가: {price:,}원")
 
-        # 매수 주문 (시장가)
-        order = kis_api.buy_stock(stock.code, quantity, price=0)
+        try:
+            # 매수 주문 (시장가)
+            order = kis_api.buy_stock(stock.code, quantity, price=0)
 
-        if order["success"]:
-            # 메모리에 매수 기록 추가
-            purchase = stock.add_purchase(price, quantity)
+            if order["success"]:
+                # 메모리에 매수 기록 추가
+                purchase = stock.add_purchase(price, quantity)
 
-            # DB에 저장
-            if Config.validate_supabase() and stock.id:
-                purchase_id = supabase.save_purchase(stock, purchase)
-                if purchase_id:
-                    purchase.id = purchase_id
-                    print(f"[Bot] DB 저장 완료: {purchase_id}")
+                # DB에 저장
+                if Config.validate_supabase() and stock.id:
+                    purchase_id = supabase.save_purchase(stock, purchase)
+                    if purchase_id:
+                        purchase.id = purchase_id
+                        print(f"[Bot] DB 저장 완료: {purchase_id}")
 
-            print(f"[Bot] 매수 성공: 주문번호 {order['order_no']}")
-        else:
-            print(f"[Bot] 매수 실패: {order['message']}")
+                print(f"[Bot] 매수 성공: 주문번호 {order['order_no']}")
+            else:
+                print(f"[Bot] 매수 실패: {order['message']}")
 
-        # 텔레그램 알림
-        await notifier.send_buy_alert(
-            stock_name=stock.name,
-            stock_code=stock.code,
-            price=price,
-            quantity=quantity,
-            round_num=round_num,
-            success=order["success"],
-            order_no=order.get("order_no", ""),
-        )
+            # 텔레그램 알림
+            await notifier.send_buy_alert(
+                stock_name=stock.name,
+                stock_code=stock.code,
+                price=price,
+                quantity=quantity,
+                round_num=round_num,
+                success=order["success"],
+                order_no=order.get("order_no", ""),
+            )
+        finally:
+            # 주문 처리 완료 (성공/실패 무관)
+            stock.clear_order_pending()
 
     async def execute_sell(self, result: dict) -> None:
         """매도 실행 (차수별 개별 매도)"""
@@ -167,32 +180,78 @@ class SplitBot:
         profit = result["profit"]
         profit_rate = result["profit_rate"]
 
+        # 주문 처리 중 플래그 설정 (중복 주문 방지)
+        stock.set_order_pending("sell", round_num)
+
         print(f"[Bot] 매도 시도: {stock.name} {round_num}차 {quantity}주 @ {price:,}원")
         print(f"      매수가: {purchase.price:,}원 → 매도가: {price:,}원 ({profit_rate:+.1f}%)")
 
+        try:
+            # 매도 주문 (시장가)
+            order = kis_api.sell_stock(stock.code, quantity, price=0)
+
+            if order["success"]:
+                # 매도 처리
+                stock.mark_sold(purchase, price)
+
+                # DB 업데이트
+                if Config.validate_supabase() and purchase.id:
+                    supabase.mark_purchase_sold(purchase.id, price)
+                    print(f"[Bot] DB 매도 처리 완료")
+
+                print(f"[Bot] 매도 성공: 손익 {profit:+,}원 ({profit_rate:+.2f}%)")
+            else:
+                print(f"[Bot] 매도 실패: {order['message']}")
+
+            # 텔레그램 알림
+            await notifier.send_sell_alert(
+                stock_name=stock.name,
+                stock_code=stock.code,
+                price=price,
+                quantity=quantity,
+                profit=int(profit),
+                profit_rate=profit_rate,
+                success=order["success"],
+            )
+        finally:
+            # 주문 처리 완료 (성공/실패 무관)
+            stock.clear_order_pending()
+
+    async def execute_stop_loss(self, result: dict) -> None:
+        """손절 실행 (전량 매도)"""
+        stock: StockConfig = result["stock"]
+        purchases: list[Purchase] = result["purchases"]
+        price = result["price"]
+        total_qty = result["quantity"]
+        avg_price = result["avg_price"]
+        total_profit = result["total_profit"]
+        profit_rate = result["profit_rate"]
+
+        print(f"[Bot] 손절 시도: {stock.name} 전량 {total_qty}주 @ {price:,}원")
+        print(f"      평균단가: {avg_price:,.0f}원 → 현재가: {price:,}원 ({profit_rate:.1f}%)")
+
         # 매도 주문 (시장가)
-        order = kis_api.sell_stock(stock.code, quantity, price=0)
+        order = kis_api.sell_stock(stock.code, total_qty, price=0)
 
         if order["success"]:
-            # 매도 처리
-            stock.mark_sold(purchase, price)
+            # 모든 보유분 매도 처리
+            for purchase in purchases:
+                stock.mark_sold(purchase, price)
+                if Config.validate_supabase() and purchase.id:
+                    supabase.mark_purchase_sold(purchase.id, price)
 
-            # DB 업데이트
-            if Config.validate_supabase() and purchase.id:
-                supabase.mark_purchase_sold(purchase.id, price)
-                print(f"[Bot] DB 매도 처리 완료")
-
-            print(f"[Bot] 매도 성공: 손익 {profit:+,}원 ({profit_rate:+.2f}%)")
+            print(f"[Bot] 손절 완료: 손익 {total_profit:+,.0f}원 ({profit_rate:+.2f}%)")
         else:
-            print(f"[Bot] 매도 실패: {order['message']}")
+            print(f"[Bot] 손절 실패: {order['message']}")
 
-        # 텔레그램 알림
-        await notifier.send_sell_alert(
+        # 텔레그램 알림 (손절 전용)
+        await notifier.send_stop_loss_alert(
             stock_name=stock.name,
             stock_code=stock.code,
             price=price,
-            quantity=quantity,
-            profit=int(profit),
+            quantity=total_qty,
+            avg_price=int(avg_price),
+            profit=int(total_profit),
             profit_rate=profit_rate,
             success=order["success"],
         )
@@ -210,123 +269,288 @@ class SplitBot:
                 status = self.get_status()
                 await notifier.send_status(status)
 
-    async def send_heartbeat(self) -> None:
-        """하트비트 전송 (30초마다)"""
-        while self._running:
-            try:
-                supabase.update_heartbeat()
-            except Exception as e:
-                print(f"[Bot] 하트비트 실패: {e}")
-            await asyncio.sleep(30)
-
-    async def reload_stocks_periodically(self) -> None:
-        """주기적으로 새 종목 확인 및 구독 (30초마다)"""
-        while self._running:
-            await asyncio.sleep(30)
-
-            # 현재 구독 중인 종목 코드
-            current_codes = set(strategy.stocks.keys())
-
-            # DB에서 종목 다시 로드
-            self.load_stocks_from_db()
-
-            # 새로 추가된 종목 구독
-            new_codes = set(strategy.stocks.keys()) - current_codes
-            for code in new_codes:
-                await kis_ws.subscribe(code)
-                stock = strategy.get_stock(code)
-                print(f"[Bot] 새 종목 감지: {stock.name} ({code})")
-                print(f"[WS] 구독: {code}")
-
-    async def process_buy_requests(self) -> None:
-        """웹에서 요청한 매수 처리 (10초마다)"""
+    async def process_web_requests(self) -> None:
+        """웹에서 요청한 매수/매도/동기화 처리 (10초마다)"""
         while self._running:
             await asyncio.sleep(10)
 
+            # 동기화 요청은 장 운영과 무관하게 처리
+            await self.process_sync_requests()
+
+            # 장 운영 시간이 아니면 매수/매도 스킵
+            if not self.is_market_open():
+                continue
+
+            # 봇 활성화 상태 확인
             if not self._bot_enabled:
                 continue
 
-            # 대기 중인 매수 요청 조회
-            requests = supabase.get_pending_buy_requests()
+            # 매수 요청 처리
+            await self.process_buy_requests()
 
+            # 매도 요청 처리
+            await self.process_sell_requests()
+
+    async def process_sync_requests(self) -> None:
+        """대기 중인 동기화 요청 처리"""
+        try:
+            requests = supabase.get_pending_sync_requests()
+            for req in requests:
+                await self.execute_sync_request(req)
+        except Exception as e:
+            print(f"[Bot] 동기화 요청 처리 오류: {e}")
+
+    async def execute_sync_request(self, req: dict) -> None:
+        """동기화 요청 실행"""
+        request_id = req.get("id")
+        user_id = req.get("user_id")
+        sync_days = req.get("sync_days", 30)
+
+        print(f"[Bot] 동기화 요청 처리: {request_id} ({sync_days}일)")
+
+        # 처리 중 상태로 변경
+        supabase.update_sync_request(request_id, "processing")
+
+        try:
+            # KIS API로 체결내역 조회
+            from datetime import datetime, timedelta
+            end_date = datetime.now().strftime("%Y%m%d")
+            start_date = (datetime.now() - timedelta(days=sync_days)).strftime("%Y%m%d")
+
+            orders = kis_api.get_order_history(start_date, end_date)
+
+            if not orders:
+                supabase.update_sync_request(request_id, "completed", "체결내역이 없습니다.")
+                return
+
+            # 결과 저장 (bot_sync_results)
+            supabase.save_sync_results(request_id, user_id, orders)
+
+            # 체결내역을 bot_purchases에 반영
+            buy_synced = 0
+            sell_synced = 0
+            skipped = 0
+
+            for order in orders:
+                stock_code = order.get("code", "")
+
+                # 해당 종목 찾기
+                stock = supabase.get_stock_by_code(stock_code)
+                if not stock:
+                    skipped += 1
+                    continue
+
+                stock_id = stock.get("id")
+                side = order.get("side", "")
+
+                if side == "buy":
+                    result = supabase.sync_buy_order_to_purchase(stock_id, user_id, order)
+                    if result:
+                        buy_synced += 1
+                elif side == "sell":
+                    result = supabase.sync_sell_order_to_purchase(stock_id, order)
+                    if result:
+                        sell_synced += 1
+
+            # 메모리 상태도 갱신
+            await self._reload_stocks()
+
+            # 완료 처리
+            message = f"{len(orders)}건 조회 (매수 {buy_synced}건, 매도 {sell_synced}건 동기화, {skipped}건 스킵)"
+            supabase.update_sync_request(request_id, "completed", message)
+            print(f"[Bot] 동기화 완료: {message}")
+
+        except Exception as e:
+            supabase.update_sync_request(request_id, "failed", str(e))
+            print(f"[Bot] 동기화 실패: {e}")
+
+    async def _reload_stocks(self) -> None:
+        """DB에서 종목 데이터 다시 로드"""
+        try:
+            stocks = supabase.load_all_stocks()
+            strategy.stocks = {s.code: s for s in stocks}
+            print(f"[Bot] 종목 데이터 리로드 완료: {len(stocks)}개")
+        except Exception as e:
+            print(f"[Bot] 종목 리로드 실패: {e}")
+
+    async def process_buy_requests(self) -> None:
+        """대기 중인 매수 요청 처리"""
+        try:
+            requests = supabase.get_pending_buy_requests()
             for req in requests:
                 await self.execute_web_buy_request(req)
+        except Exception as e:
+            print(f"[Bot] 매수 요청 처리 오류: {e}")
 
     async def execute_web_buy_request(self, req: dict) -> None:
         """웹 매수 요청 실행"""
-        stock_code = req.get("stock_code", "")
-        stock_name = req.get("stock_name", "")
-        stock_id = req.get("stock_id", "")
-        request_id = req.get("id", "")
+        request_id = req.get("id")
+        stock_code = req.get("stock_code")
+        stock_name = req.get("stock_name")
+        quantity = req.get("quantity")
+        price = req.get("price", 0)
+        order_type = req.get("order_type", "market")
 
-        print(f"[Bot] 웹 매수 요청: {stock_name} ({stock_code})")
+        print(f"[Bot] 웹 매수 요청: {stock_name}({stock_code}) {quantity}주")
 
-        # 종목 설정 확인
-        stock = strategy.get_stock(stock_code)
+        # 종목 확인
+        stock = strategy.stocks.get(stock_code)
         if not stock:
-            # 새 종목이면 DB에서 다시 로드
-            self.load_stocks_from_db()
-            stock = strategy.get_stock(stock_code)
-
-        if not stock:
-            supabase.update_buy_request(request_id, "failed", "종목 설정을 찾을 수 없습니다")
+            supabase.update_buy_request(request_id, "failed", f"종목 없음: {stock_code}")
             return
 
-        # 매수 금액으로 수량 계산 (현재가 필요)
+        # 주문 처리 중 체크 (중복 주문 방지)
+        if stock.is_order_pending("buy"):
+            supabase.update_buy_request(request_id, "failed", "이미 매수 주문 처리 중")
+            return
+
+        # 수량이 없으면 기본 매수금액으로 계산
+        if not quantity:
+            current_price = self._prices.get(stock_code, 0)
+            if current_price <= 0:
+                # 현재가 조회
+                current_price = kis_api.get_current_price(stock_code)
+            if current_price > 0:
+                quantity = stock.buy_amount // current_price
+            else:
+                supabase.update_buy_request(request_id, "failed", "현재가 조회 실패")
+                return
+
+        # 주문 처리 중 플래그 설정
+        next_round = stock.current_round + 1
+        stock.set_order_pending("buy", next_round)
+
+        try:
+            # 매수 주문
+            if order_type == "limit" and price > 0:
+                order = kis_api.buy_stock(stock_code, quantity, price=price)
+            else:
+                order = kis_api.buy_stock(stock_code, quantity, price=0)
+
+            if order["success"]:
+                # 매수가 (시장가면 현재가 사용)
+                buy_price = price if price > 0 else self._prices.get(stock_code, 0)
+                if buy_price <= 0:
+                    buy_price = kis_api.get_current_price(stock_code)
+
+                # 매수 기록 추가
+                purchase = stock.add_purchase(buy_price, quantity)
+
+                # DB 저장
+                if stock.id:
+                    purchase_id = supabase.save_purchase(stock, purchase)
+                    if purchase_id:
+                        purchase.id = purchase_id
+
+                message = f"주문번호: {order['order_no']}, {quantity}주 @ {buy_price:,}원"
+                supabase.update_buy_request(request_id, "executed", message)
+                print(f"[Bot] 웹 매수 성공: {message}")
+
+                # 텔레그램 알림
+                await notifier.send_buy_alert(
+                    stock_name=stock.name,
+                    stock_code=stock.code,
+                    price=buy_price,
+                    quantity=quantity,
+                    round_num=stock.current_round,
+                    success=True,
+                    order_no=order.get("order_no", ""),
+                )
+            else:
+                supabase.update_buy_request(request_id, "failed", order["message"])
+                print(f"[Bot] 웹 매수 실패: {order['message']}")
+        finally:
+            stock.clear_order_pending()
+
+    async def process_sell_requests(self) -> None:
+        """대기 중인 매도 요청 처리"""
+        try:
+            requests = supabase.get_pending_sell_requests()
+            for req in requests:
+                await self.execute_web_sell_request(req)
+        except Exception as e:
+            print(f"[Bot] 매도 요청 처리 오류: {e}")
+
+    async def execute_web_sell_request(self, req: dict) -> None:
+        """웹 매도 요청 실행"""
+        request_id = req.get("id")
+        stock_code = req.get("stock_code")
+        stock_name = req.get("stock_name")
+        purchase_id = req.get("purchase_id")
+        round_num = req.get("round")
+        quantity = req.get("quantity")
+
+        print(f"[Bot] 웹 매도 요청: {stock_name}({stock_code}) {round_num}차 {quantity}주")
+
+        # 종목 확인
+        stock = strategy.stocks.get(stock_code)
+        if not stock:
+            supabase.update_sell_request(request_id, "failed", f"종목 없음: {stock_code}")
+            return
+
+        # 주문 처리 중 체크 (해당 차수에 대해)
+        if stock.is_order_pending("sell", round_num):
+            supabase.update_sell_request(request_id, "failed", f"이미 {round_num}차 매도 주문 처리 중")
+            return
+
+        # 해당 매수 기록 찾기
+        purchase = None
+        for p in stock.purchases:
+            if p.id == purchase_id and p.status == "holding":
+                purchase = p
+                break
+
+        if not purchase:
+            supabase.update_sell_request(request_id, "failed", f"매수 기록 없음: {purchase_id}")
+            return
+
+        # 현재가 조회
         current_price = self._prices.get(stock_code, 0)
         if current_price <= 0:
-            # 현재가 없으면 API로 조회
             current_price = kis_api.get_current_price(stock_code)
 
         if current_price <= 0:
-            supabase.update_buy_request(request_id, "failed", "현재가 조회 실패")
+            supabase.update_sell_request(request_id, "failed", "현재가 조회 실패")
             return
 
-        quantity = stock.calculate_buy_quantity(current_price)
-        if quantity <= 0:
-            supabase.update_buy_request(request_id, "failed", "매수 수량 계산 실패")
-            return
+        # 주문 처리 중 플래그 설정
+        stock.set_order_pending("sell", round_num)
 
-        # 차수 결정
-        round_num = stock.current_round + 1
+        try:
+            # 매도 주문 (시장가)
+            order = kis_api.sell_stock(stock_code, quantity, price=0)
 
-        print(f"[Bot] 매수 실행: {stock_name} {quantity}주 @ 시장가 ({round_num}차)")
+            if order["success"]:
+                # 손익 계산
+                profit = (current_price - purchase.price) * quantity
+                profit_rate = ((current_price / purchase.price) - 1) * 100
 
-        # 매수 주문 (시장가)
-        order = kis_api.buy_stock(stock_code, quantity, price=0)
+                # 매도 처리
+                stock.mark_sold(purchase, current_price)
 
-        if order["success"]:
-            # 메모리에 매수 기록 추가
-            purchase = stock.add_purchase(current_price, quantity)
+                # DB 업데이트
+                if purchase.id:
+                    supabase.mark_purchase_sold(purchase.id, current_price)
 
-            # DB에 매수 기록 저장
-            if stock.id:
-                purchase_id = supabase.save_purchase(stock, purchase)
-                if purchase_id:
-                    purchase.id = purchase_id
+                message = f"주문번호: {order['order_no']}, {quantity}주 @ {current_price:,}원, 손익: {profit:+,.0f}원({profit_rate:+.1f}%)"
+                supabase.update_sell_request(request_id, "executed", message)
+                print(f"[Bot] 웹 매도 성공: {message}")
 
-            # 요청 상태 업데이트
-            supabase.update_buy_request(
-                request_id,
-                "executed",
-                f"주문번호: {order['order_no']}, {quantity}주 @ {current_price:,}원"
-            )
-
-            print(f"[Bot] 웹 매수 성공: 주문번호 {order['order_no']}")
-
-            # 텔레그램 알림
-            await notifier.send_buy_alert(
-                stock_name=stock_name,
-                stock_code=stock_code,
-                price=current_price,
-                quantity=quantity,
-                round_num=round_num,
-                success=True,
-                order_no=order.get("order_no", ""),
-            )
-        else:
-            supabase.update_buy_request(request_id, "failed", order.get("message", "매수 실패"))
-            print(f"[Bot] 웹 매수 실패: {order['message']}")
+                # 텔레그램 알림
+                await notifier.send_sell_alert(
+                    stock_name=stock.name,
+                    stock_code=stock.code,
+                    price=current_price,
+                    quantity=quantity,
+                    profit=int(profit),
+                    profit_rate=profit_rate,
+                    success=True,
+                )
+            else:
+                supabase.update_sell_request(request_id, "failed", order["message"])
+                print(f"[Bot] 웹 매도 실패: {order['message']}")
+        finally:
+            stock.clear_order_pending()
 
     async def start(self) -> None:
         """봇 시작"""
@@ -341,15 +565,16 @@ class SplitBot:
             print("        .env 파일의 SUPABASE_URL, SUPABASE_KEY를 확인하세요.")
             return
 
-        # 설정 검증
+        # KIS API 설정 확인 (선택사항)
         if not Config.validate_kis():
-            print("[Error] 한투 API 설정이 없습니다.")
-            print("        웹 Settings 페이지에서 API 키를 등록하세요.")
-            return
-
-        mode = "실전" if Config.KIS_IS_REAL else "모의"
-        print(f"[Bot] 모드: {mode}투자")
-        print(f"[Bot] 계좌: {Config.KIS_ACCOUNT_NO}")
+            print("[Warning] 한투 API 설정이 없습니다.")
+            print("          웹 Settings에서 등록하면 자동매매가 활성화됩니다.")
+            print("          현재는 모니터링 모드로 실행됩니다.")
+            print()
+        else:
+            mode = "실전" if Config.KIS_IS_REAL else "모의"
+            print(f"[Bot] 모드: {mode}투자")
+            print(f"[Bot] 계좌: {Config.KIS_ACCOUNT_NO}")
         print()
 
         # DB에서 종목 로드
@@ -357,8 +582,8 @@ class SplitBot:
 
         if not strategy.stocks:
             print("[Bot] 감시할 종목이 없습니다.")
-            print("      웹에서 종목을 추가하면 자동으로 감지됩니다.")
-            print()
+            print("      웹에서 종목을 추가하고 1차 매수를 해주세요.")
+            return
 
         # 초기 봇 상태 확인
         self._bot_enabled = self.check_bot_enabled()
@@ -389,15 +614,9 @@ class SplitBot:
         # 정기 상태 리포트 태스크
         status_task = asyncio.create_task(self.send_periodic_status())
 
-        # 웹 매수 요청 처리 태스크
-        buy_request_task = asyncio.create_task(self.process_buy_requests())
-
-        # 새 종목 감지 태스크 (30초마다)
-        reload_stocks_task = asyncio.create_task(self.reload_stocks_periodically())
-
-        # 하트비트 태스크 (30초마다)
-        heartbeat_task = asyncio.create_task(self.send_heartbeat())
-        print("[Bot] 하트비트 활성화 (30초 간격)")
+        # 웹 요청 처리 태스크
+        web_requests_task = asyncio.create_task(self.process_web_requests())
+        print("[Bot] 웹 매수/매도 요청 처리 활성화 (10초 간격)")
 
         try:
             # WebSocket 연결 (메인 루프)
@@ -409,9 +628,7 @@ class SplitBot:
         finally:
             self._running = False
             status_task.cancel()
-            buy_request_task.cancel()
-            reload_stocks_task.cancel()
-            heartbeat_task.cancel()
+            web_requests_task.cancel()
             kis_ws.stop()
             await bot_handler.stop()
             print("[Bot] 종료 완료")

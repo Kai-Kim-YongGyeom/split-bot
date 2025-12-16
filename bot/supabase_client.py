@@ -200,9 +200,8 @@ class SupabaseClient:
             ]
 
             # split_rates, target_rates는 배열로 저장됨
-            split_rates = stock_data.get("split_rates") or [5.0] * 5
-            target_rates = stock_data.get("target_rates") or [5.0] * 5
-            stop_loss_rate = stock_data.get("stop_loss_rate") or 0.0
+            split_rates = stock_data.get("split_rates") or [5.0] * 10
+            target_rates = stock_data.get("target_rates") or [5.0] * 10
 
             stock = StockConfig(
                 id=stock_data["id"],
@@ -210,9 +209,10 @@ class SupabaseClient:
                 name=stock_data["name"],
                 is_active=stock_data.get("is_active", True),
                 buy_amount=stock_data.get("buy_amount", Config.DEFAULT_BUY_AMOUNT),
+                max_rounds=stock_data.get("max_rounds", 10),
                 split_rates=split_rates,
                 target_rates=target_rates,
-                stop_loss_rate=stop_loss_rate,
+                stop_loss_rate=stock_data.get("stop_loss_rate", 0.0),
                 purchases=purchases,
             )
             result.append(stock)
@@ -245,27 +245,79 @@ class SupabaseClient:
             return result[0]
         return None
 
-    def update_heartbeat(self) -> bool:
-        """봇 하트비트 업데이트 (30초마다 호출)"""
+    # ==================== 동기화 관련 ====================
+
+    def get_pending_sync_requests(self) -> list[dict]:
+        """대기 중인 동기화 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "bot_sync_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_sync_request(self, request_id: str, status: str, message: str = "") -> bool:
+        """동기화 요청 상태 업데이트"""
         if not self.is_configured:
             return False
 
-        config = self.get_bot_config()
-        if not config:
-            return False
+        data = {"status": status, "result_message": message}
+        if status in ["completed", "failed"]:
+            data["completed_at"] = datetime.now().isoformat()
 
         result = self._request(
             "PATCH",
-            "bot_config",
-            data={"last_heartbeat": datetime.now().isoformat()},
-            params={"id": f"eq.{config['id']}"},
+            "bot_sync_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
         )
 
         return "error" not in result
 
-    # ==================== 매수 요청 (bot_buy_requests) ====================
+    def save_sync_results(self, request_id: str, user_id: str, orders: list[dict]) -> bool:
+        """동기화 결과 저장"""
+        if not self.is_configured or not orders:
+            return False
 
-    def get_pending_buy_requests(self) -> list[dict]:
+        # 기존 결과 삭제
+        self._request(
+            "DELETE",
+            "bot_sync_results",
+            params={"sync_request_id": f"eq.{request_id}"},
+        )
+
+        # 새 결과 저장
+        records = []
+        for order in orders:
+            records.append({
+                "sync_request_id": request_id,
+                "user_id": user_id,
+                "trade_date": order.get("date", ""),
+                "trade_time": order.get("time", ""),
+                "stock_code": order.get("code", ""),
+                "stock_name": order.get("name", ""),
+                "side": order.get("side", ""),
+                "quantity": order.get("quantity", 0),
+                "price": order.get("price", 0),
+                "amount": order.get("amount", 0),
+                "order_no": order.get("order_no", ""),
+                "match_status": "unmatched",
+            })
+
+        result = self._request("POST", "bot_sync_results", data=records)
+        return "error" not in result
+
+    def get_buy_requests(self) -> list[dict]:
         """대기 중인 매수 요청 조회"""
         if not self.is_configured:
             return []
@@ -284,16 +336,18 @@ class SupabaseClient:
             return result
         return []
 
+    def get_pending_buy_requests(self) -> list[dict]:
+        """대기 중인 매수 요청 조회 (별칭)"""
+        return self.get_buy_requests()
+
     def update_buy_request(self, request_id: str, status: str, message: str = "") -> bool:
         """매수 요청 상태 업데이트"""
         if not self.is_configured:
             return False
 
-        data = {
-            "status": status,
-            "result_message": message,
-            "executed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
+        data = {"status": status, "result_message": message}
+        if status in ["executed", "failed"]:
+            data["executed_at"] = datetime.now().isoformat()
 
         result = self._request(
             "PATCH",
@@ -304,9 +358,7 @@ class SupabaseClient:
 
         return "error" not in result
 
-    # ==================== 매도 요청 (bot_sell_requests) ====================
-
-    def get_pending_sell_requests(self) -> list[dict]:
+    def get_sell_requests(self) -> list[dict]:
         """대기 중인 매도 요청 조회"""
         if not self.is_configured:
             return []
@@ -325,16 +377,18 @@ class SupabaseClient:
             return result
         return []
 
+    def get_pending_sell_requests(self) -> list[dict]:
+        """대기 중인 매도 요청 조회 (별칭)"""
+        return self.get_sell_requests()
+
     def update_sell_request(self, request_id: str, status: str, message: str = "") -> bool:
         """매도 요청 상태 업데이트"""
         if not self.is_configured:
             return False
 
-        data = {
-            "status": status,
-            "result_message": message,
-            "executed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
+        data = {"status": status, "result_message": message}
+        if status in ["executed", "failed"]:
+            data["executed_at"] = datetime.now().isoformat()
 
         result = self._request(
             "PATCH",
@@ -344,6 +398,96 @@ class SupabaseClient:
         )
 
         return "error" not in result
+
+    # ==================== 동기화 매칭 ====================
+
+    def find_matching_purchase(self, stock_id: str, price: int, quantity: int, date: str) -> Optional[dict]:
+        """체결내역과 매칭되는 매수 기록 찾기 (가격 ±1%, 수량 동일)"""
+        if not self.is_configured:
+            return None
+
+        purchases = self.get_purchases(stock_id)
+        for p in purchases:
+            if p.get("status") != "holding":
+                continue
+            # 가격 ±1% 허용, 수량 정확히 일치
+            price_diff = abs(p["price"] - price) / price if price > 0 else 0
+            if price_diff <= 0.01 and p["quantity"] == quantity:
+                return p
+        return None
+
+    def find_unmatched_purchase_for_sell(self, stock_id: str, quantity: int) -> Optional[dict]:
+        """매도 체결과 매칭되는 보유 매수 기록 찾기 (수량 기준)"""
+        if not self.is_configured:
+            return None
+
+        purchases = self.get_purchases(stock_id)
+        for p in purchases:
+            if p.get("status") == "holding" and p["quantity"] == quantity:
+                return p
+        return None
+
+    def sync_buy_order_to_purchase(self, stock_id: str, user_id: str, order: dict) -> Optional[str]:
+        """매수 체결내역을 purchases에 반영 (중복 체크)"""
+        if not self.is_configured:
+            return None
+
+        price = order.get("price", 0)
+        quantity = order.get("quantity", 0)
+        date = order.get("date", "")
+
+        # 이미 존재하는지 확인
+        existing = self.find_matching_purchase(stock_id, price, quantity, date)
+        if existing:
+            return existing.get("id")  # 이미 존재함
+
+        # 새로운 매수 기록 추가 (round는 holding 개수 + 1)
+        purchases = self.get_purchases(stock_id)
+        holding_count = sum(1 for p in purchases if p.get("status") == "holding")
+        new_round = holding_count + 1
+
+        data = {
+            "stock_id": stock_id,
+            "user_id": user_id,
+            "round": new_round,
+            "price": price,
+            "quantity": quantity,
+            "date": date,
+            "status": "holding",
+        }
+
+        result = self._request("POST", "bot_purchases", data=data)
+        if isinstance(result, list) and len(result) > 0:
+            print(f"[Supabase] 동기화 매수 추가: {result[0].get('id')}")
+            return result[0].get("id")
+        return None
+
+    def sync_sell_order_to_purchase(self, stock_id: str, order: dict) -> bool:
+        """매도 체결내역을 purchases에 반영 (매도 처리)"""
+        if not self.is_configured:
+            return False
+
+        quantity = order.get("quantity", 0)
+        price = order.get("price", 0)
+        date = order.get("date", "")
+
+        # 매칭되는 보유 매수 기록 찾기
+        purchase = self.find_unmatched_purchase_for_sell(stock_id, quantity)
+        if not purchase:
+            return False
+
+        # 매도 처리
+        success = self.update_purchase(
+            purchase["id"],
+            {
+                "status": "sold",
+                "sold_price": price,
+                "sold_date": date,
+            }
+        )
+        if success:
+            print(f"[Supabase] 동기화 매도 처리: {purchase['id']}")
+        return success
 
 
 # 싱글톤 인스턴스

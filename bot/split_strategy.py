@@ -32,6 +32,9 @@ class StockConfig:
     is_active: bool = True              # 활성화 여부
     buy_amount: int = 100000            # 1회 매수 금액
 
+    # 최대 차수 (1~10) - 사용자 설정 가능
+    max_rounds: int = 10
+
     # 물타기 조건 (차수별 하락률 %) - 최대 10회차
     # 예: [5, 5, 5, ...] → 각 차수의 이전 차수 대비 -5% 도달 시 매수
     split_rates: list[float] = field(default_factory=lambda: [5.0] * 10)
@@ -40,11 +43,21 @@ class StockConfig:
     # 예: [5, 5, 5, ...] → 각 차수 매수가 대비 +5% 도달 시 해당 차수 전량 매도
     target_rates: list[float] = field(default_factory=lambda: [5.0] * 10)
 
+    # 손절 비율 (%) - 평균단가 기준
+    # 예: 20 → 평균단가 대비 -20% 도달 시 전량 손절
+    # 0이면 손절 비활성화
+    stop_loss_rate: float = 0.0
+
     # 매수 기록
     purchases: list[Purchase] = field(default_factory=list)
 
     # 마지막 주문 시간 (중복 주문 방지)
     last_order_time: Optional[datetime] = None
+
+    # 주문 처리 중 플래그 (중복 주문 방지 강화)
+    _order_pending: bool = field(default=False, repr=False)
+    _pending_type: Optional[str] = field(default=None, repr=False)  # "buy" or "sell"
+    _pending_round: Optional[int] = field(default=None, repr=False)
 
     @property
     def holding_purchases(self) -> list[Purchase]:
@@ -62,8 +75,8 @@ class StockConfig:
 
     @property
     def max_round(self) -> int:
-        """최대 차수"""
-        return len(self.split_rates) + 1  # 1차 + 물타기 횟수
+        """최대 차수 (사용자 설정값 사용)"""
+        return self.max_rounds
 
     @property
     def total_quantity(self) -> int:
@@ -104,10 +117,12 @@ class StockConfig:
 
         # N차 물타기 조건: (N-1)차 매수가 × (1 - split_rate[N-1] / 100)
         next_round_idx = self.current_round  # 다음 차수 인덱스 (0-based: 2차면 idx=1)
-        if next_round_idx > len(self.split_rates):
-            return None
+        if next_round_idx >= len(self.split_rates):
+            return None  # split_rates 범위 초과
 
-        split_rate = self.split_rates[next_round_idx - 1]  # 해당 차수의 하락률
+        # 안전한 인덱스 접근
+        rate_idx = min(next_round_idx - 1, len(self.split_rates) - 1)
+        split_rate = self.split_rates[rate_idx]  # 해당 차수의 하락률
         target_price = int(last_purchase.price * (1 - split_rate / 100))
         return target_price
 
@@ -115,15 +130,10 @@ class StockConfig:
         """목표가 도달한 매도 가능 차수들
 
         각 차수별로 해당 차수 매수가 기준 목표가 도달 여부 체크
-        1차수는 매도 대상에서 제외 (원금 보존)
         """
         sellable = []
 
         for purchase in self.holding_purchases:
-            # 1차수는 자동 매도 제외
-            if purchase.round == 1:
-                continue
-
             # 해당 차수의 목표 상승률
             rate_idx = min(purchase.round - 1, len(self.target_rates) - 1)
             target_rate = self.target_rates[rate_idx]
@@ -136,6 +146,28 @@ class StockConfig:
 
         return sellable
 
+    def set_order_pending(self, order_type: str, round_num: int = None) -> None:
+        """주문 처리 중 상태 설정"""
+        self._order_pending = True
+        self._pending_type = order_type
+        self._pending_round = round_num
+
+    def clear_order_pending(self) -> None:
+        """주문 처리 완료"""
+        self._order_pending = False
+        self._pending_type = None
+        self._pending_round = None
+
+    def is_order_pending(self, order_type: str = None, round_num: int = None) -> bool:
+        """주문 처리 중인지 확인"""
+        if not self._order_pending:
+            return False
+        if order_type and self._pending_type != order_type:
+            return False
+        if round_num and self._pending_round != round_num:
+            return False
+        return True
+
     def should_buy(self, current_price: int) -> bool:
         """매수 조건 체크"""
         if not self.is_active:
@@ -146,6 +178,10 @@ class StockConfig:
 
         if self.current_round == 0:
             return False  # 1차 매수는 수동
+
+        # 주문 처리 중이면 스킵 (중복 주문 방지 강화)
+        if self._order_pending:
+            return False
 
         # 중복 주문 방지 (60초 내 재주문 방지)
         if self.last_order_time:
@@ -165,7 +201,37 @@ class StockConfig:
         if not self.is_active or self.current_round == 0:
             return []
 
-        return self.get_sellable_purchases(current_price)
+        # 매도 주문 처리 중인 차수 제외
+        sellable = self.get_sellable_purchases(current_price)
+        if self._order_pending and self._pending_type == "sell":
+            sellable = [p for p in sellable if p.round != self._pending_round]
+
+        return sellable
+
+    def get_stop_loss_price(self) -> Optional[int]:
+        """손절가 계산 (평균단가 기준)"""
+        if self.stop_loss_rate <= 0:
+            return None  # 손절 비활성화
+
+        avg = self.avg_price
+        if avg <= 0:
+            return None
+
+        return int(avg * (1 - self.stop_loss_rate / 100))
+
+    def should_stop_loss(self, current_price: int) -> bool:
+        """손절 조건 체크"""
+        if not self.is_active or self.current_round == 0:
+            return False
+
+        if self.stop_loss_rate <= 0:
+            return False
+
+        stop_loss_price = self.get_stop_loss_price()
+        if stop_loss_price and current_price <= stop_loss_price:
+            return True
+
+        return False
 
     def calculate_buy_quantity(self, current_price: int) -> int:
         """매수 수량 계산"""
@@ -202,8 +268,10 @@ class StockConfig:
             "name": self.name,
             "is_active": self.is_active,
             "buy_amount": self.buy_amount,
+            "max_rounds": self.max_rounds,
             "split_rates": self.split_rates,
             "target_rates": self.target_rates,
+            "stop_loss_rate": self.stop_loss_rate,
             "purchases": [
                 {
                     "id": p.id,
@@ -242,8 +310,10 @@ class StockConfig:
             name=data["name"],
             is_active=data.get("is_active", True),
             buy_amount=data.get("buy_amount", Config.DEFAULT_BUY_AMOUNT),
+            max_rounds=data.get("max_rounds", 10),
             split_rates=data.get("split_rates", [5.0] * 10),
             target_rates=data.get("target_rates", [5.0] * 10),
+            stop_loss_rate=data.get("stop_loss_rate", 0.0),
             purchases=purchases,
         )
 
@@ -317,6 +387,36 @@ class SplitStrategy:
             })
 
         return results
+
+    def check_stop_loss_condition(self, code: str, current_price: int) -> Optional[dict]:
+        """손절 조건 체크 - 전량 손절 대상인지 확인"""
+        stock = self.stocks.get(code)
+        if not stock:
+            return None
+
+        if not stock.should_stop_loss(current_price):
+            return None
+
+        # 전량 손절
+        holdings = stock.holding_purchases
+        total_qty = sum(p.quantity for p in holdings)
+        total_cost = sum(p.price * p.quantity for p in holdings)
+        avg_price = total_cost / total_qty if total_qty > 0 else 0
+        total_profit = (current_price - avg_price) * total_qty
+        profit_rate = ((current_price / avg_price) - 1) * 100 if avg_price > 0 else 0
+
+        return {
+            "action": "stop_loss",
+            "stock": stock,
+            "purchases": holdings,
+            "price": current_price,
+            "quantity": total_qty,
+            "avg_price": avg_price,
+            "total_profit": total_profit,
+            "profit_rate": profit_rate,
+            "stop_loss_price": stock.get_stop_loss_price(),
+            "reason": f"손절가 도달 (평단 {avg_price:,.0f}원 → {current_price:,}원, {profit_rate:.1f}%)",
+        }
 
     def get_status_report(self, prices: dict[str, int]) -> str:
         """현재 상태 리포트"""
