@@ -407,11 +407,17 @@ function EditPurchaseModal({
   purchase: Purchase;
   stockName: string;
 }) {
+  // 날짜 기본값: purchase.date가 없으면 오늘 날짜
+  const getDateValue = (date: string | undefined | null) => {
+    if (date && date.length >= 10) return date.slice(0, 10); // YYYY-MM-DD 형식
+    return new Date().toISOString().split('T')[0];
+  };
+
   const [formData, setFormData] = useState({
     price: purchase.price,
     quantity: purchase.quantity,
     round: purchase.round,
-    date: purchase.date,
+    date: getDateValue(purchase.date),
   });
 
   useEffect(() => {
@@ -419,7 +425,7 @@ function EditPurchaseModal({
       price: purchase.price,
       quantity: purchase.quantity,
       round: purchase.round,
-      date: purchase.date,
+      date: getDateValue(purchase.date),
     });
   }, [purchase]);
 
@@ -506,6 +512,89 @@ function EditPurchaseModal({
   );
 }
 
+// 매수 확인 모달
+function BuyConfirmModal({
+  isOpen,
+  onClose,
+  onConfirm,
+  stock,
+  loading,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: (buyAmount: number) => void;
+  stock: StockWithPurchases;
+  loading: boolean;
+}) {
+  const [buyAmount, setBuyAmount] = useState(stock.buy_amount);
+  const holdingCount = stock.purchases.filter(p => p.status === 'holding').length;
+  const nextRound = holdingCount + 1;
+
+  useEffect(() => {
+    setBuyAmount(stock.buy_amount);
+  }, [stock.buy_amount, isOpen]);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onConfirm(buyAmount);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+      <div className="bg-gray-800 rounded-t-2xl md:rounded-lg p-4 md:p-6 w-full md:max-w-sm border-t md:border border-gray-700">
+        <h2 className="text-lg font-bold mb-4">시장가 매수</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="bg-gray-700/50 rounded-lg p-3">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-gray-400">종목</span>
+              <span className="font-bold">{stock.name} ({stock.code})</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">다음 차수</span>
+              <span className="text-blue-400 font-bold">{nextRound}차</span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">매수 금액</label>
+            <input
+              type="number"
+              value={buyAmount || ''}
+              onChange={e => setBuyAmount(Number(e.target.value) || 0)}
+              onFocus={handleNumberFocus}
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+              placeholder="100000"
+              required
+            />
+            <p className="text-xs text-gray-500 mt-1">현재가 기준 수량 자동 계산</p>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="flex-1 px-4 py-3 md:py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition disabled:opacity-50"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              disabled={loading || buyAmount <= 0}
+              className="flex-1 px-4 py-3 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              매수 요청
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // 종목 카드 컴포넌트 (모바일 친화적)
 function StockCard({
   stock,
@@ -525,6 +614,7 @@ function StockCard({
   const [expanded, setExpanded] = useState(false);
   const [buying, setBuying] = useState(false);
   const [buySuccess, setBuySuccess] = useState(false);
+  const [showBuyModal, setShowBuyModal] = useState(false);
   const [sellingPurchaseId, setSellingPurchaseId] = useState<string | null>(null);
   const [sellSuccess, setSellSuccess] = useState<string | null>(null);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
@@ -571,18 +661,16 @@ function StockCard({
     }
   };
 
-  const handleBuyRequest = async () => {
-    if (!confirm(`${stock.name} 시장가 매수 요청을 보내시겠습니까?\n(설정된 매수금액: ${stock.buy_amount.toLocaleString()}원)`)) {
-      return;
-    }
-
+  const handleBuyRequest = async (buyAmount: number) => {
     setBuying(true);
     const result = await api.createBuyRequest(
       stock.id,
       stock.code,
-      stock.name
+      stock.name,
+      buyAmount
     );
     setBuying(false);
+    setShowBuyModal(false);
 
     if (result) {
       setBuySuccess(true);
@@ -630,7 +718,7 @@ function StockCard({
               </span>
             )}
             <button
-              onClick={handleBuyRequest}
+              onClick={() => setShowBuyModal(true)}
               disabled={buying || !stock.is_active}
               className={`p-2 rounded transition flex items-center gap-1 text-sm ${
                 stock.is_active
@@ -778,6 +866,14 @@ function StockCard({
           stockName={stock.name}
         />
       )}
+
+      <BuyConfirmModal
+        isOpen={showBuyModal}
+        onClose={() => setShowBuyModal(false)}
+        onConfirm={handleBuyRequest}
+        stock={stock}
+        loading={buying}
+      />
     </div>
   );
 }

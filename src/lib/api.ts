@@ -256,6 +256,7 @@ export async function createBuyRequest(
   stockId: string,
   stockCode: string,
   stockName: string,
+  buyAmount?: number,
   quantity?: number,
   price: number = 0
 ): Promise<BuyRequest | null> {
@@ -271,6 +272,7 @@ export async function createBuyRequest(
       stock_id: stockId,
       stock_code: stockCode,
       stock_name: stockName,
+      buy_amount: buyAmount || null,
       quantity: quantity || null,
       price,
       order_type: price > 0 ? 'limit' : 'market',

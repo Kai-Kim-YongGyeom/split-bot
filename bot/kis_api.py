@@ -417,8 +417,11 @@ class KisAPI:
                     # 체결 수량이 있는 것만
                     tot_ccld_qty = int(order.get("tot_ccld_qty", 0))
                     if tot_ccld_qty > 0:
+                        # 날짜 형식 변환 (YYYYMMDD -> YYYY-MM-DD)
+                        ord_dt = order.get("ord_dt", "")
+                        formatted_date = f"{ord_dt[:4]}-{ord_dt[4:6]}-{ord_dt[6:8]}" if len(ord_dt) == 8 else ord_dt
                         all_orders.append({
-                            "date": order.get("ord_dt", ""),  # 주문일자
+                            "date": formatted_date,  # 주문일자
                             "time": order.get("ord_tmd", ""),  # 주문시간
                             "code": order.get("pdno", ""),  # 종목코드
                             "name": order.get("prdt_name", ""),  # 종목명
