@@ -338,19 +338,29 @@ class SplitBot:
             # 체결내역을 bot_purchases에 반영
             buy_synced = 0
             sell_synced = 0
+            stocks_created = 0
             skipped = 0
 
             for order in orders:
                 stock_code = order.get("code", "")
+                stock_name = order.get("name", "")
+                side = order.get("side", "")
 
                 # 해당 종목 찾기
                 stock = supabase.get_stock_by_code(stock_code)
+
+                # 미등록 종목이면 자동 생성 (매수 체결인 경우)
+                if not stock and side == "buy" and stock_name:
+                    stock = supabase.create_stock(stock_code, stock_name, user_id)
+                    if stock:
+                        stocks_created += 1
+                        print(f"[Bot] 새 종목 자동 등록: {stock_name} ({stock_code})")
+
                 if not stock:
                     skipped += 1
                     continue
 
                 stock_id = stock.get("id")
-                side = order.get("side", "")
 
                 if side == "buy":
                     result = supabase.sync_buy_order_to_purchase(stock_id, user_id, order)
@@ -365,7 +375,13 @@ class SplitBot:
             await self._reload_stocks()
 
             # 완료 처리
-            message = f"{len(orders)}건 조회 (매수 {buy_synced}건, 매도 {sell_synced}건 동기화, {skipped}건 스킵)"
+            parts = [f"{len(orders)}건 조회"]
+            if stocks_created > 0:
+                parts.append(f"신규 종목 {stocks_created}개 등록")
+            parts.append(f"매수 {buy_synced}건, 매도 {sell_synced}건 동기화")
+            if skipped > 0:
+                parts.append(f"{skipped}건 스킵")
+            message = ", ".join(parts)
             supabase.update_sync_request(request_id, "completed", message)
             print(f"[Bot] 동기화 완료: {message}")
 

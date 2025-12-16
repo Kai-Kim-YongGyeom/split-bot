@@ -103,6 +103,39 @@ class SupabaseClient:
 
         return "error" not in result
 
+    def create_stock(self, code: str, name: str, user_id: str = None) -> Optional[dict]:
+        """새 종목 생성 (기본 설정으로)
+
+        동기화 시 미등록 종목 자동 추가용
+        """
+        if not self.is_configured:
+            return None
+
+        # 이미 존재하는지 확인
+        existing = self.get_stock_by_code(code)
+        if existing:
+            return existing
+
+        data = {
+            "code": code,
+            "name": name,
+            "is_active": True,
+            "buy_amount": Config.DEFAULT_BUY_AMOUNT,
+            "max_rounds": 10,
+            "split_rates": [5.0] * 10,
+            "target_rates": [5.0] * 10,
+            "stop_loss_rate": 0.0,
+        }
+        if user_id:
+            data["user_id"] = user_id
+
+        result = self._request("POST", "bot_stocks", data=data)
+
+        if isinstance(result, list) and len(result) > 0:
+            print(f"[Supabase] 새 종목 생성: {name} ({code})")
+            return result[0]
+        return None
+
     # ==================== 매수 기록 (bot_purchases) ====================
 
     def get_purchases(self, stock_id: str) -> list[dict]:
