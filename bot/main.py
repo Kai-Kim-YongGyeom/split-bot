@@ -592,13 +592,14 @@ class SplitBot:
         if not strategy.stocks:
             print("[Bot] 감시할 종목이 없습니다.")
             print("      웹에서 종목을 추가하고 1차 매수를 해주세요.")
-            print("[Bot] 종목이 추가될 때까지 대기합니다... (30초마다 확인)")
+            print("[Bot] 종목이 추가될 때까지 대기합니다... (10초마다 확인)")
             print()
 
-            # 종목이 추가될 때까지 대기 (heartbeat도 전송)
+            # 종목이 추가될 때까지 대기 (heartbeat, 동기화 요청도 처리)
             while not strategy.stocks:
                 supabase.update_heartbeat()  # 대기 중에도 heartbeat 전송
-                await asyncio.sleep(30)
+                await self.process_sync_requests()  # 동기화 요청 처리
+                await asyncio.sleep(10)
                 self.load_stocks_from_db()
                 if strategy.stocks:
                     print(f"[Bot] 종목 감지! {len(strategy.stocks)}개 종목 로드됨")
