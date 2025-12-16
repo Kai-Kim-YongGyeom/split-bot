@@ -121,8 +121,8 @@ export function Settings() {
   }
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <h1 className="text-2xl font-bold">설정</h1>
+    <div className="space-y-4 md:space-y-6 max-w-2xl">
+      <h1 className="text-xl md:text-2xl font-bold">설정</h1>
 
       {saved && (
         <div className="bg-green-900/20 border border-green-800 rounded-lg p-4 flex items-center gap-3">
@@ -139,23 +139,23 @@ export function Settings() {
       )}
 
       {/* 봇 상태 제어 */}
-      <div className={`rounded-lg border p-6 ${
+      <div className={`rounded-lg border p-4 md:p-6 ${
         config?.is_running
           ? 'bg-green-900/20 border-green-700'
           : 'bg-gray-800 border-gray-700'
       }`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className={`p-3 rounded-full ${
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className={`p-2 md:p-3 rounded-full ${
               config?.is_running ? 'bg-green-600' : 'bg-gray-600'
             }`}>
-              <Power className="w-6 h-6" />
+              <Power className="w-5 h-5 md:w-6 md:h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold">
+              <h2 className="text-lg md:text-xl font-bold">
                 봇 상태: {config?.is_running ? '실행 중' : '중지됨'}
               </h2>
-              <p className="text-gray-400 text-sm">
+              <p className="text-gray-400 text-xs md:text-sm">
                 {config?.is_running
                   ? '실시간 시세 모니터링 및 자동 매매 활성화'
                   : '봇이 중지 상태입니다. 매매가 실행되지 않습니다.'
@@ -165,7 +165,7 @@ export function Settings() {
           </div>
           <button
             onClick={toggleBot}
-            className={`px-6 py-3 rounded-lg font-bold transition ${
+            className={`w-full md:w-auto px-6 py-3 rounded-lg font-bold transition ${
               config?.is_running
                 ? 'bg-red-600 hover:bg-red-500'
                 : 'bg-green-600 hover:bg-green-500'
@@ -177,10 +177,10 @@ export function Settings() {
       </div>
 
       {/* 한국투자증권 API 설정 */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Key className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-bold">한국투자증권 API</h2>
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
+        <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+          <Key className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+          <h2 className="text-base md:text-lg font-bold">한국투자증권 API</h2>
         </div>
 
         <div className="space-y-4">
@@ -248,10 +248,10 @@ export function Settings() {
       </div>
 
       {/* 텔레그램 설정 */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <MessageSquare className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-bold">텔레그램 알림</h2>
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
+        <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+          <MessageSquare className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+          <h2 className="text-base md:text-lg font-bold">텔레그램 알림</h2>
         </div>
 
         <div className="space-y-4">
@@ -304,10 +304,10 @@ export function Settings() {
       </div>
 
       {/* 매매 설정 */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Server className="w-5 h-5 text-blue-400" />
-          <h2 className="text-lg font-bold">매매 설정</h2>
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
+        <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+          <Server className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+          <h2 className="text-base md:text-lg font-bold">매매 설정</h2>
         </div>
 
         <div className="space-y-4">
@@ -325,15 +325,15 @@ export function Settings() {
       </div>
 
       {/* 서버 필수 설정 안내 */}
-      <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5" />
-          <div>
-            <p className="text-yellow-400 font-medium">서버 .env 필수 설정</p>
-            <p className="text-yellow-200/70 text-sm mt-1">
+      <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg p-3 md:p-4">
+        <div className="flex items-start gap-2 md:gap-3">
+          <AlertCircle className="w-4 h-4 md:w-5 md:h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0">
+            <p className="text-yellow-400 font-medium text-sm md:text-base">서버 .env 필수 설정</p>
+            <p className="text-yellow-200/70 text-xs md:text-sm mt-1">
               봇 서버의 <code className="bg-gray-700 px-1 rounded">.env</code> 파일에 아래 2개만 설정하면 됩니다:
             </p>
-            <pre className="bg-gray-900 rounded p-3 text-sm mt-2 overflow-x-auto">
+            <pre className="bg-gray-900 rounded p-2 md:p-3 text-xs md:text-sm mt-2 overflow-x-auto">
 {`SUPABASE_URL=https://sfxydmwyhlkdusesqkbg.supabase.co
 SUPABASE_KEY=수파베이스_아논키`}
             </pre>
@@ -344,7 +344,7 @@ SUPABASE_KEY=수파베이스_아논키`}
       <button
         onClick={handleSave}
         disabled={saving}
-        className="flex items-center gap-2 px-6 py-3 bg-blue-600 rounded-lg hover:bg-blue-500 transition disabled:opacity-50"
+        className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 rounded-lg hover:bg-blue-500 transition disabled:opacity-50"
       >
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         설정 저장

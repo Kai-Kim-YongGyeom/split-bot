@@ -28,7 +28,6 @@ function DateRangePicker({
     { label: '7일', days: 7 },
     { label: '30일', days: 30 },
     { label: '90일', days: 90 },
-    { label: '1년', days: 365 },
     { label: '전체', days: -1 },
   ];
 
@@ -47,33 +46,33 @@ function DateRangePicker({
   };
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-      <div className="flex flex-wrap items-center gap-4">
+    <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+      <div className="flex flex-col md:flex-row md:items-center gap-3 md:gap-4">
         <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-gray-400" />
-          <span className="text-gray-400">기간:</span>
+          <Calendar className="w-4 h-4 md:w-5 md:h-5 text-gray-400" />
+          <span className="text-gray-400 text-sm">기간</span>
         </div>
         <div className="flex items-center gap-2">
           <input
             type="date"
             value={startDate}
             onChange={e => onStartChange(e.target.value)}
-            className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm"
+            className="flex-1 md:flex-none bg-gray-700 border border-gray-600 rounded px-2 py-2 text-sm"
           />
           <span className="text-gray-400">~</span>
           <input
             type="date"
             value={endDate}
             onChange={e => onEndChange(e.target.value)}
-            className="bg-gray-700 border border-gray-600 rounded px-3 py-2 text-sm"
+            className="flex-1 md:flex-none bg-gray-700 border border-gray-600 rounded px-2 py-2 text-sm"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5 md:gap-2">
           {presets.map(preset => (
             <button
               key={preset.label}
               onClick={() => handlePreset(preset.days)}
-              className="px-3 py-1 text-sm bg-gray-700 hover:bg-gray-600 rounded transition"
+              className="px-2.5 py-1.5 text-xs md:text-sm bg-gray-700 hover:bg-gray-600 rounded transition"
             >
               {preset.label}
             </button>
@@ -98,15 +97,15 @@ function KPICard({
   colorClass: string;
 }) {
   return (
-    <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-      <div className="flex items-center gap-3">
-        <div className={`p-3 rounded-lg ${colorClass}`}>
-          <Icon className="w-6 h-6" />
+    <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+      <div className="flex items-center gap-2 md:gap-3">
+        <div className={`p-2 md:p-3 rounded-lg ${colorClass}`}>
+          <Icon className="w-5 h-5 md:w-6 md:h-6" />
         </div>
-        <div>
-          <p className="text-gray-400 text-sm">{title}</p>
-          <p className="text-2xl font-bold">{value}</p>
-          {subValue && <p className="text-gray-500 text-sm">{subValue}</p>}
+        <div className="min-w-0">
+          <p className="text-gray-400 text-xs md:text-sm">{title}</p>
+          <p className="text-lg md:text-2xl font-bold truncate">{value}</p>
+          {subValue && <p className="text-gray-500 text-xs md:text-sm">{subValue}</p>}
         </div>
       </div>
     </div>
@@ -221,6 +220,11 @@ export function KPI() {
     return Object.values(byStock).sort((a, b) => b.profit - a.profit);
   }, [purchases, startDate, endDate]);
 
+  // 필터된 거래 내역
+  const filteredPurchases = useMemo(() => {
+    return purchases.filter(p => p.date >= startDate && p.date <= endDate).slice(0, 50);
+  }, [purchases, startDate, endDate]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -230,8 +234,8 @@ export function KPI() {
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">KPI 조회</h1>
+    <div className="space-y-4 md:space-y-6">
+      <h1 className="text-xl md:text-2xl font-bold">KPI 조회</h1>
 
       <DateRangePicker
         startDate={startDate}
@@ -240,7 +244,7 @@ export function KPI() {
         onEndChange={setEndDate}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
         <KPICard
           title="총 매수금액"
           value={`${kpiData.totalBuyAmount.toLocaleString()}원`}
@@ -271,20 +275,20 @@ export function KPI() {
 
       {/* 종목별 실현손익 */}
       {stockProfits.length > 0 && (
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-          <h2 className="text-lg font-bold mb-4">종목별 실현손익</h2>
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-3 md:p-4">
+          <h2 className="text-base md:text-lg font-bold mb-3 md:mb-4">종목별 실현손익</h2>
           <div className="space-y-2">
             {stockProfits.map(stock => (
               <div
                 key={stock.name}
-                className="flex items-center justify-between p-3 bg-gray-700/50 rounded"
+                className="flex items-center justify-between p-2 md:p-3 bg-gray-700/50 rounded"
               >
                 <div>
-                  <span className="font-bold">{stock.name}</span>
-                  <span className="text-gray-400 text-sm ml-2">{stock.count}건</span>
+                  <span className="font-bold text-sm md:text-base">{stock.name}</span>
+                  <span className="text-gray-400 text-xs md:text-sm ml-2">{stock.count}건</span>
                 </div>
                 <span
-                  className={`font-bold ${
+                  className={`font-bold text-sm md:text-base ${
                     stock.profit >= 0 ? 'text-green-400' : 'text-red-400'
                   }`}
                 >
@@ -297,73 +301,126 @@ export function KPI() {
         </div>
       )}
 
-      {/* 최근 거래 내역 */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-        <h2 className="text-lg font-bold mb-4">기간 내 거래 내역</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-gray-400 border-b border-gray-700">
-                <th className="text-left py-2 px-3">종목</th>
-                <th className="text-left py-2 px-3">차수</th>
-                <th className="text-right py-2 px-3">매수가</th>
-                <th className="text-right py-2 px-3">수량</th>
-                <th className="text-left py-2 px-3">매수일</th>
-                <th className="text-left py-2 px-3">상태</th>
-                <th className="text-right py-2 px-3">매도가</th>
-                <th className="text-right py-2 px-3">손익</th>
-              </tr>
-            </thead>
-            <tbody>
-              {purchases
-                .filter(p => p.date >= startDate && p.date <= endDate)
-                .slice(0, 50)
-                .map(p => {
-                  const stockInfo = (p as any).bot_stocks;
-                  const profit = p.sold_price ? (p.sold_price - p.price) * p.quantity : null;
-                  return (
-                    <tr key={p.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
-                      <td className="py-2 px-3">{stockInfo?.name || '-'}</td>
-                      <td className="py-2 px-3">{p.round}차</td>
-                      <td className="py-2 px-3 text-right">{p.price.toLocaleString()}원</td>
-                      <td className="py-2 px-3 text-right">{p.quantity}주</td>
-                      <td className="py-2 px-3">{p.date}</td>
-                      <td className="py-2 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs ${
-                            p.status === 'holding'
-                              ? 'bg-blue-900/50 text-blue-400'
-                              : 'bg-green-900/50 text-green-400'
-                          }`}
-                        >
-                          {p.status === 'holding' ? '보유' : '매도'}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        {p.sold_price ? `${p.sold_price.toLocaleString()}원` : '-'}
-                      </td>
-                      <td
-                        className={`py-2 px-3 text-right font-bold ${
-                          profit === null
-                            ? 'text-gray-500'
-                            : profit >= 0
-                            ? 'text-green-400'
-                            : 'text-red-400'
+      {/* 거래 내역 - 모바일은 카드, 데스크탑은 테이블 */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-3 md:p-4">
+        <h2 className="text-base md:text-lg font-bold mb-3 md:mb-4">기간 내 거래 내역</h2>
+
+        {filteredPurchases.length === 0 ? (
+          <p className="text-gray-500 text-center py-8">해당 기간에 거래 내역이 없습니다.</p>
+        ) : (
+          <>
+            {/* 모바일 카드 뷰 */}
+            <div className="md:hidden space-y-2">
+              {filteredPurchases.map(p => {
+                const stockInfo = (p as any).bot_stocks;
+                const profit = p.sold_price ? (p.sold_price - p.price) * p.quantity : null;
+                return (
+                  <div key={p.id} className="bg-gray-700/50 rounded p-3">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-bold">{stockInfo?.name || '-'}</p>
+                        <p className="text-xs text-gray-400">{p.round}차 · {p.date}</p>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs ${
+                          p.status === 'holding'
+                            ? 'bg-blue-900/50 text-blue-400'
+                            : 'bg-green-900/50 text-green-400'
                         }`}
                       >
-                        {profit !== null
-                          ? `${profit >= 0 ? '+' : ''}${profit.toLocaleString()}원`
-                          : '-'}
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-          {purchases.filter(p => p.date >= startDate && p.date <= endDate).length === 0 && (
-            <p className="text-gray-500 text-center py-8">해당 기간에 거래 내역이 없습니다.</p>
-          )}
-        </div>
+                        {p.status === 'holding' ? '보유' : '매도'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <p className="text-xs text-gray-400">매수가</p>
+                        <p>{p.price.toLocaleString()}원</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-400">수량</p>
+                        <p>{p.quantity}주</p>
+                      </div>
+                      {p.sold_price && (
+                        <>
+                          <div>
+                            <p className="text-xs text-gray-400">매도가</p>
+                            <p>{p.sold_price.toLocaleString()}원</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-400">손익</p>
+                            <p className={profit && profit >= 0 ? 'text-green-400' : 'text-red-400'}>
+                              {profit !== null ? `${profit >= 0 ? '+' : ''}${profit.toLocaleString()}원` : '-'}
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 데스크탑 테이블 뷰 */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-gray-400 border-b border-gray-700">
+                    <th className="text-left py-2 px-3">종목</th>
+                    <th className="text-left py-2 px-3">차수</th>
+                    <th className="text-right py-2 px-3">매수가</th>
+                    <th className="text-right py-2 px-3">수량</th>
+                    <th className="text-left py-2 px-3">매수일</th>
+                    <th className="text-left py-2 px-3">상태</th>
+                    <th className="text-right py-2 px-3">매도가</th>
+                    <th className="text-right py-2 px-3">손익</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPurchases.map(p => {
+                    const stockInfo = (p as any).bot_stocks;
+                    const profit = p.sold_price ? (p.sold_price - p.price) * p.quantity : null;
+                    return (
+                      <tr key={p.id} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                        <td className="py-2 px-3">{stockInfo?.name || '-'}</td>
+                        <td className="py-2 px-3">{p.round}차</td>
+                        <td className="py-2 px-3 text-right">{p.price.toLocaleString()}원</td>
+                        <td className="py-2 px-3 text-right">{p.quantity}주</td>
+                        <td className="py-2 px-3">{p.date}</td>
+                        <td className="py-2 px-3">
+                          <span
+                            className={`px-2 py-0.5 rounded text-xs ${
+                              p.status === 'holding'
+                                ? 'bg-blue-900/50 text-blue-400'
+                                : 'bg-green-900/50 text-green-400'
+                            }`}
+                          >
+                            {p.status === 'holding' ? '보유' : '매도'}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right">
+                          {p.sold_price ? `${p.sold_price.toLocaleString()}원` : '-'}
+                        </td>
+                        <td
+                          className={`py-2 px-3 text-right font-bold ${
+                            profit === null
+                              ? 'text-gray-500'
+                              : profit >= 0
+                              ? 'text-green-400'
+                              : 'text-red-400'
+                          }`}
+                        >
+                          {profit !== null
+                            ? `${profit >= 0 ? '+' : ''}${profit.toLocaleString()}원`
+                            : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

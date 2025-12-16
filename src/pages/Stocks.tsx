@@ -66,9 +66,9 @@ function StockModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold mb-4">
+    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+      <div className="bg-gray-800 rounded-t-2xl md:rounded-lg p-4 md:p-6 w-full md:max-w-md border-t md:border border-gray-700 max-h-[85vh] overflow-y-auto">
+        <h2 className="text-lg md:text-xl font-bold mb-4">
           {initialData ? '종목 수정' : '종목 추가'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -82,7 +82,7 @@ function StockModal({
                   type="text"
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 pl-10"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 pl-10 text-base"
                   placeholder="종목명 또는 코드 검색..."
                 />
               </div>
@@ -93,7 +93,7 @@ function StockModal({
                       key={stock.code}
                       type="button"
                       onClick={() => handleSelectStock(stock)}
-                      className="w-full px-3 py-2 text-left hover:bg-gray-600 flex justify-between items-center"
+                      className="w-full px-3 py-3 md:py-2 text-left hover:bg-gray-600 flex justify-between items-center"
                     >
                       <span>{stock.name}</span>
                       <span className="text-gray-400 text-sm">{stock.code}</span>
@@ -111,7 +111,7 @@ function StockModal({
                 type="text"
                 value={formData.code}
                 onChange={e => setFormData({ ...formData, code: e.target.value })}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
                 placeholder="005930"
                 required
               />
@@ -122,7 +122,7 @@ function StockModal({
                 type="text"
                 value={formData.name}
                 onChange={e => setFormData({ ...formData, name: e.target.value })}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
                 placeholder="삼성전자"
                 required
               />
@@ -135,7 +135,7 @@ function StockModal({
                 type="number"
                 value={formData.buy_amount}
                 onChange={e => setFormData({ ...formData, buy_amount: Number(e.target.value) })}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
                 required
               />
             </div>
@@ -145,17 +145,17 @@ function StockModal({
                 type="number"
                 value={formData.stop_loss_rate}
                 onChange={e => setFormData({ ...formData, stop_loss_rate: Number(e.target.value) })}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
                 placeholder="0 (비활성화)"
                 min="0"
                 max="100"
               />
-              <p className="text-xs text-gray-500 mt-1">0이면 비활성화, 평단 대비</p>
+              <p className="text-xs text-gray-500 mt-1">0이면 비활성화</p>
             </div>
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-2">물타기 비율 (%) - 2~10차</label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-5 gap-1.5 md:gap-2">
               {formData.split_rates.slice(0, 5).map((rate, i) => (
                 <div key={i} className="flex flex-col items-center">
                   <span className="text-xs text-gray-500 mb-1">{i + 2}차</span>
@@ -167,14 +167,14 @@ function StockModal({
                       newRates[i] = Number(e.target.value);
                       setFormData({ ...formData, split_rates: newRates });
                     }}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
                     min="1"
                     max="50"
                   />
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-5 gap-2 mt-2">
+            <div className="grid grid-cols-5 gap-1.5 md:gap-2 mt-2">
               {formData.split_rates.slice(5, 10).map((rate, i) => (
                 <div key={i + 5} className="flex flex-col items-center">
                   <span className="text-xs text-gray-500 mb-1">{i + 7}차</span>
@@ -186,18 +186,17 @@ function StockModal({
                       newRates[i + 5] = Number(e.target.value);
                       setFormData({ ...formData, split_rates: newRates });
                     }}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
                     min="1"
                     max="50"
                   />
                 </div>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-2">N-1차 대비 하락률 (예: 5% → 이전 차수 대비 5% 하락 시 매수)</p>
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-2">목표 수익률 (%) - 1~10차</label>
-            <div className="grid grid-cols-5 gap-2">
+            <div className="grid grid-cols-5 gap-1.5 md:gap-2">
               {formData.target_rates.slice(0, 5).map((rate, i) => (
                 <div key={i} className="flex flex-col items-center">
                   <span className="text-xs text-gray-500 mb-1">{i + 1}차</span>
@@ -209,14 +208,14 @@ function StockModal({
                       newRates[i] = Number(e.target.value);
                       setFormData({ ...formData, target_rates: newRates });
                     }}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
                     min="1"
                     max="50"
                   />
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-5 gap-2 mt-2">
+            <div className="grid grid-cols-5 gap-1.5 md:gap-2 mt-2">
               {formData.target_rates.slice(5, 10).map((rate, i) => (
                 <div key={i + 5} className="flex flex-col items-center">
                   <span className="text-xs text-gray-500 mb-1">{i + 6}차</span>
@@ -228,26 +227,25 @@ function StockModal({
                       newRates[i + 5] = Number(e.target.value);
                       setFormData({ ...formData, target_rates: newRates });
                     }}
-                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-2 md:py-1 text-center text-sm"
                     min="1"
                     max="50"
                   />
                 </div>
               ))}
             </div>
-            <p className="text-xs text-gray-500 mt-2">각 차수별 목표 수익률 (예: 5% → 해당 차수 매수가 대비 5% 상승 시 매도)</p>
           </div>
           <div className="flex gap-3 pt-4">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-700 rounded hover:bg-gray-600 transition"
+              className="flex-1 px-4 py-3 md:py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition text-base"
             >
               취소
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 rounded hover:bg-blue-500 transition"
+              className="flex-1 px-4 py-3 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-base"
             >
               {initialData ? '수정' : '추가'}
             </button>
@@ -284,9 +282,9 @@ function PurchaseModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-800 rounded-lg p-6 w-full max-w-md border border-gray-700">
-        <h2 className="text-xl font-bold mb-4">{stockName} - 1차 매수 추가</h2>
+    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+      <div className="bg-gray-800 rounded-t-2xl md:rounded-lg p-4 md:p-6 w-full md:max-w-md border-t md:border border-gray-700">
+        <h2 className="text-lg md:text-xl font-bold mb-4">{stockName} - 1차 매수 추가</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm text-gray-400 mb-1">매수가</label>
@@ -294,7 +292,7 @@ function PurchaseModal({
               type="number"
               value={formData.price || ''}
               onChange={e => setFormData({ ...formData, price: Number(e.target.value) })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
               placeholder="10000"
               required
             />
@@ -305,7 +303,7 @@ function PurchaseModal({
               type="number"
               value={formData.quantity || ''}
               onChange={e => setFormData({ ...formData, quantity: Number(e.target.value) })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
               placeholder="10"
               required
             />
@@ -316,7 +314,7 @@ function PurchaseModal({
               type="date"
               value={formData.date}
               onChange={e => setFormData({ ...formData, date: e.target.value })}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
               required
             />
           </div>
@@ -324,13 +322,13 @@ function PurchaseModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-gray-700 rounded hover:bg-gray-600 transition"
+              className="flex-1 px-4 py-3 md:py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition text-base"
             >
               취소
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 rounded hover:bg-blue-500 transition"
+              className="flex-1 px-4 py-3 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-base"
             >
               추가
             </button>
@@ -341,8 +339,8 @@ function PurchaseModal({
   );
 }
 
-// 종목 행 컴포넌트
-function StockRow({
+// 종목 카드 컴포넌트 (모바일 친화적)
+function StockCard({
   stock,
   onEdit,
   onDelete,
@@ -418,40 +416,45 @@ function StockRow({
 
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
-      <div className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setExpanded(!expanded)}
-              className="text-gray-400 hover:text-white"
-            >
-              {expanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-            </button>
+      <div className="p-3 md:p-4">
+        {/* 헤더 - 종목명, 상태 */}
+        <div className="flex items-start justify-between mb-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="flex items-center gap-2 text-left flex-1"
+          >
+            {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             <div>
-              <h3 className="font-bold">{stock.name}</h3>
-              <p className="text-gray-400 text-sm">{stock.code}</p>
+              <h3 className="font-bold text-base">{stock.name}</h3>
+              <p className="text-gray-400 text-xs">{stock.code}</p>
             </div>
-            <span className={`px-2 py-1 rounded text-xs ${
+          </button>
+          <div className="flex items-center gap-1.5">
+            <span className={`px-2 py-0.5 rounded text-xs ${
               stock.is_active
                 ? 'bg-green-900/50 text-green-400'
                 : 'bg-gray-700 text-gray-500'
             }`}>
               {stock.is_active ? '활성' : '비활성'}
             </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-400">
-              {holdingPurchases.length}차 보유
+            <span className="text-xs text-gray-400 bg-gray-700/50 px-2 py-0.5 rounded">
+              {holdingPurchases.length}차
             </span>
+          </div>
+        </div>
+
+        {/* 액션 버튼 */}
+        <div className="flex items-center justify-between pt-2 border-t border-gray-700/50">
+          <div className="flex items-center gap-1">
             {buySuccess && (
-              <span className="text-xs text-green-400 bg-green-900/30 px-2 py-1 rounded">
+              <span className="text-xs text-green-400 bg-green-900/30 px-2 py-1 rounded mr-1">
                 요청완료
               </span>
             )}
             <button
               onClick={handleBuyRequest}
               disabled={buying || !stock.is_active}
-              className={`p-2 rounded transition ${
+              className={`p-2 rounded transition flex items-center gap-1 text-sm ${
                 stock.is_active
                   ? 'text-blue-400 hover:bg-blue-900/30'
                   : 'text-gray-600 cursor-not-allowed'
@@ -459,6 +462,7 @@ function StockRow({
               title="즉시 매수"
             >
               {buying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
+              <span className="hidden md:inline">매수</span>
             </button>
             <button
               onClick={onToggle}
@@ -471,6 +475,8 @@ function StockRow({
             >
               <Power className="w-4 h-4" />
             </button>
+          </div>
+          <div className="flex items-center gap-1">
             <button
               onClick={onEdit}
               className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition"
@@ -488,23 +494,21 @@ function StockRow({
       </div>
 
       {expanded && (
-        <div className="border-t border-gray-700 p-4 bg-gray-800/50">
-          <div className="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <p className="text-sm text-gray-400">회당 매수금액</p>
+        <div className="border-t border-gray-700 p-3 md:p-4 bg-gray-800/50">
+          {/* 설정 정보 */}
+          <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
+            <div className="bg-gray-700/30 rounded p-2">
+              <p className="text-xs text-gray-400">회당 매수금액</p>
               <p className="font-bold">{stock.buy_amount.toLocaleString()}원</p>
             </div>
-            <div>
-              <p className="text-sm text-gray-400">물타기 비율</p>
-              <p className="font-bold">{stock.split_rates.join('% / ')}%</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-400">목표 수익률</p>
-              <p className="font-bold">{stock.target_rates.join('% / ')}%</p>
+            <div className="bg-gray-700/30 rounded p-2">
+              <p className="text-xs text-gray-400">물타기 비율</p>
+              <p className="font-bold text-xs">{stock.split_rates.slice(0, 5).join('/')}%</p>
             </div>
           </div>
 
-          <div className="mt-4">
+          {/* 매수 기록 */}
+          <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-bold text-sm">매수 기록</h4>
               {holdingPurchases.length === 0 && (
@@ -523,53 +527,55 @@ function StockRow({
                 {stock.purchases.map(purchase => (
                   <div
                     key={purchase.id}
-                    className={`flex items-center justify-between p-2 rounded text-sm ${
+                    className={`p-2 rounded text-sm ${
                       purchase.status === 'holding'
                         ? 'bg-gray-700/50'
                         : 'bg-gray-700/30 opacity-60'
                     }`}
                   >
-                    <div className="flex items-center gap-4">
-                      <span className="font-bold">{purchase.round}차</span>
-                      <span>{purchase.price.toLocaleString()}원</span>
-                      <span className="text-gray-400">{purchase.quantity}주</span>
-                      <span className="text-gray-500">{purchase.date}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`px-2 py-0.5 rounded text-xs ${
-                        purchase.status === 'holding'
-                          ? 'bg-blue-900/50 text-blue-400'
-                          : 'bg-green-900/50 text-green-400'
-                      }`}>
-                        {purchase.status === 'holding' ? '보유' : '매도'}
-                      </span>
-                      {purchase.status === 'holding' && (
-                        <>
-                          {sellSuccess === purchase.id && (
-                            <span className="text-xs text-green-400">요청완료</span>
-                          )}
-                          <button
-                            onClick={() => handleSellRequest(purchase)}
-                            disabled={sellingPurchaseId === purchase.id}
-                            className="text-orange-400 hover:text-orange-300 disabled:opacity-50"
-                            title="즉시 매도"
-                          >
-                            {sellingPurchaseId === purchase.id ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              <TrendingUp className="w-3 h-3" />
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold">{purchase.round}차</span>
+                        <span>{purchase.price.toLocaleString()}원</span>
+                        <span className="text-gray-400">{purchase.quantity}주</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-1.5 py-0.5 rounded text-xs ${
+                          purchase.status === 'holding'
+                            ? 'bg-blue-900/50 text-blue-400'
+                            : 'bg-green-900/50 text-green-400'
+                        }`}>
+                          {purchase.status === 'holding' ? '보유' : '매도'}
+                        </span>
+                        {purchase.status === 'holding' && (
+                          <>
+                            {sellSuccess === purchase.id && (
+                              <span className="text-xs text-green-400">완료</span>
                             )}
-                          </button>
-                          <button
-                            onClick={() => handleDeletePurchase(purchase.id)}
-                            className="text-gray-500 hover:text-red-400"
-                            title="삭제"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </>
-                      )}
+                            <button
+                              onClick={() => handleSellRequest(purchase)}
+                              disabled={sellingPurchaseId === purchase.id}
+                              className="p-1.5 text-orange-400 hover:text-orange-300 hover:bg-orange-900/20 rounded disabled:opacity-50"
+                              title="즉시 매도"
+                            >
+                              {sellingPurchaseId === purchase.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <TrendingUp className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                            <button
+                              onClick={() => handleDeletePurchase(purchase.id)}
+                              className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
+                    <p className="text-xs text-gray-500 mt-1">{purchase.date}</p>
                   </div>
                 ))}
               </div>
@@ -628,23 +634,23 @@ export function Stocks() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 md:space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">종목 관리</h1>
+        <h1 className="text-xl md:text-2xl font-bold">종목 관리</h1>
         <button
           onClick={() => {
             setEditingStock(undefined);
             setShowModal(true);
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition"
+          className="flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-sm md:text-base"
         >
           <Plus className="w-4 h-4" />
-          종목 추가
+          <span className="hidden md:inline">종목 </span>추가
         </button>
       </div>
 
       {stocks.length === 0 ? (
-        <div className="bg-gray-800 rounded-lg p-8 text-center border border-gray-700">
+        <div className="bg-gray-800 rounded-lg p-6 md:p-8 text-center border border-gray-700">
           <p className="text-gray-400">등록된 종목이 없습니다.</p>
           <button
             onClick={() => setShowModal(true)}
@@ -656,7 +662,7 @@ export function Stocks() {
       ) : (
         <div className="space-y-3">
           {stocks.map(stock => (
-            <StockRow
+            <StockCard
               key={stock.id}
               stock={stock}
               onEdit={() => {
