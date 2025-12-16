@@ -12,12 +12,6 @@ class KisAPI:
     """한국투자증권 API 클라이언트"""
 
     def __init__(self):
-        self.base_url = Config.KIS_BASE_URL
-        self.app_key = Config.KIS_APP_KEY
-        self.app_secret = Config.KIS_APP_SECRET
-        self.account_no = Config.KIS_ACCOUNT_NO
-        self.is_real = Config.KIS_IS_REAL
-
         # 토큰 캐시
         self._access_token: Optional[str] = None
         self._token_expires: Optional[datetime] = None
@@ -34,11 +28,11 @@ class KisAPI:
 
     def _refresh_token(self) -> None:
         """토큰 발급/갱신"""
-        url = f"{self.base_url}/oauth2/tokenP"
+        url = f"{Config.KIS_BASE_URL}/oauth2/tokenP"
         data = {
             "grant_type": "client_credentials",
-            "appkey": self.app_key,
-            "appsecret": self.app_secret,
+            "appkey": Config.KIS_APP_KEY,
+            "appsecret": Config.KIS_APP_SECRET,
         }
 
         response = requests.post(url, json=data)
@@ -58,25 +52,25 @@ class KisAPI:
         return {
             "Content-Type": "application/json; charset=utf-8",
             "authorization": f"Bearer {self.access_token}",
-            "appkey": self.app_key,
-            "appsecret": self.app_secret,
+            "appkey": Config.KIS_APP_KEY,
+            "appsecret": Config.KIS_APP_SECRET,
             "tr_id": tr_id,
         }
 
     def _get_hashkey(self, data: dict) -> str:
         """해시키 생성 (주문 시 필요)"""
-        url = f"{self.base_url}/uapi/hashkey"
+        url = f"{Config.KIS_BASE_URL}/uapi/hashkey"
         headers = {
             "Content-Type": "application/json; charset=utf-8",
-            "appkey": self.app_key,
-            "appsecret": self.app_secret,
+            "appkey": Config.KIS_APP_KEY,
+            "appsecret": Config.KIS_APP_SECRET,
         }
         response = requests.post(url, headers=headers, json=data)
         return response.json().get("HASH", "")
 
     def get_price(self, stock_code: str) -> dict:
         """현재가 조회"""
-        url = f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-price"
+        url = f"{Config.KIS_BASE_URL}/uapi/domestic-stock/v1/quotations/inquire-price"
         headers = self._get_headers("FHKST01010100")
         params = {
             "FID_COND_MRKT_DIV_CODE": "J",
@@ -97,15 +91,20 @@ class KisAPI:
             }
         return {}
 
+    def get_current_price(self, stock_code: str) -> int:
+        """현재가만 조회"""
+        result = self.get_price(stock_code)
+        return result.get("price", 0)
+
     def get_balance(self) -> dict:
         """예수금 조회"""
-        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+        url = f"{Config.KIS_BASE_URL}/uapi/domestic-stock/v1/trading/inquire-psbl-order"
 
         # 실전/모의 tr_id
-        tr_id = "TTTC8908R" if self.is_real else "VTTC8908R"
+        tr_id = "TTTC8908R" if Config.KIS_IS_REAL else "VTTC8908R"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = Config.KIS_ACCOUNT_NO.split("-")
         params = {
             "CANO": acct_no,
             "ACNT_PRDT_CD": acct_suffix,
@@ -129,12 +128,12 @@ class KisAPI:
 
     def get_holdings(self) -> list[dict]:
         """보유 종목 조회"""
-        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-balance"
+        url = f"{Config.KIS_BASE_URL}/uapi/domestic-stock/v1/trading/inquire-balance"
 
-        tr_id = "TTTC8434R" if self.is_real else "VTTC8434R"
+        tr_id = "TTTC8434R" if Config.KIS_IS_REAL else "VTTC8434R"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = Config.KIS_ACCOUNT_NO.split("-")
         params = {
             "CANO": acct_no,
             "ACNT_PRDT_CD": acct_suffix,
@@ -178,12 +177,12 @@ class KisAPI:
         Returns:
             주문 결과
         """
-        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/order-cash"
+        url = f"{Config.KIS_BASE_URL}/uapi/domestic-stock/v1/trading/order-cash"
 
-        tr_id = "TTTC0802U" if self.is_real else "VTTC0802U"
+        tr_id = "TTTC0802U" if Config.KIS_IS_REAL else "VTTC0802U"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = Config.KIS_ACCOUNT_NO.split("-")
 
         # 주문 구분: 00=지정가, 01=시장가
         ord_dvsn = "00" if price > 0 else "01"
@@ -216,12 +215,12 @@ class KisAPI:
 
     def sell_stock(self, stock_code: str, quantity: int, price: int = 0) -> dict:
         """매도 주문"""
-        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/order-cash"
+        url = f"{Config.KIS_BASE_URL}/uapi/domestic-stock/v1/trading/order-cash"
 
-        tr_id = "TTTC0801U" if self.is_real else "VTTC0801U"
+        tr_id = "TTTC0801U" if Config.KIS_IS_REAL else "VTTC0801U"
         headers = self._get_headers(tr_id)
 
-        acct_no, acct_suffix = self.account_no.split("-")
+        acct_no, acct_suffix = Config.KIS_ACCOUNT_NO.split("-")
 
         ord_dvsn = "00" if price > 0 else "01"
         ord_price = str(price) if price > 0 else "0"

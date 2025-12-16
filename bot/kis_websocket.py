@@ -16,11 +16,6 @@ class KisWebSocket:
     """한국투자증권 실시간 시세 WebSocket"""
 
     def __init__(self):
-        self.ws_url = Config.KIS_WS_URL
-        self.app_key = Config.KIS_APP_KEY
-        self.app_secret = Config.KIS_APP_SECRET
-        self.is_real = Config.KIS_IS_REAL
-
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
         self._approval_key: Optional[str] = None
         self._subscribed_codes: set[str] = set()
@@ -36,8 +31,8 @@ class KisWebSocket:
         url = f"{Config.KIS_BASE_URL}/oauth2/Approval"
         data = {
             "grant_type": "client_credentials",
-            "appkey": self.app_key,
-            "secretkey": self.app_secret,
+            "appkey": Config.KIS_APP_KEY,
+            "secretkey": Config.KIS_APP_SECRET,
         }
 
         response = requests.post(url, json=data)
@@ -109,12 +104,12 @@ class KisWebSocket:
         self._approval_key = self._get_approval_key()
         self._running = True
 
-        print(f"[WS] 연결 시도: {self.ws_url}")
+        print(f"[WS] 연결 시도: {Config.KIS_WS_URL}")
 
         while self._running:
             try:
                 async with websockets.connect(
-                    self.ws_url,
+                    Config.KIS_WS_URL,
                     ping_interval=30,
                     ping_timeout=10,
                 ) as ws:
