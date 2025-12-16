@@ -245,6 +245,24 @@ class SupabaseClient:
             return result[0]
         return None
 
+    def update_heartbeat(self) -> bool:
+        """봇 heartbeat 업데이트 (서버 상태 체크용)"""
+        if not self.is_configured:
+            return False
+
+        config = self.get_bot_config()
+        if not config:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "bot_config",
+            data={"last_heartbeat": datetime.now().isoformat()},
+            params={"id": f"eq.{config['id']}"},
+        )
+
+        return "error" not in result
+
     # ==================== 동기화 관련 ====================
 
     def get_pending_sync_requests(self) -> list[dict]:

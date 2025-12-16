@@ -269,6 +269,15 @@ class SplitBot:
                 status = self.get_status()
                 await notifier.send_status(status)
 
+    async def send_heartbeat(self) -> None:
+        """서버 상태 heartbeat 전송 (30초마다)"""
+        while self._running:
+            try:
+                supabase.update_heartbeat()
+            except Exception as e:
+                print(f"[Bot] Heartbeat 오류: {e}")
+            await asyncio.sleep(30)
+
     async def process_web_requests(self) -> None:
         """웹에서 요청한 매수/매도/동기화 처리 (10초마다)"""
         while self._running:
@@ -586,8 +595,9 @@ class SplitBot:
             print("[Bot] 종목이 추가될 때까지 대기합니다... (30초마다 확인)")
             print()
 
-            # 종목이 추가될 때까지 대기
+            # 종목이 추가될 때까지 대기 (heartbeat도 전송)
             while not strategy.stocks:
+                supabase.update_heartbeat()  # 대기 중에도 heartbeat 전송
                 await asyncio.sleep(30)
                 self.load_stocks_from_db()
                 if strategy.stocks:
@@ -627,6 +637,10 @@ class SplitBot:
         web_requests_task = asyncio.create_task(self.process_web_requests())
         print("[Bot] 웹 매수/매도 요청 처리 활성화 (10초 간격)")
 
+        # Heartbeat 태스크 (서버 상태 체크용)
+        heartbeat_task = asyncio.create_task(self.send_heartbeat())
+        print("[Bot] Heartbeat 활성화 (30초 간격)")
+
         try:
             # WebSocket 연결 (메인 루프)
             await kis_ws.connect(
@@ -638,6 +652,7 @@ class SplitBot:
             self._running = False
             status_task.cancel()
             web_requests_task.cancel()
+            heartbeat_task.cancel()
             kis_ws.stop()
             await bot_handler.stop()
             print("[Bot] 종료 완료")
