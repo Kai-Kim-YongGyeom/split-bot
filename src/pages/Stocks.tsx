@@ -546,15 +546,34 @@ function BuyConfirmModal({
       <div className="bg-gray-800 rounded-t-2xl md:rounded-lg p-4 md:p-6 w-full md:max-w-sm border-t md:border border-gray-700">
         <h2 className="text-lg font-bold mb-4">시장가 매수</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="bg-gray-700/50 rounded-lg p-3">
-            <div className="flex justify-between items-center mb-2">
+          <div className="bg-gray-700/50 rounded-lg p-3 space-y-2">
+            <div className="flex justify-between items-center">
               <span className="text-gray-400">종목</span>
               <span className="font-bold">{stock.name} ({stock.code})</span>
             </div>
+            {stock.current_price && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400">현재가</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">{stock.current_price.toLocaleString()}원</span>
+                  {stock.price_change !== undefined && (
+                    <span className={`text-xs ${stock.price_change >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                      {stock.price_change >= 0 ? '+' : ''}{stock.price_change.toFixed(2)}%
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <span className="text-gray-400">다음 차수</span>
               <span className="text-blue-400 font-bold">{nextRound}차</span>
             </div>
+            {stock.current_price && buyAmount > 0 && (
+              <div className="flex justify-between items-center pt-1 border-t border-gray-600">
+                <span className="text-gray-400">예상 수량</span>
+                <span className="font-bold">약 {Math.floor(buyAmount / stock.current_price)}주</span>
+              </div>
+            )}
           </div>
 
           <div>
@@ -680,10 +699,19 @@ function StockCard({
     }
   };
 
+  // 평균 매수가 계산
+  const avgPrice = holdingPurchases.length > 0
+    ? Math.round(holdingPurchases.reduce((sum, p) => sum + p.price * p.quantity, 0) / holdingPurchases.reduce((sum, p) => sum + p.quantity, 0))
+    : 0;
+  // 현재가 대비 수익률
+  const profitRate = stock.current_price && avgPrice > 0
+    ? ((stock.current_price - avgPrice) / avgPrice * 100)
+    : null;
+
   return (
     <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
       <div className="p-3 md:p-4">
-        {/* 헤더 - 종목명, 상태 */}
+        {/* 헤더 - 종목명, 현재가, 상태 */}
         <div className="flex items-start justify-between mb-2">
           <button
             onClick={() => setExpanded(!expanded)}
@@ -692,20 +720,39 @@ function StockCard({
             {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             <div>
               <h3 className="font-bold text-base">{stock.name}</h3>
-              <p className="text-gray-400 text-xs">{stock.code}</p>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-xs">{stock.code}</span>
+                {stock.current_price && (
+                  <>
+                    <span className="text-white text-xs font-medium">{stock.current_price.toLocaleString()}원</span>
+                    {stock.price_change !== undefined && (
+                      <span className={`text-xs ${stock.price_change >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                        {stock.price_change >= 0 ? '+' : ''}{stock.price_change.toFixed(2)}%
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </button>
-          <div className="flex items-center gap-1.5">
-            <span className={`px-2 py-0.5 rounded text-xs ${
-              stock.is_active
-                ? 'bg-green-900/50 text-green-400'
-                : 'bg-gray-700 text-gray-500'
-            }`}>
-              {stock.is_active ? '활성' : '비활성'}
-            </span>
-            <span className="text-xs text-gray-400 bg-gray-700/50 px-2 py-0.5 rounded">
-              {holdingPurchases.length}/{stock.max_rounds || 10}차
-            </span>
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-1.5">
+              <span className={`px-2 py-0.5 rounded text-xs ${
+                stock.is_active
+                  ? 'bg-green-900/50 text-green-400'
+                  : 'bg-gray-700 text-gray-500'
+              }`}>
+                {stock.is_active ? '활성' : '비활성'}
+              </span>
+              <span className="text-xs text-gray-400 bg-gray-700/50 px-2 py-0.5 rounded">
+                {holdingPurchases.length}/{stock.max_rounds || 10}차
+              </span>
+            </div>
+            {profitRate !== null && (
+              <span className={`text-xs font-medium ${profitRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                수익률 {profitRate >= 0 ? '+' : ''}{profitRate.toFixed(2)}%
+              </span>
+            )}
           </div>
         </div>
 
@@ -790,7 +837,12 @@ function StockCard({
               <p className="text-gray-500 text-sm">매수 기록이 없습니다.</p>
             ) : (
               <div className="space-y-2">
-                {stock.purchases.map(purchase => (
+                {stock.purchases.map(purchase => {
+                  // 개별 매수 수익률 계산
+                  const purchaseProfitRate = stock.current_price && purchase.price > 0 && purchase.status === 'holding'
+                    ? ((stock.current_price - purchase.price) / purchase.price * 100)
+                    : null;
+                  return (
                   <div
                     key={purchase.id}
                     className={`p-2 rounded text-sm ${
@@ -804,6 +856,11 @@ function StockCard({
                         <span className="font-bold">{purchase.round}차</span>
                         <span>{purchase.price.toLocaleString()}원</span>
                         <span className="text-gray-400">{purchase.quantity}주</span>
+                        {purchaseProfitRate !== null && (
+                          <span className={`text-xs ${purchaseProfitRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                            {purchaseProfitRate >= 0 ? '+' : ''}{purchaseProfitRate.toFixed(1)}%
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1.5">
                         <span className={`px-1.5 py-0.5 rounded text-xs ${
@@ -850,7 +907,8 @@ function StockCard({
                     </div>
                     <p className="text-xs text-gray-500 mt-1">{purchase.date}</p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

@@ -103,6 +103,24 @@ class SupabaseClient:
 
         return "error" not in result
 
+    def update_stock_price(self, code: str, price: int, change_rate: float = 0.0) -> bool:
+        """종목 현재가 업데이트 (실시간 시세용)"""
+        if not self.is_configured:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "bot_stocks",
+            data={
+                "current_price": price,
+                "price_change": change_rate,
+                "price_updated_at": datetime.now().isoformat(),
+            },
+            params={"code": f"eq.{code}"},
+        )
+
+        return "error" not in result
+
     def create_stock(self, code: str, name: str, user_id: str = None) -> Optional[dict]:
         """새 종목 생성 (기본 설정으로)
 

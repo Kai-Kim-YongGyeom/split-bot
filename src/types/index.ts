@@ -9,6 +9,9 @@ export interface Stock {
   split_rates: number[];
   target_rates: number[];
   stop_loss_rate: number;
+  current_price?: number;      // 현재가 (봇에서 업데이트)
+  price_change?: number;       // 등락률 (%)
+  price_updated_at?: string;   // 가격 업데이트 시간
   created_at: string;
   updated_at: string;
 }

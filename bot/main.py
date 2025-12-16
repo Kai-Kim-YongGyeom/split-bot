@@ -30,6 +30,8 @@ class SplitBot:
         self._prices: dict[str, int] = {}
         self._last_status_time: Optional[datetime] = None
         self._last_config_check: Optional[datetime] = None
+        self._last_price_db_update: dict[str, datetime] = {}  # 종목별 마지막 DB 업데이트 시간
+        self._price_db_update_interval = 10  # DB 업데이트 간격 (초)
 
     def is_market_open(self) -> bool:
         """장 운영 시간 체크 (09:00 ~ 15:30)"""
@@ -93,11 +95,19 @@ class SplitBot:
         """실시간 시세 수신 콜백"""
         code = data.get("code", "")
         price = data.get("price", 0)
+        change_rate = data.get("change_rate", 0.0)
 
         if not code or not price:
             return
 
         self._prices[code] = price
+
+        # DB에 현재가 업데이트 (10초마다)
+        now = datetime.now()
+        last_update = self._last_price_db_update.get(code)
+        if not last_update or (now - last_update).total_seconds() >= self._price_db_update_interval:
+            self._last_price_db_update[code] = now
+            supabase.update_stock_price(code, price, change_rate)
 
         # 봇 활성화 상태 확인 (DB에서)
         if not self.check_bot_enabled():
