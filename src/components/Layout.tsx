@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Bot, ListOrdered, Settings, Activity } from 'lucide-react';
+import { Bot, ListOrdered, Settings, Activity, LogOut } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 
 const navItems = [
   { path: '/', label: '대시보드', icon: Activity },
@@ -9,6 +10,7 @@ const navItems = [
 
 export function Layout() {
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -20,25 +22,37 @@ export function Layout() {
               <Bot className="w-8 h-8 text-blue-400" />
               <h1 className="text-xl font-bold">Split Bot</h1>
             </div>
-            <nav className="flex gap-2">
-              {navItems.map(({ path, label, icon: Icon }) => {
-                const isActive = location.pathname === path;
-                return (
-                  <Link
-                    key={path}
-                    to={path}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                      isActive
-                        ? 'bg-blue-600 text-white'
-                        : 'text-gray-400 hover:bg-gray-700 hover:text-white'
-                    }`}
-                  >
-                    <Icon className="w-4 h-4" />
-                    <span>{label}</span>
-                  </Link>
-                );
-              })}
-            </nav>
+            <div className="flex items-center gap-4">
+              <nav className="flex gap-2">
+                {navItems.map(({ path, label, icon: Icon }) => {
+                  const isActive = location.pathname === path;
+                  return (
+                    <Link
+                      key={path}
+                      to={path}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                        isActive
+                          ? 'bg-blue-600 text-white'
+                          : 'text-gray-400 hover:bg-gray-700 hover:text-white'
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+              <div className="flex items-center gap-3 pl-4 border-l border-gray-700">
+                <span className="text-gray-400 text-sm">{user?.email}</span>
+                <button
+                  onClick={signOut}
+                  className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  title="로그아웃"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </header>
