@@ -1,6 +1,13 @@
 import { supabase } from './supabase';
 import type { Stock, Purchase, BotConfig, StockFormData, PurchaseFormData } from '../types';
 
+// ==================== 유저 ID 헬퍼 ====================
+
+async function getCurrentUserId(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id || null;
+}
+
 // ==================== 종목 (bot_stocks) ====================
 
 export async function getStocks(): Promise<Stock[]> {
@@ -31,11 +38,18 @@ export async function getStock(id: string): Promise<Stock | null> {
 }
 
 export async function createStock(stock: StockFormData): Promise<Stock | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('bot_stocks')
     .insert([{
       ...stock,
       is_active: true,
+      user_id: userId,
     }])
     .select()
     .single();
@@ -93,6 +107,12 @@ export async function getPurchases(stockId: string): Promise<Purchase[]> {
 }
 
 export async function createPurchase(stockId: string, purchase: PurchaseFormData, round: number): Promise<Purchase | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('bot_purchases')
     .insert([{
@@ -102,6 +122,7 @@ export async function createPurchase(stockId: string, purchase: PurchaseFormData
       quantity: purchase.quantity,
       date: purchase.date,
       status: 'holding',
+      user_id: userId,
     }])
     .select()
     .single();
@@ -142,9 +163,13 @@ export async function deletePurchase(id: string): Promise<boolean> {
 // ==================== 봇 설정 (bot_config) ====================
 
 export async function getBotConfig(): Promise<BotConfig | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
   const { data, error } = await supabase
     .from('bot_config')
     .select('*')
+    .eq('user_id', userId)
     .single();
 
   if (error && error.code !== 'PGRST116') {
@@ -154,11 +179,48 @@ export async function getBotConfig(): Promise<BotConfig | null> {
   return data;
 }
 
+export async function createBotConfig(): Promise<BotConfig | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('bot_config')
+    .insert([{
+      user_id: userId,
+      is_running: false,
+      kis_is_real: false,
+      telegram_enabled: true,
+      default_buy_amount: 100000,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating bot config:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getOrCreateBotConfig(): Promise<BotConfig | null> {
+  let config = await getBotConfig();
+  if (!config) {
+    config = await createBotConfig();
+  }
+  return config;
+}
+
 export async function updateBotConfig(updates: Partial<BotConfig>): Promise<boolean> {
+  const config = await getBotConfig();
+  if (!config) {
+    console.error('No bot config found');
+    return false;
+  }
+
   const { error } = await supabase
     .from('bot_config')
     .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq('id', (await getBotConfig())?.id);
+    .eq('id', config.id);
 
   if (error) {
     console.error('Error updating bot config:', error);
@@ -211,6 +273,12 @@ export async function createBuyRequest(
   quantity?: number,
   price: number = 0
 ): Promise<BuyRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('bot_buy_requests')
     .insert([{
@@ -221,6 +289,7 @@ export async function createBuyRequest(
       price,
       order_type: price > 0 ? 'limit' : 'market',
       status: 'pending',
+      user_id: userId,
     }])
     .select()
     .single();
@@ -284,6 +353,12 @@ export async function createSellRequest(
   round: number,
   quantity: number
 ): Promise<SellRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('bot_sell_requests')
     .insert([{
@@ -294,6 +369,7 @@ export async function createSellRequest(
       round,
       quantity,
       status: 'pending',
+      user_id: userId,
     }])
     .select()
     .single();

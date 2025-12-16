@@ -29,9 +29,16 @@ export interface Purchase {
 // 봇 설정
 export interface BotConfig {
   id: string;
+  user_id?: string;
   is_running: boolean;
-  kis_account_no: string;
+  kis_app_key?: string | null;
+  kis_app_secret?: string | null;
+  kis_account_no?: string | null;
+  kis_is_real?: boolean;
+  telegram_bot_token?: string | null;
+  telegram_chat_id?: string | null;
   telegram_enabled: boolean;
+  default_buy_amount?: number;
   last_started_at?: string;
   last_heartbeat?: string;
   created_at: string;

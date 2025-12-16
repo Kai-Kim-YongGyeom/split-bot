@@ -1,19 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle, Power, Loader2, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-
-interface BotConfig {
-  id: string;
-  is_running: boolean;
-  kis_app_key: string | null;
-  kis_app_secret: string | null;
-  kis_account_no: string | null;
-  kis_is_real: boolean;
-  telegram_bot_token: string | null;
-  telegram_chat_id: string | null;
-  telegram_enabled: boolean;
-  default_buy_amount: number;
-}
+import { getOrCreateBotConfig, updateBotConfig } from '../lib/api';
+import type { BotConfig } from '../types';
 
 export function Settings() {
   const [loading, setLoading] = useState(true);
@@ -31,29 +19,16 @@ export function Settings() {
 
   const loadConfig = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('bot_config')
-      .select('*')
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
+    try {
+      const data = await getOrCreateBotConfig();
+      if (data) {
+        setConfig(data);
+      } else {
+        setError('설정을 불러오는데 실패했습니다.');
+      }
+    } catch (err) {
       setError('설정을 불러오는데 실패했습니다.');
-      console.error(error);
-    } else if (data) {
-      setConfig(data);
-    } else {
-      // 설정이 없으면 기본값 생성
-      const { data: newConfig } = await supabase
-        .from('bot_config')
-        .insert([{
-          is_running: false,
-          kis_is_real: false,
-          telegram_enabled: true,
-          default_buy_amount: 100000,
-        }])
-        .select()
-        .single();
-      if (newConfig) setConfig(newConfig);
+      console.error(err);
     }
     setLoading(false);
   };
@@ -64,26 +39,21 @@ export function Settings() {
     setSaving(true);
     setError(null);
 
-    const { error } = await supabase
-      .from('bot_config')
-      .update({
-        kis_app_key: config.kis_app_key,
-        kis_app_secret: config.kis_app_secret,
-        kis_account_no: config.kis_account_no,
-        kis_is_real: config.kis_is_real,
-        telegram_bot_token: config.telegram_bot_token,
-        telegram_chat_id: config.telegram_chat_id,
-        telegram_enabled: config.telegram_enabled,
-        default_buy_amount: config.default_buy_amount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', config.id);
+    const success = await updateBotConfig({
+      kis_app_key: config.kis_app_key,
+      kis_app_secret: config.kis_app_secret,
+      kis_account_no: config.kis_account_no,
+      kis_is_real: config.kis_is_real,
+      telegram_bot_token: config.telegram_bot_token,
+      telegram_chat_id: config.telegram_chat_id,
+      telegram_enabled: config.telegram_enabled,
+      default_buy_amount: config.default_buy_amount,
+    });
 
     setSaving(false);
 
-    if (error) {
+    if (!success) {
       setError('저장에 실패했습니다.');
-      console.error(error);
     } else {
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
@@ -95,18 +65,13 @@ export function Settings() {
 
     const newStatus = !config.is_running;
 
-    const { error } = await supabase
-      .from('bot_config')
-      .update({
-        is_running: newStatus,
-        last_started_at: newStatus ? new Date().toISOString() : undefined,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', config.id);
+    const success = await updateBotConfig({
+      is_running: newStatus,
+      ...(newStatus && { last_started_at: new Date().toISOString() }),
+    });
 
-    if (error) {
+    if (!success) {
       setError('봇 상태 변경에 실패했습니다.');
-      console.error(error);
     } else {
       setConfig({ ...config, is_running: newStatus });
     }
