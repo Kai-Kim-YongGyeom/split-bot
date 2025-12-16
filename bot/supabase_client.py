@@ -243,6 +243,47 @@ class SupabaseClient:
             return result[0]
         return None
 
+    # ==================== 매수 요청 (bot_buy_requests) ====================
+
+    def get_pending_buy_requests(self) -> list[dict]:
+        """대기 중인 매수 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "bot_buy_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_buy_request(self, request_id: str, status: str, message: str = "") -> bool:
+        """매수 요청 상태 업데이트"""
+        if not self.is_configured:
+            return False
+
+        data = {
+            "status": status,
+            "result_message": message,
+            "executed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+        result = self._request(
+            "PATCH",
+            "bot_buy_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
+        )
+
+        return "error" not in result
+
 
 # 싱글톤 인스턴스
 supabase = SupabaseClient()

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStocks } from '../hooks/useStocks';
-import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2 } from 'lucide-react';
 import type { StockWithPurchases, StockFormData, PurchaseFormData } from '../types';
 import * as api from '../lib/api';
 
@@ -275,12 +275,35 @@ function StockRow({
   onRefresh: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [buying, setBuying] = useState(false);
+  const [buySuccess, setBuySuccess] = useState(false);
   const holdingPurchases = stock.purchases.filter(p => p.status === 'holding');
 
   const handleDeletePurchase = async (purchaseId: string) => {
     if (confirm('이 매수 기록을 삭제하시겠습니까?')) {
       await api.deletePurchase(purchaseId);
       onRefresh();
+    }
+  };
+
+  const handleBuyRequest = async () => {
+    if (!confirm(`${stock.name} 시장가 매수 요청을 보내시겠습니까?\n(설정된 매수금액: ${stock.buy_amount.toLocaleString()}원)`)) {
+      return;
+    }
+
+    setBuying(true);
+    const result = await api.createBuyRequest(
+      stock.id,
+      stock.code,
+      stock.name
+    );
+    setBuying(false);
+
+    if (result) {
+      setBuySuccess(true);
+      setTimeout(() => setBuySuccess(false), 3000);
+    } else {
+      alert('매수 요청 실패. 다시 시도해주세요.');
     }
   };
 
@@ -311,6 +334,23 @@ function StockRow({
             <span className="text-sm text-gray-400">
               {holdingPurchases.length}차 보유
             </span>
+            {buySuccess && (
+              <span className="text-xs text-green-400 bg-green-900/30 px-2 py-1 rounded">
+                요청완료
+              </span>
+            )}
+            <button
+              onClick={handleBuyRequest}
+              disabled={buying || !stock.is_active}
+              className={`p-2 rounded transition ${
+                stock.is_active
+                  ? 'text-blue-400 hover:bg-blue-900/30'
+                  : 'text-gray-600 cursor-not-allowed'
+              }`}
+              title="즉시 매수"
+            >
+              {buying ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingCart className="w-4 h-4" />}
+            </button>
             <button
               onClick={onToggle}
               className={`p-2 rounded transition ${

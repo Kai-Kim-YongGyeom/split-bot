@@ -187,3 +187,75 @@ export async function getAllStocksWithPurchases() {
   );
   return results;
 }
+
+// ==================== 매수 요청 (bot_buy_requests) ====================
+
+export interface BuyRequest {
+  id: string;
+  stock_id: string;
+  stock_code: string;
+  stock_name: string;
+  quantity: number | null;
+  price: number;
+  order_type: 'market' | 'limit';
+  status: 'pending' | 'executed' | 'failed' | 'cancelled';
+  result_message: string | null;
+  created_at: string;
+  executed_at: string | null;
+}
+
+export async function createBuyRequest(
+  stockId: string,
+  stockCode: string,
+  stockName: string,
+  quantity?: number,
+  price: number = 0
+): Promise<BuyRequest | null> {
+  const { data, error } = await supabase
+    .from('bot_buy_requests')
+    .insert([{
+      stock_id: stockId,
+      stock_code: stockCode,
+      stock_name: stockName,
+      quantity: quantity || null,
+      price,
+      order_type: price > 0 ? 'limit' : 'market',
+      status: 'pending',
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating buy request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getPendingBuyRequests(): Promise<BuyRequest[]> {
+  const { data, error } = await supabase
+    .from('bot_buy_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching buy requests:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function cancelBuyRequest(id: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('bot_buy_requests')
+    .update({ status: 'cancelled' })
+    .eq('id', id)
+    .eq('status', 'pending');
+
+  if (error) {
+    console.error('Error cancelling buy request:', error);
+    return false;
+  }
+  return true;
+}
