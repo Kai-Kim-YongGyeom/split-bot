@@ -558,6 +558,57 @@ class SupabaseClient:
             print(f"[Supabase] 동기화 매도 처리: {purchase['id']}")
         return success
 
+    # ==================== KIS 토큰 관리 ====================
+
+    def get_kis_token(self, user_id: str) -> Optional[dict]:
+        """kis_tokens 테이블에서 토큰 조회"""
+        if not self.is_configured:
+            return None
+
+        result = self._request(
+            "GET",
+            "kis_tokens",
+            params={
+                "user_id": f"eq.{user_id}",
+                "select": "*",
+                "limit": "1",
+            },
+        )
+
+        if isinstance(result, list) and len(result) > 0:
+            return result[0]
+        return None
+
+    def save_kis_token(self, user_id: str, access_token: str, token_expiry: str) -> bool:
+        """kis_tokens 테이블에 토큰 저장 (upsert)"""
+        if not self.is_configured:
+            return False
+
+        # 기존 토큰 확인
+        existing = self.get_kis_token(user_id)
+
+        data = {
+            "user_id": user_id,
+            "access_token": access_token,
+            "token_expiry": token_expiry,
+            "updated_at": datetime.now().isoformat(),
+        }
+
+        if existing:
+            # UPDATE
+            result = self._request(
+                "PATCH",
+                "kis_tokens",
+                data=data,
+                params={"user_id": f"eq.{user_id}"},
+            )
+        else:
+            # INSERT
+            data["created_at"] = datetime.now().isoformat()
+            result = self._request("POST", "kis_tokens", data=data)
+
+        return "error" not in result
+
 
 # 싱글톤 인스턴스
 supabase = SupabaseClient()

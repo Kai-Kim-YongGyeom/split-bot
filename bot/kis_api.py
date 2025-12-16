@@ -19,17 +19,22 @@ class KisAPI:
         self.account_no = Config.KIS_ACCOUNT_NO
         self.is_real = Config.KIS_IS_REAL
 
-        # 토큰 캐시
+        # 토큰 캐시 (메모리)
         self._access_token: Optional[str] = None
         self._token_expires: Optional[datetime] = None
 
-    def reload_config(self) -> None:
+        # user_id (DB 토큰 조회용)
+        self._user_id: Optional[str] = None
+
+    def reload_config(self, user_id: str = None) -> None:
         """Config에서 설정 다시 로드 (DB 로드 후 호출 필요)"""
         self.base_url = Config.KIS_BASE_URL
         self.app_key = Config.KIS_APP_KEY
         self.app_secret = Config.KIS_APP_SECRET
         self.account_no = Config.KIS_ACCOUNT_NO
         self.is_real = Config.KIS_IS_REAL
+        if user_id:
+            self._user_id = user_id
         # 토큰은 초기화하지 않음 (이미 발급받은 경우 유지)
 
     @property
@@ -46,16 +51,37 @@ class KisAPI:
 
     @property
     def access_token(self) -> str:
-        """액세스 토큰 (자동 갱신)"""
+        """액세스 토큰 (DB 우선 조회, 자동 갱신)"""
+        # 1. 메모리 캐시 확인
         if self._access_token and self._token_expires:
             if datetime.now() < self._token_expires - timedelta(hours=1):
                 return self._access_token
 
+        # 2. DB에서 토큰 조회 (kis_tokens 테이블)
+        if self._user_id:
+            from supabase_client import supabase
+            token_data = supabase.get_kis_token(self._user_id)
+            if token_data:
+                token_expiry_str = token_data.get("token_expiry", "")
+                if token_expiry_str:
+                    try:
+                        # ISO 형식 파싱 (타임존 정보 제거)
+                        token_expiry_str = token_expiry_str.replace("Z", "").split("+")[0]
+                        token_expiry = datetime.fromisoformat(token_expiry_str)
+                        if datetime.now() < token_expiry - timedelta(hours=1):
+                            self._access_token = token_data.get("access_token")
+                            self._token_expires = token_expiry
+                            print(f"[KIS] DB에서 토큰 로드 (만료: {self._token_expires})")
+                            return self._access_token
+                    except (ValueError, TypeError) as e:
+                        print(f"[KIS] 토큰 만료시간 파싱 오류: {e}")
+
+        # 3. 새 토큰 발급
         self._refresh_token()
         return self._access_token
 
     def _refresh_token(self) -> None:
-        """토큰 발급/갱신"""
+        """토큰 발급/갱신 후 DB 저장"""
         url = f"{self.base_url}/oauth2/tokenP"
         data = {
             "grant_type": "client_credentials",
@@ -74,6 +100,16 @@ class KisAPI:
                 expires_in = int(result.get("expires_in", 86400))
                 self._token_expires = datetime.now() + timedelta(seconds=expires_in)
                 print(f"[KIS] 토큰 발급 완료 (만료: {self._token_expires})")
+
+                # DB에 토큰 저장
+                if self._user_id:
+                    from supabase_client import supabase
+                    supabase.save_kis_token(
+                        self._user_id,
+                        self._access_token,
+                        self._token_expires.isoformat()
+                    )
+                    print(f"[KIS] 토큰 DB 저장 완료")
             else:
                 raise Exception(f"토큰 발급 실패: {result}")
         except requests.exceptions.Timeout:
