@@ -3,7 +3,7 @@ import { useStocks } from '../hooks/useStocks';
 import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp, RefreshCw, X } from 'lucide-react';
 import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult } from '../types';
 import * as api from '../lib/api';
-import { searchStocks, type StockInfo } from '../data/stocks';
+import type { StockNameInfo } from '../lib/api';
 
 // 숫자 입력 시 포커스되면 전체 선택
 const handleNumberFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -34,9 +34,14 @@ function StockModal({
 
   const [formData, setFormData] = useState<StockFormData>(getInitialFormData());
 
+  // 일괄 적용용 상태
+  const [bulkSplitRate, setBulkSplitRate] = useState<number>(5);
+  const [bulkTargetRate, setBulkTargetRate] = useState<number>(5);
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<StockInfo[]>([]);
+  const [searchResults, setSearchResults] = useState<StockNameInfo[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [searching, setSearching] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // initialData가 변경되면 폼 데이터 리셋
@@ -45,15 +50,23 @@ function StockModal({
     setSearchQuery('');
   }, [initialData, isOpen]);
 
+  // 디바운스된 검색
   useEffect(() => {
-    if (searchQuery.length >= 1) {
-      const results = searchStocks(searchQuery);
-      setSearchResults(results);
-      setShowDropdown(results.length > 0);
-    } else {
+    if (searchQuery.length < 1) {
       setSearchResults([]);
       setShowDropdown(false);
+      return;
     }
+
+    setSearching(true);
+    const timer = setTimeout(async () => {
+      const results = await api.searchStockNames(searchQuery);
+      setSearchResults(results);
+      setShowDropdown(results.length > 0);
+      setSearching(false);
+    }, 300); // 300ms 디바운스
+
+    return () => clearTimeout(timer);
   }, [searchQuery]);
 
   useEffect(() => {
@@ -68,7 +81,7 @@ function StockModal({
 
   if (!isOpen) return null;
 
-  const handleSelectStock = (stock: StockInfo) => {
+  const handleSelectStock = (stock: StockNameInfo) => {
     setFormData({ ...formData, code: stock.code, name: stock.name });
     setSearchQuery('');
     setShowDropdown(false);
@@ -89,9 +102,13 @@ function StockModal({
           {/* 종목 검색 */}
           {!initialData && (
             <div className="relative" ref={dropdownRef}>
-              <label className="block text-sm text-gray-400 mb-1">종목 검색</label>
+              <label className="block text-sm text-gray-400 mb-1">종목 검색 (Supabase)</label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                {searching ? (
+                  <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400 animate-spin" />
+                ) : (
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                )}
                 <input
                   type="text"
                   value={searchQuery}
@@ -110,7 +127,16 @@ function StockModal({
                       className="w-full px-3 py-3 md:py-2 text-left hover:bg-gray-600 flex justify-between items-center"
                     >
                       <span>{stock.name}</span>
-                      <span className="text-gray-400 text-sm">{stock.code}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-400 text-sm">{stock.code}</span>
+                        {stock.market && (
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                            stock.market === 'KOSPI' ? 'bg-blue-900/50 text-blue-400' : 'bg-purple-900/50 text-purple-400'
+                          }`}>
+                            {stock.market}
+                          </span>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -196,6 +222,30 @@ function StockModal({
           {formData.max_rounds >= 2 && (
             <div>
               <label className="block text-sm text-gray-400 mb-2">물타기 비율 (%) - 2~{formData.max_rounds}차</label>
+              {/* 일괄 적용 */}
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="number"
+                  value={bulkSplitRate || ''}
+                  onChange={e => setBulkSplitRate(Number(e.target.value) || 0)}
+                  onFocus={handleNumberFocus}
+                  className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
+                  min="1"
+                  max="50"
+                  placeholder="%"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newRates = formData.split_rates.map(() => bulkSplitRate);
+                    setFormData({ ...formData, split_rates: newRates });
+                  }}
+                  className="px-3 py-1 bg-blue-600 text-sm rounded hover:bg-blue-500 transition"
+                >
+                  일괄 적용
+                </button>
+                <span className="text-xs text-gray-500">모든 차수에 동일 비율 적용</span>
+              </div>
               <div className="grid grid-cols-5 gap-1.5 md:gap-2">
                 {formData.split_rates.slice(0, Math.min(formData.max_rounds - 1, 5)).map((rate, i) => (
                   <div key={i} className="flex flex-col items-center">
@@ -244,6 +294,30 @@ function StockModal({
           {/* 목표 수익률 */}
           <div>
             <label className="block text-sm text-gray-400 mb-2">목표 수익률 (%) - 1~{formData.max_rounds}차</label>
+            {/* 일괄 적용 */}
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="number"
+                value={bulkTargetRate || ''}
+                onChange={e => setBulkTargetRate(Number(e.target.value) || 0)}
+                onFocus={handleNumberFocus}
+                className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
+                min="1"
+                max="50"
+                placeholder="%"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const newRates = formData.target_rates.map(() => bulkTargetRate);
+                  setFormData({ ...formData, target_rates: newRates });
+                }}
+                className="px-3 py-1 bg-green-600 text-sm rounded hover:bg-green-500 transition"
+              >
+                일괄 적용
+              </button>
+              <span className="text-xs text-gray-500">모든 차수에 동일 비율 적용</span>
+            </div>
             <div className="grid grid-cols-5 gap-1.5 md:gap-2">
               {formData.target_rates.slice(0, Math.min(formData.max_rounds, 5)).map((rate, i) => (
                 <div key={i} className="flex flex-col items-center">

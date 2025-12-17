@@ -9,6 +9,46 @@ async function getCurrentUserId(): Promise<string | null> {
   return user?.id || null;
 }
 
+// ==================== 종목명 검색 (stock_names) ====================
+
+export interface StockNameInfo {
+  code: string;
+  name: string;
+  market?: string;
+}
+
+export async function searchStockNames(query: string): Promise<StockNameInfo[]> {
+  if (!query || query.length < 1) return [];
+
+  // 종목코드로 검색 (숫자로 시작하면)
+  if (/^\d/.test(query)) {
+    const { data, error } = await supabase
+      .from('stock_names')
+      .select('code, name, market')
+      .ilike('code', `${query}%`)
+      .limit(15);
+
+    if (error) {
+      console.error('Error searching stocks by code:', error);
+      return [];
+    }
+    return data || [];
+  }
+
+  // 종목명으로 검색
+  const { data, error } = await supabase
+    .from('stock_names')
+    .select('code, name, market')
+    .ilike('name', `%${query}%`)
+    .limit(15);
+
+  if (error) {
+    console.error('Error searching stocks by name:', error);
+    return [];
+  }
+  return data || [];
+}
+
 // ==================== 종목 (bot_stocks) ====================
 
 export async function getStocks(): Promise<Stock[]> {
