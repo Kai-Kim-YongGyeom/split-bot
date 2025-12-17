@@ -247,7 +247,7 @@ class StockConfig:
             round=new_round,
             price=price,
             quantity=quantity,
-            date=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            date=datetime.now().isoformat(),
             status="holding",
         )
         self.purchases.append(purchase)
@@ -258,7 +258,7 @@ class StockConfig:
         """매도 처리"""
         purchase.status = "sold"
         purchase.sold_price = sold_price
-        purchase.sold_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        purchase.sold_date = datetime.now().isoformat()
 
     def to_dict(self) -> dict:
         """딕셔너리 변환"""

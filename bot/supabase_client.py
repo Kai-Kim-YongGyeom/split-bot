@@ -188,6 +188,7 @@ class SupabaseClient:
     def add_purchase(self, stock_id: str, purchase: Purchase) -> Optional[str]:
         """매수 기록 추가"""
         if not self.is_configured:
+            print(f"[Supabase] 설정 없음 - 매수 저장 실패")
             return None
 
         data = {
@@ -199,11 +200,15 @@ class SupabaseClient:
             "status": purchase.status,
         }
 
+        print(f"[Supabase] 매수 저장 시도: stock_id={stock_id}, round={purchase.round}, price={purchase.price}")
         result = self._request("POST", "bot_purchases", data=data)
 
         if isinstance(result, list) and len(result) > 0:
-            print(f"[Supabase] 매수 기록 저장: {result[0].get('id')}")
+            print(f"[Supabase] 매수 기록 저장 성공: {result[0].get('id')}")
             return result[0].get("id")
+
+        # 실패 시 상세 로그
+        print(f"[Supabase] 매수 저장 실패! result={result}")
         return None
 
     def update_purchase(self, purchase_id: str, data: dict) -> bool:

@@ -162,13 +162,31 @@ class SplitBot:
                 purchase = stock.add_purchase(price, quantity)
 
                 # DB에 저장
+                db_saved = False
                 if Config.validate_supabase() and stock.id:
                     purchase_id = supabase.save_purchase(stock, purchase)
                     if purchase_id:
                         purchase.id = purchase_id
+                        db_saved = True
                         print(f"[Bot] DB 저장 완료: {purchase_id}")
+                    else:
+                        print(f"[Bot] ⚠️ DB 저장 실패! 종목 자동매매 일시 중지")
+                        # DB 저장 실패 시 해당 종목 비활성화 (중복 매수 방지)
+                        stock.is_active = False
+                        # DB에도 비활성화 저장 (봇 재시작해도 유지)
+                        if stock.id:
+                            supabase.update_stock(stock.id, {"is_active": False})
+                        await notifier.send_error(
+                            f"🚨 매수 체결됐으나 DB 저장 실패!\n"
+                            f"종목: {stock.name} ({stock.code})\n"
+                            f"차수: {round_num}차\n"
+                            f"가격: {price:,}원 x {quantity}주\n"
+                            f"주문번호: {order['order_no']}\n"
+                            f"⚠️ 해당 종목 자동매매 일시 중지됨\n"
+                            f"→ DB 확인 후 웹에서 종목 다시 활성화 필요"
+                        )
 
-                print(f"[Bot] 매수 성공: 주문번호 {order['order_no']}")
+                print(f"[Bot] 매수 성공: 주문번호 {order['order_no']} (DB: {'저장' if db_saved else '실패'})")
             else:
                 print(f"[Bot] 매수 실패: {order['message']}")
 
@@ -286,10 +304,12 @@ class SplitBot:
                 await notifier.send_status(status)
 
     async def send_heartbeat(self) -> None:
-        """서버 상태 heartbeat 전송 (30초마다)"""
+        """서버 상태 heartbeat 전송 + DB 동기화 (30초마다)"""
         while self._running:
             try:
                 supabase.update_heartbeat()
+                # 30초마다 DB에서 purchases 리로드 (웹/동기화로 추가된 매수 반영)
+                await self._reload_stocks()
             except Exception as e:
                 print(f"[Bot] Heartbeat 오류: {e}")
             await asyncio.sleep(30)
@@ -502,8 +522,8 @@ class SplitBot:
                     if result:
                         sell_synced += 1
 
-            # 메모리 상태도 갱신
-            await self._reload_stocks()
+            # 메모리 상태도 갱신 (동기화 후에는 전체 리로드)
+            await self._reload_stocks(full_reload=True)
 
             # 완료 처리
             parts = [f"{len(orders)}건 조회"]
@@ -520,12 +540,34 @@ class SplitBot:
             supabase.update_sync_request(request_id, "failed", str(e))
             print(f"[Bot] 동기화 실패: {e}")
 
-    async def _reload_stocks(self) -> None:
-        """DB에서 종목 데이터 다시 로드"""
+    async def _reload_stocks(self, full_reload: bool = False) -> None:
+        """DB에서 종목 데이터 다시 로드
+
+        full_reload=True: 전체 덮어쓰기 (동기화 후 사용)
+        full_reload=False: purchases만 병합 (주기적 동기화용)
+        """
         try:
             stocks = supabase.load_all_stocks()
-            strategy.stocks = {s.code: s for s in stocks}
-            print(f"[Bot] 종목 데이터 리로드 완료: {len(stocks)}개")
+
+            if full_reload:
+                # 전체 덮어쓰기
+                strategy.stocks = {s.code: s for s in stocks}
+                print(f"[Bot] 종목 전체 리로드: {len(stocks)}개")
+            else:
+                # purchases만 병합 (메모리의 last_order_time 등 유지)
+                for new_stock in stocks:
+                    existing = strategy.stocks.get(new_stock.code)
+                    if existing:
+                        # DB의 purchases가 더 많으면 업데이트 (새 매수 반영)
+                        if len(new_stock.purchases) > len(existing.purchases):
+                            existing.purchases = new_stock.purchases
+                            print(f"[Bot] {new_stock.name} purchases 업데이트: {len(new_stock.purchases)}건")
+                        # is_active 상태도 DB에서 반영 (웹에서 변경 시)
+                        existing.is_active = new_stock.is_active
+                    else:
+                        # 새 종목 추가
+                        strategy.stocks[new_stock.code] = new_stock
+                        print(f"[Bot] 새 종목 추가: {new_stock.name}")
         except Exception as e:
             print(f"[Bot] 종목 리로드 실패: {e}")
 
