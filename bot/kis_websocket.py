@@ -19,16 +19,29 @@ class KisWebSocket:
     def __init__(self):
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
         self._access_token: Optional[str] = None  # approval_key 대신 access_token 사용
+        self._token_expires: Optional[datetime] = None  # 토큰 만료 시간
         self._subscribed_codes: set[str] = set()
         self._price_callback: Optional[Callable] = None
         self._running = False
+        self._connection_failed_count = 0  # 연속 연결 실패 횟수
 
         # AES 복호화 키 (WebSocket 응답 복호화용)
         self._aes_key: Optional[bytes] = None
         self._aes_iv: Optional[bytes] = None
 
-    def _get_access_token(self) -> str:
-        """REST API access_token 발급 (WebSocket 인증용)"""
+    def _get_access_token(self, force: bool = False) -> str:
+        """REST API access_token 발급 (WebSocket 인증용)
+
+        Args:
+            force: True면 강제 재발급, False면 캐시된 토큰 사용
+        """
+        # 기존 토큰이 유효하면 재사용 (만료 1시간 전까지)
+        if not force and self._access_token and self._token_expires:
+            from datetime import timedelta
+            if datetime.now() < self._token_expires - timedelta(hours=1):
+                print(f"[WS] 기존 토큰 재사용 (만료: {self._token_expires})")
+                return self._access_token
+
         url = f"{Config.KIS_BASE_URL}/oauth2/tokenP"
         headers = {"content-type": "application/json"}
         data = {
@@ -41,8 +54,13 @@ class KisWebSocket:
         result = response.json()
 
         if "access_token" in result:
-            print(f"[WS] Access Token 발급 완료")
-            return result["access_token"]
+            self._access_token = result["access_token"]
+            # 토큰 유효기간 (보통 24시간)
+            from datetime import timedelta
+            expires_in = int(result.get("expires_in", 86400))
+            self._token_expires = datetime.now() + timedelta(seconds=expires_in)
+            print(f"[WS] Access Token 발급 완료 (만료: {self._token_expires})")
+            return self._access_token
         raise Exception(f"Access Token 발급 실패: {result}")
 
     def _decrypt_data(self, encrypted_data: str) -> str:
@@ -136,6 +154,7 @@ class KisWebSocket:
                         **connect_kwargs
                     ) as ws:
                         self._ws = ws
+                        self._connection_failed_count = 0  # 성공 시 실패 카운트 리셋
                         print("[WS] 연결 성공")
                         await self._run_message_loop(ws)
                 except TypeError:
@@ -145,6 +164,7 @@ class KisWebSocket:
                         **connect_kwargs
                     ) as ws:
                         self._ws = ws
+                        self._connection_failed_count = 0  # 성공 시 실패 카운트 리셋
                         print("[WS] 연결 성공 (헤더 없이)")
                         await self._run_message_loop(ws)
 
@@ -154,13 +174,18 @@ class KisWebSocket:
                 print(f"[WS] 오류: {e}")
 
             if self._running:
-                print("[WS] 60초 후 재연결... (토큰 발급 제한: 1분)")
-                await asyncio.sleep(60)  # 토큰 발급 제한 때문에 60초 대기
-                # 재연결 시 토큰 갱신
-                try:
-                    self._access_token = self._get_access_token()
-                except Exception as e:
-                    print(f"[WS] 토큰 갱신 실패: {e}")
+                self._connection_failed_count += 1
+
+                # 연속 5회 실패 시 WebSocket 포기 (REST 폴링만 사용)
+                if self._connection_failed_count >= 5:
+                    print("[WS] 연속 5회 연결 실패 - WebSocket 포기, REST 폴링만 사용")
+                    self._running = False
+                    return
+
+                # 기존 토큰 재사용 (재발급 안 함)
+                wait_time = min(60 * self._connection_failed_count, 300)  # 최대 5분
+                print(f"[WS] {wait_time}초 후 재연결... (실패 횟수: {self._connection_failed_count}/5)")
+                await asyncio.sleep(wait_time)
 
     async def _run_message_loop(self, ws) -> None:
         """메시지 수신 루프"""
