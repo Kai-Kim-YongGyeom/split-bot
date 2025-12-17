@@ -22,13 +22,13 @@ export function BotStatusProvider({ children }: { children: ReactNode }) {
     if (config) {
       setBotRunning(config.is_running);
 
-      // 하트비트 체크 (60초 이내면 서버 살아있음)
+      // 하트비트 체크 (45초 이내면 서버 살아있음 - 봇은 30초마다 전송)
       const heartbeat = config.last_heartbeat;
       if (heartbeat) {
         const lastTime = new Date(heartbeat).getTime();
         const now = Date.now();
         const diffSec = (now - lastTime) / 1000;
-        setServerAlive(diffSec < 60);
+        setServerAlive(diffSec < 45);
       } else {
         setServerAlive(false);
       }
@@ -37,7 +37,7 @@ export function BotStatusProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     checkStatus();
-    const interval = setInterval(checkStatus, 30000);
+    const interval = setInterval(checkStatus, 15000);  // 15초마다 체크
     return () => clearInterval(interval);
   }, [checkStatus]);
 
