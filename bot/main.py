@@ -827,6 +827,8 @@ class SplitBot:
             print("[Bot] 종료 요청")
         finally:
             self._running = False
+            # 종료 알림 전송
+            await notifier.send_shutdown()
             status_task.cancel()
             web_requests_task.cancel()
             heartbeat_task.cancel()

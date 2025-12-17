@@ -13,9 +13,17 @@ class TelegramNotifier:
     """텔레그램 알림 전송"""
 
     def __init__(self):
-        self.bot_token = Config.TELEGRAM_BOT_TOKEN
-        self.chat_id = Config.TELEGRAM_CHAT_ID
         self._bot: Optional[Bot] = None
+
+    @property
+    def bot_token(self) -> str:
+        """Config에서 동적으로 읽기"""
+        return Config.TELEGRAM_BOT_TOKEN
+
+    @property
+    def chat_id(self) -> str:
+        """Config에서 동적으로 읽기"""
+        return Config.TELEGRAM_CHAT_ID
 
     @property
     def is_configured(self) -> bool:
@@ -136,6 +144,15 @@ class TelegramNotifier:
 
 모드: {mode}투자
 감시 종목: {stock_count}개
+시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+"""
+        await self.send(message.strip())
+
+    async def send_shutdown(self) -> None:
+        """종료 알림"""
+        message = f"""
+🛑 <b>Split Bot 종료</b>
+
 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 """
         await self.send(message.strip())
