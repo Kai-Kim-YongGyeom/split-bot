@@ -23,13 +23,15 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
   // 평균 단가 (가중평균)
   const avgPrice = totalQuantity > 0 ? Math.round(totalInvested / totalQuantity) : 0;
 
-  // 실현 손익 계산
+  // 실현 손익 및 수익률 계산
   const realizedProfit = soldPurchases.reduce((sum, p) => {
     if (p.sold_price) {
       return sum + (p.sold_price - p.price) * p.quantity;
     }
     return sum;
   }, 0);
+  const soldCost = soldPurchases.reduce((sum, p) => sum + p.price * p.quantity, 0);
+  const realizedRate = soldCost > 0 ? (realizedProfit / soldCost) * 100 : 0;
 
   // 다음 물타기 가격 계산
   const lastPurchase = holdingPurchases[holdingPurchases.length - 1];
@@ -152,6 +154,7 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
             <span className="text-gray-400">실현 손익:</span>
             <span className={`font-bold ${realizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {realizedProfit >= 0 ? '+' : ''}{realizedProfit.toLocaleString()}원
+              <span className="text-xs ml-1">({realizedRate >= 0 ? '+' : ''}{realizedRate.toFixed(1)}%)</span>
             </span>
           </div>
         )}
@@ -187,12 +190,17 @@ export function Dashboard() {
     );
   }, 0);
 
-  // 총 실현 손익
-  const totalRealizedProfit = stocks.reduce((sum, s) => {
-    return sum + s.purchases.filter(p => p.status === 'sold').reduce(
-      (pSum, p) => pSum + (p.sold_price ? (p.sold_price - p.price) * p.quantity : 0), 0
-    );
-  }, 0);
+  // 총 실현 손익 및 수익률
+  const soldPurchases = stocks.flatMap(s => s.purchases.filter(p => p.status === 'sold'));
+  const totalRealizedProfit = soldPurchases.reduce(
+    (sum, p) => sum + (p.sold_price ? (p.sold_price - p.price) * p.quantity : 0), 0
+  );
+  const totalSoldCost = soldPurchases.reduce(
+    (sum, p) => sum + p.price * p.quantity, 0
+  );
+  const totalRealizedRate = totalSoldCost > 0
+    ? (totalRealizedProfit / totalSoldCost) * 100
+    : 0;
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -276,6 +284,9 @@ export function Dashboard() {
               <p className="text-gray-400 text-xs md:text-sm">총 실현 손익</p>
               <p className={`text-xl md:text-2xl font-bold ${totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {totalRealizedProfit >= 0 ? '+' : ''}{totalRealizedProfit.toLocaleString()}원
+                <span className="text-base md:text-lg ml-2">
+                  ({totalRealizedRate >= 0 ? '+' : ''}{totalRealizedRate.toFixed(2)}%)
+                </span>
               </p>
             </div>
           </div>
