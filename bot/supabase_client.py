@@ -191,8 +191,11 @@ class SupabaseClient:
             print(f"[Supabase] 설정 없음 - 매수 저장 실패")
             return None
 
+        from config import Config
+
         data = {
             "stock_id": stock_id,
+            "user_id": Config.USER_ID,
             "round": purchase.round,
             "price": purchase.price,
             "quantity": purchase.quantity,
