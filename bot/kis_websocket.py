@@ -113,27 +113,40 @@ class KisWebSocket:
 
         while self._running:
             try:
-                async with websockets.connect(
-                    Config.KIS_WS_URL,
-                    ssl=ssl_context,
-                    ping_interval=30,
-                    ping_timeout=10,
-                    extra_headers={
-                        "authorization": f"Bearer {self._access_token}",
-                        "appkey": Config.KIS_APP_KEY,
-                        "appsecret": Config.KIS_APP_SECRET,
-                    }
-                ) as ws:
-                    self._ws = ws
-                    print("[WS] 연결 성공")
+                # websockets 버전에 따라 헤더 전달 방식이 다름
+                # 최신 버전: additional_headers, 구버전: extra_headers
+                connect_kwargs = {
+                    "ssl": ssl_context,
+                    "ping_interval": 30,
+                    "ping_timeout": 10,
+                }
 
-                    # 기존 구독 종목 재구독
-                    for code in self._subscribed_codes:
-                        await self._subscribe(code)
+                # 헤더 설정 시도 (버전 호환성)
+                headers = [
+                    ("authorization", f"Bearer {self._access_token}"),
+                    ("appkey", Config.KIS_APP_KEY),
+                    ("appsecret", Config.KIS_APP_SECRET),
+                ]
 
-                    # 메시지 수신 루프
-                    async for message in ws:
-                        await self._handle_message(message)
+                try:
+                    # 최신 websockets (10.x+)
+                    async with websockets.connect(
+                        Config.KIS_WS_URL,
+                        additional_headers=headers,
+                        **connect_kwargs
+                    ) as ws:
+                        self._ws = ws
+                        print("[WS] 연결 성공")
+                        await self._run_message_loop(ws)
+                except TypeError:
+                    # 구버전 websockets - 헤더 없이 연결
+                    async with websockets.connect(
+                        Config.KIS_WS_URL,
+                        **connect_kwargs
+                    ) as ws:
+                        self._ws = ws
+                        print("[WS] 연결 성공 (헤더 없이)")
+                        await self._run_message_loop(ws)
 
             except websockets.ConnectionClosed as e:
                 print(f"[WS] 연결 종료: {e}")
@@ -141,13 +154,23 @@ class KisWebSocket:
                 print(f"[WS] 오류: {e}")
 
             if self._running:
-                print("[WS] 5초 후 재연결...")
-                await asyncio.sleep(5)
+                print("[WS] 60초 후 재연결... (토큰 발급 제한: 1분)")
+                await asyncio.sleep(60)  # 토큰 발급 제한 때문에 60초 대기
                 # 재연결 시 토큰 갱신
                 try:
                     self._access_token = self._get_access_token()
                 except Exception as e:
                     print(f"[WS] 토큰 갱신 실패: {e}")
+
+    async def _run_message_loop(self, ws) -> None:
+        """메시지 수신 루프"""
+        # 기존 구독 종목 재구독
+        for code in self._subscribed_codes:
+            await self._subscribe(code)
+
+        # 메시지 수신 루프
+        async for message in ws:
+            await self._handle_message(message)
 
     async def _handle_message(self, message: str) -> None:
         """메시지 처리"""
