@@ -30,44 +30,60 @@ class TelegramNotifier:
         """텔레그램 설정 여부"""
         return bool(self.bot_token and self.chat_id)
 
-    def send_sync(self, message: str) -> bool:
-        """동기 방식 메시지 전송"""
+    def send_sync(self, message: str, max_retries: int = 5) -> bool:
+        """동기 방식 메시지 전송 (재시도 포함)"""
         if not self.is_configured:
             print(f"[TG] 설정 없음, 메시지: {message}")
             return False
 
-        try:
-            url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
-            data = {
-                "chat_id": self.chat_id,
-                "text": message,
-                "parse_mode": "HTML",
-            }
-            response = requests.post(url, json=data, timeout=10)
-            return response.status_code == 200
-        except Exception as e:
-            print(f"[TG] 전송 실패: {e}")
-            return False
+        url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        data = {
+            "chat_id": self.chat_id,
+            "text": message,
+            "parse_mode": "HTML",
+        }
 
-    async def send(self, message: str) -> bool:
-        """비동기 메시지 전송"""
+        for attempt in range(1, max_retries + 1):
+            try:
+                response = requests.post(url, json=data, timeout=10)
+                if response.status_code == 200:
+                    return True
+                print(f"[TG] 전송 실패 (시도 {attempt}/{max_retries}): HTTP {response.status_code}")
+            except Exception as e:
+                print(f"[TG] 전송 실패 (시도 {attempt}/{max_retries}): {e}")
+
+            if attempt < max_retries:
+                import time
+                time.sleep(2 * attempt)  # 2초, 4초, 6초, 8초 대기
+
+        print(f"[TG] 최종 전송 실패 ({max_retries}회 시도)")
+        return False
+
+    async def send(self, message: str, max_retries: int = 5) -> bool:
+        """비동기 메시지 전송 (재시도 포함)"""
         if not self.is_configured:
             print(f"[TG] 설정 없음, 메시지: {message}")
             return False
 
-        try:
-            if not self._bot:
-                self._bot = Bot(token=self.bot_token)
+        if not self._bot:
+            self._bot = Bot(token=self.bot_token)
 
-            await self._bot.send_message(
-                chat_id=self.chat_id,
-                text=message,
-                parse_mode="HTML",
-            )
-            return True
-        except Exception as e:
-            print(f"[TG] 전송 실패: {e}")
-            return False
+        for attempt in range(1, max_retries + 1):
+            try:
+                await self._bot.send_message(
+                    chat_id=self.chat_id,
+                    text=message,
+                    parse_mode="HTML",
+                )
+                return True
+            except Exception as e:
+                print(f"[TG] 전송 실패 (시도 {attempt}/{max_retries}): {e}")
+
+                if attempt < max_retries:
+                    await asyncio.sleep(2 * attempt)  # 2초, 4초, 6초, 8초 대기
+
+        print(f"[TG] 최종 전송 실패 ({max_retries}회 시도)")
+        return False
 
     async def send_buy_alert(
         self,
