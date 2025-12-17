@@ -297,12 +297,9 @@ class SplitBot:
 
         while self._running:
             try:
-                # 장 운영 시간이 아니면 10초 대기 후 재시도
-                if not self.is_market_open():
-                    await asyncio.sleep(10)
-                    continue
+                is_market_open = self.is_market_open()
 
-                # 각 종목의 현재가 조회
+                # 각 종목의 현재가 조회 (장 외 시간에도 조회 - 웹 표시용)
                 for code, stock in strategy.stocks.items():
                     if not self._running:
                         break
@@ -310,24 +307,35 @@ class SplitBot:
                     try:
                         price_data = kis_api.get_price(code)
                         if price_data and price_data.get("price", 0) > 0:
-                            # on_price_update와 동일한 형식으로 변환
-                            data = {
-                                "code": code,
-                                "price": price_data["price"],
-                                "change_rate": price_data.get("change", 0.0),
-                            }
-                            await self.on_price_update(data)
+                            price = price_data["price"]
+                            change_rate = price_data.get("change", 0.0)
+
+                            # 가격 저장 및 DB 업데이트 (항상)
+                            self._prices[code] = price
+                            from supabase_client import supabase
+                            supabase.update_stock_price(code, price, change_rate)
+                            print(f"[Poll] {stock.name}: {price:,}원 ({change_rate:+.2f}%)")
+
+                            # 자동매매는 장 시간에만
+                            if is_market_open and self.check_bot_enabled():
+                                data = {
+                                    "code": code,
+                                    "price": price,
+                                    "change_rate": change_rate,
+                                }
+                                await self.on_price_update(data)
                     except Exception as e:
                         print(f"[Bot] {code} 가격 조회 오류: {e}")
 
-                    # API 호출 간 0.2초 대기 (rate limit 방지)
-                    await asyncio.sleep(0.2)
+                    # API 호출 간 0.5초 대기 (rate limit 방지)
+                    await asyncio.sleep(0.5)
 
             except Exception as e:
                 print(f"[Bot] 폴링 오류: {e}")
 
-            # 폴링 간격만큼 대기
-            await asyncio.sleep(self._polling_interval)
+            # 폴링 간격 (장 외 시간에는 더 느리게)
+            interval = self._polling_interval if is_market_open else 30
+            await asyncio.sleep(interval)
 
     async def process_web_requests(self) -> None:
         """웹에서 요청한 매수/매도/동기화 처리 (10초마다)"""
