@@ -32,6 +32,9 @@ class SplitBot:
         self._last_config_check: Optional[datetime] = None
         self._last_price_db_update: dict[str, datetime] = {}  # 종목별 마지막 DB 업데이트 시간
         self._price_db_update_interval = 10  # DB 업데이트 간격 (초)
+        self._use_polling = False  # WebSocket 실패 시 REST API 폴링 모드
+        self._polling_interval = 5  # 폴링 간격 (초)
+        self._ws_fail_count = 0  # WebSocket 연속 실패 횟수
 
     def is_market_open(self) -> bool:
         """장 운영 시간 체크 (09:00 ~ 15:30)"""
@@ -287,6 +290,44 @@ class SplitBot:
             except Exception as e:
                 print(f"[Bot] Heartbeat 오류: {e}")
             await asyncio.sleep(30)
+
+    async def poll_prices(self) -> None:
+        """REST API로 가격 폴링 (WebSocket 대안)"""
+        print(f"[Bot] REST API 폴링 모드 시작 (간격: {self._polling_interval}초)")
+
+        while self._running:
+            try:
+                # 장 운영 시간이 아니면 10초 대기 후 재시도
+                if not self.is_market_open():
+                    await asyncio.sleep(10)
+                    continue
+
+                # 각 종목의 현재가 조회
+                for code, stock in strategy.stocks.items():
+                    if not self._running:
+                        break
+
+                    try:
+                        price_data = kis_api.get_price(code)
+                        if price_data and price_data.get("price", 0) > 0:
+                            # on_price_update와 동일한 형식으로 변환
+                            data = {
+                                "code": code,
+                                "price": price_data["price"],
+                                "change_rate": price_data.get("change", 0.0),
+                            }
+                            await self.on_price_update(data)
+                    except Exception as e:
+                        print(f"[Bot] {code} 가격 조회 오류: {e}")
+
+                    # API 호출 간 0.2초 대기 (rate limit 방지)
+                    await asyncio.sleep(0.2)
+
+            except Exception as e:
+                print(f"[Bot] 폴링 오류: {e}")
+
+            # 폴링 간격만큼 대기
+            await asyncio.sleep(self._polling_interval)
 
     async def process_web_requests(self) -> None:
         """웹에서 요청한 매수/매도/동기화 처리 (10초마다)"""
@@ -671,11 +712,23 @@ class SplitBot:
         heartbeat_task = asyncio.create_task(self.send_heartbeat())
         print("[Bot] Heartbeat 활성화 (30초 간격)")
 
+        # 폴링 태스크 (항상 활성화 - WebSocket과 병행)
+        polling_task = asyncio.create_task(self.poll_prices())
+        print("[Bot] REST API 폴링 활성화 (5초 간격)")
+
         try:
-            # WebSocket 연결 (메인 루프)
-            await kis_ws.connect(
-                on_price=lambda data: asyncio.create_task(self.on_price_update(data))
-            )
+            # WebSocket도 시도 (연결되면 더 빠른 업데이트)
+            print("[Bot] WebSocket 연결 시도 중... (실패해도 폴링으로 동작)")
+            try:
+                await kis_ws.connect(
+                    on_price=lambda data: asyncio.create_task(self.on_price_update(data))
+                )
+            except Exception as e:
+                print(f"[Bot] WebSocket 오류: {e}")
+                print("[Bot] REST API 폴링만 사용합니다.")
+                # 폴링이 계속 돌아가니까 여기서 대기
+                while self._running:
+                    await asyncio.sleep(1)
         except asyncio.CancelledError:
             print("[Bot] 종료 요청")
         finally:
@@ -683,6 +736,7 @@ class SplitBot:
             status_task.cancel()
             web_requests_task.cancel()
             heartbeat_task.cancel()
+            polling_task.cancel()
             kis_ws.stop()
             await bot_handler.stop()
             print("[Bot] 종료 완료")
