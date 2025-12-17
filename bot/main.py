@@ -313,8 +313,9 @@ class SplitBot:
                             # 가격 저장 및 DB 업데이트 (항상)
                             self._prices[code] = price
                             from supabase_client import supabase
-                            supabase.update_stock_price(code, price, change_rate)
-                            print(f"[Poll] {stock.name}: {price:,}원 ({change_rate:+.2f}%)")
+                            saved = supabase.update_stock_price(code, price, change_rate)
+                            status = "저장" if saved else "실패"
+                            print(f"[Poll] {stock.name}({code}): {price:,}원 ({change_rate:+.2f}%) - DB {status}")
 
                             # 자동매매는 장 시간에만
                             if is_market_open and self.check_bot_enabled():

@@ -106,6 +106,7 @@ class SupabaseClient:
     def update_stock_price(self, code: str, price: int, change_rate: float = 0.0) -> bool:
         """종목 현재가 업데이트 (실시간 시세용)"""
         if not self.is_configured:
+            print(f"[Supabase] update_stock_price 실패: 설정 없음")
             return False
 
         result = self._request(
@@ -119,7 +120,16 @@ class SupabaseClient:
             params={"code": f"eq.{code}"},
         )
 
-        return "error" not in result
+        if "error" in result:
+            print(f"[Supabase] update_stock_price 실패: {code} - {result}")
+            return False
+
+        # 결과가 빈 배열이면 해당 종목이 없는 것
+        if isinstance(result, list) and len(result) == 0:
+            print(f"[Supabase] update_stock_price: 종목 없음 - {code}")
+            return False
+
+        return True
 
     def create_stock(self, code: str, name: str, user_id: str = None) -> Optional[dict]:
         """새 종목 생성 (기본 설정으로)
