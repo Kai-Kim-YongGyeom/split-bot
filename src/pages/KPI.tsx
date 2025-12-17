@@ -145,7 +145,8 @@ export function KPI() {
 
   const kpiData = useMemo<KPIData>(() => {
     const filtered = purchases.filter(p => {
-      const date = p.date;
+      // 날짜만 추출해서 비교 (TIMESTAMPTZ 형식 대응)
+      const date = p.date.split('T')[0].split(' ')[0];
       return date >= startDate && date <= endDate;
     });
 
@@ -159,9 +160,11 @@ export function KPI() {
     );
 
     // 매도 집계 (해당 기간에 매도된 것만)
-    const soldInPeriod = filtered.filter(
-      p => p.status === 'sold' && p.sold_date && p.sold_date >= startDate && p.sold_date <= endDate
-    );
+    const soldInPeriod = filtered.filter(p => {
+      if (p.status !== 'sold' || !p.sold_date) return false;
+      const soldDate = p.sold_date.split('T')[0].split(' ')[0];
+      return soldDate >= startDate && soldDate <= endDate;
+    });
 
     const sellData = soldInPeriod.reduce(
       (acc, p) => ({
@@ -195,13 +198,11 @@ export function KPI() {
 
   // 종목별 실현손익
   const stockProfits = useMemo(() => {
-    const soldInPeriod = purchases.filter(
-      p =>
-        p.status === 'sold' &&
-        p.sold_date &&
-        p.sold_date >= startDate &&
-        p.sold_date <= endDate
-    );
+    const soldInPeriod = purchases.filter(p => {
+      if (p.status !== 'sold' || !p.sold_date) return false;
+      const soldDate = p.sold_date.split('T')[0].split(' ')[0];
+      return soldDate >= startDate && soldDate <= endDate;
+    });
 
     const byStock: Record<string, { name: string; profit: number; count: number }> = {};
 
@@ -222,7 +223,11 @@ export function KPI() {
 
   // 필터된 거래 내역
   const filteredPurchases = useMemo(() => {
-    return purchases.filter(p => p.date >= startDate && p.date <= endDate).slice(0, 50);
+    return purchases.filter(p => {
+      // 날짜만 추출해서 비교 (TIMESTAMPTZ 형식 대응)
+      const pDate = p.date.split('T')[0].split(' ')[0];
+      return pDate >= startDate && pDate <= endDate;
+    }).slice(0, 50);
   }, [purchases, startDate, endDate]);
 
   if (loading) {
