@@ -60,6 +60,7 @@ class KisAPI:
         # 2. DB에서 토큰 조회 (kis_tokens 테이블)
         if self._user_id:
             from supabase_client import supabase
+            print(f"[KIS] DB에서 토큰 조회 중... (user_id: {self._user_id[:8]}...)")
             token_data = supabase.get_kis_token(self._user_id)
             if token_data:
                 token_expiry_str = token_data.get("token_expiry", "")
@@ -71,12 +72,19 @@ class KisAPI:
                         if datetime.now() < token_expiry - timedelta(hours=1):
                             self._access_token = token_data.get("access_token")
                             self._token_expires = token_expiry
-                            print(f"[KIS] DB에서 토큰 로드 (만료: {self._token_expires})")
+                            print(f"[KIS] DB 토큰 사용! (만료: {self._token_expires})")
                             return self._access_token
+                        else:
+                            print(f"[KIS] DB 토큰 만료됨 (만료: {token_expiry})")
                     except (ValueError, TypeError) as e:
                         print(f"[KIS] 토큰 만료시간 파싱 오류: {e}")
+            else:
+                print("[KIS] DB에 저장된 토큰 없음")
+        else:
+            print("[KIS] user_id 없음 - DB 토큰 조회 스킵")
 
         # 3. 새 토큰 발급
+        print("[KIS] 새 토큰 발급 중...")
         self._refresh_token()
         return self._access_token
 

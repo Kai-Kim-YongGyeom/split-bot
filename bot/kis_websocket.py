@@ -30,38 +30,18 @@ class KisWebSocket:
         self._aes_iv: Optional[bytes] = None
 
     def _get_access_token(self, force: bool = False) -> str:
-        """REST API access_token 발급 (WebSocket 인증용)
+        """REST API access_token 가져오기 (kis_api 토큰 재사용)
 
         Args:
-            force: True면 강제 재발급, False면 캐시된 토큰 사용
+            force: 사용되지 않음 (호환성 유지용)
         """
-        # 기존 토큰이 유효하면 재사용 (만료 1시간 전까지)
-        if not force and self._access_token and self._token_expires:
-            from datetime import timedelta
-            if datetime.now() < self._token_expires - timedelta(hours=1):
-                print(f"[WS] 기존 토큰 재사용 (만료: {self._token_expires})")
-                return self._access_token
-
-        url = f"{Config.KIS_BASE_URL}/oauth2/tokenP"
-        headers = {"content-type": "application/json"}
-        data = {
-            "grant_type": "client_credentials",
-            "appkey": Config.KIS_APP_KEY,
-            "appsecret": Config.KIS_APP_SECRET,
-        }
-
-        response = requests.post(url, headers=headers, json=data, timeout=10)
-        result = response.json()
-
-        if "access_token" in result:
-            self._access_token = result["access_token"]
-            # 토큰 유효기간 (보통 24시간)
-            from datetime import timedelta
-            expires_in = int(result.get("expires_in", 86400))
-            self._token_expires = datetime.now() + timedelta(seconds=expires_in)
-            print(f"[WS] Access Token 발급 완료 (만료: {self._token_expires})")
-            return self._access_token
-        raise Exception(f"Access Token 발급 실패: {result}")
+        # kis_api의 토큰 재사용 (DB 조회 + 캐싱 로직이 이미 구현됨)
+        from kis_api import kis_api
+        token = kis_api.access_token  # 이 property가 DB 조회 + 자동 갱신 처리
+        self._access_token = token
+        self._token_expires = kis_api._token_expires
+        print(f"[WS] kis_api 토큰 재사용 (만료: {self._token_expires})")
+        return token
 
     def _decrypt_data(self, encrypted_data: str) -> str:
         """AES 복호화 (실시간 데이터)"""
