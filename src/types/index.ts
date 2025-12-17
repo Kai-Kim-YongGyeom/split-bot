@@ -97,6 +97,7 @@ export interface BuyRequest {
   stock_id: string;
   stock_code: string;
   stock_name: string;
+  buy_amount: number | null;
   quantity: number | null;
   price: number;
   order_type: 'market' | 'limit';

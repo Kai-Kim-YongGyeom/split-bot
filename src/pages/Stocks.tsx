@@ -934,7 +934,7 @@ function StockCard({
                         <span className="text-gray-400">{purchase.quantity}주</span>
                         {purchaseProfitRate !== null && (
                           <span className={`text-xs ${purchaseProfitRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
-                            {purchaseProfitRate >= 0 ? '+' : ''}{purchaseProfitRate.toFixed(1)}%
+                            {purchaseProfitRate >= 0 ? '+' : ''}{purchaseProfitRate.toFixed(2)}%
                           </span>
                         )}
                       </div>

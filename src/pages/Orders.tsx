@@ -184,20 +184,20 @@ export function Orders() {
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm">
                           <div>
-                            <p className="text-xs text-gray-400">가격</p>
-                            <p>{req.price > 0 ? `${req.price.toLocaleString()}원` : '시장가'}</p>
+                            <p className="text-xs text-gray-400">매수금액</p>
+                            <p>{req.buy_amount ? `${req.buy_amount.toLocaleString()}원` : '-'}</p>
                           </div>
                           <div>
                             <p className="text-xs text-gray-400">수량</p>
                             <p>{req.quantity ? `${req.quantity}주` : '자동'}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-400">요청시간</p>
-                            <p className="text-gray-400">{formatDate(req.created_at)}</p>
+                            <p className="text-xs text-gray-400">주문가</p>
+                            <p>{req.price > 0 ? `${req.price.toLocaleString()}원` : '시장가'}</p>
                           </div>
                           <div>
-                            <p className="text-xs text-gray-400">체결시간</p>
-                            <p className="text-gray-400">{formatDate(req.executed_at)}</p>
+                            <p className="text-xs text-gray-400">요청시간</p>
+                            <p className="text-gray-400">{formatDate(req.created_at)}</p>
                           </div>
                         </div>
                         {req.result_message && (
@@ -213,11 +213,10 @@ export function Orders() {
                       <thead>
                         <tr className="text-gray-400 border-b border-gray-700">
                           <th className="text-left py-3 px-4">종목</th>
-                          <th className="text-right py-3 px-4">가격</th>
+                          <th className="text-right py-3 px-4">매수금액</th>
                           <th className="text-right py-3 px-4">수량</th>
                           <th className="text-center py-3 px-4">상태</th>
                           <th className="text-left py-3 px-4">요청시간</th>
-                          <th className="text-left py-3 px-4">체결시간</th>
                           <th className="text-left py-3 px-4">결과</th>
                           <th className="text-center py-3 px-4">액션</th>
                         </tr>
@@ -232,7 +231,7 @@ export function Orders() {
                               </div>
                             </td>
                             <td className="py-3 px-4 text-right">
-                              {req.price > 0 ? `${req.price.toLocaleString()}원` : '시장가'}
+                              {req.buy_amount ? `${req.buy_amount.toLocaleString()}원` : '-'}
                             </td>
                             <td className="py-3 px-4 text-right">
                               {req.quantity ? `${req.quantity}주` : '자동'}
@@ -242,9 +241,6 @@ export function Orders() {
                             </td>
                             <td className="py-3 px-4 text-gray-400">
                               {formatDate(req.created_at)}
-                            </td>
-                            <td className="py-3 px-4 text-gray-400">
-                              {formatDate(req.executed_at)}
                             </td>
                             <td className="py-3 px-4 text-gray-400 max-w-[200px] truncate" title={req.result_message || ''}>
                               {req.result_message || '-'}
