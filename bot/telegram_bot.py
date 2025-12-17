@@ -78,6 +78,7 @@ class TelegramNotifier:
         round_num: int,
         success: bool,
         order_no: str = "",
+        error_message: str = "",
     ) -> None:
         """매수 알림"""
         status = "완료" if success else "실패"
@@ -94,6 +95,9 @@ class TelegramNotifier:
 주문번호: {order_no or '-'}
 시간: {datetime.now().strftime('%H:%M:%S')}
 """
+        if not success and error_message:
+            message += f"\n실패사유: {error_message}"
+
         await self.send(message.strip())
 
     async def send_sell_alert(

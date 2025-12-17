@@ -205,6 +205,7 @@ class SplitBot:
                 round_num=round_num,
                 success=order["success"],
                 order_no=order.get("order_no", ""),
+                error_message=order.get("message", "") if not order["success"] else "",
             )
         finally:
             # 주문 처리 완료 (성공/실패 무관)
@@ -669,6 +670,17 @@ class SplitBot:
             else:
                 supabase.update_buy_request(request_id, "failed", order["message"])
                 print(f"[Bot] 웹 매수 실패: {order['message']}")
+
+                # 텔레그램 실패 알림
+                await notifier.send_buy_alert(
+                    stock_name=stock.name,
+                    stock_code=stock.code,
+                    price=self._prices.get(stock_code, 0),
+                    quantity=quantity,
+                    round_num=stock.current_round + 1,
+                    success=False,
+                    error_message=order["message"],
+                )
         finally:
             stock.clear_order_pending()
 
