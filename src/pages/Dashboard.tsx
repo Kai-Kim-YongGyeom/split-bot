@@ -68,6 +68,29 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
         </span>
       </div>
 
+      {/* 현재가 표시 */}
+      {stock.current_price && stock.current_price > 0 && (
+        <div className="mb-3 p-2 bg-blue-900/30 rounded border border-blue-800">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400 text-xs">현재가</span>
+            <span className="font-bold text-lg text-blue-400">
+              {stock.current_price.toLocaleString()}원
+            </span>
+          </div>
+          {avgPrice > 0 && (
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-gray-400 text-xs">평가손익</span>
+              <span className={`font-bold ${
+                stock.current_price >= avgPrice ? 'text-red-400' : 'text-blue-400'
+              }`}>
+                {((stock.current_price - avgPrice) * totalQuantity).toLocaleString()}원
+                ({((stock.current_price / avgPrice - 1) * 100).toFixed(1)}%)
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2 md:gap-3 text-sm">
         <div className="bg-gray-700/50 rounded p-2">
           <p className="text-gray-400 text-xs">보유 차수</p>

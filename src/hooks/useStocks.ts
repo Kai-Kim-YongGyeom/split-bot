@@ -23,6 +23,9 @@ export function useStocks() {
 
   useEffect(() => {
     fetchStocks();
+    // 15초마다 갱신 (현재가 업데이트용)
+    const interval = setInterval(fetchStocks, 15000);
+    return () => clearInterval(interval);
   }, [fetchStocks]);
 
   const addStock = async (data: StockFormData): Promise<Stock | null> => {
