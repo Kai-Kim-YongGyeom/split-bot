@@ -382,7 +382,7 @@ class SplitBot:
             print(f"[Bot] 종목 동기화 요청 처리 오류: {e}")
 
     async def execute_stock_sync_request(self, req: dict) -> None:
-        """종목 동기화 요청 실행 (KRX에서 KOSPI/KOSDAQ 종목 가져오기)"""
+        """종목 동기화 요청 실행 (KRX에서 KOSPI/KOSDAQ/ETF 종목 가져오기)"""
         request_id = req.get("id")
         print(f"[Bot] 종목 동기화 요청 처리: {request_id}")
 
@@ -390,7 +390,7 @@ class SplitBot:
         supabase.update_stock_sync_request(request_id, "processing", "KRX에서 종목 조회 중...")
 
         try:
-            from sync_stock_names import get_krx_stocks
+            from sync_stock_names import get_krx_stocks, get_krx_etf
 
             # KOSPI 종목
             print("[Bot] KOSPI 종목 조회 중...")
@@ -400,9 +400,13 @@ class SplitBot:
             print("[Bot] KOSDAQ 종목 조회 중...")
             kosdaq_stocks = get_krx_stocks("KSQ")
 
-            all_stocks = kospi_stocks + kosdaq_stocks
+            # ETF
+            print("[Bot] ETF 조회 중...")
+            etf_stocks = get_krx_etf()
+
+            all_stocks = kospi_stocks + kosdaq_stocks + etf_stocks
             total = len(all_stocks)
-            print(f"[Bot] 총 {total} 종목 조회됨 (KOSPI: {len(kospi_stocks)}, KOSDAQ: {len(kosdaq_stocks)})")
+            print(f"[Bot] 총 {total} 종목 조회됨 (KOSPI: {len(kospi_stocks)}, KOSDAQ: {len(kosdaq_stocks)}, ETF: {len(etf_stocks)})")
 
             if total == 0:
                 supabase.update_stock_sync_request(request_id, "failed", "KRX에서 종목을 가져오지 못했습니다.")
@@ -413,7 +417,7 @@ class SplitBot:
             success_count = supabase.upsert_stock_names(all_stocks)
 
             # 완료 처리
-            message = f"KOSPI {len(kospi_stocks)}개 + KOSDAQ {len(kosdaq_stocks)}개 = 총 {success_count}개 동기화 완료"
+            message = f"KOSPI {len(kospi_stocks)}개 + KOSDAQ {len(kosdaq_stocks)}개 + ETF {len(etf_stocks)}개 = 총 {success_count}개 동기화 완료"
             supabase.update_stock_sync_request(request_id, "completed", message, success_count)
             print(f"[Bot] 종목 동기화 완료: {message}")
 
