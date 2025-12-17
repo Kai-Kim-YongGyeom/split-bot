@@ -694,15 +694,23 @@ class SupabaseClient:
         for i in range(0, len(stocks), batch_size):
             batch = stocks[i:i + batch_size]
 
-            result = self._request(
-                "POST",
-                "stock_names",
-                data=batch,
-                params={"on_conflict": "code"},  # code 기준 upsert
-            )
+            # 중복 무시하고 새 종목만 추가
+            url = f"{self.url}/rest/v1/stock_names"
+            headers = {
+                "apikey": self.key,
+                "Authorization": f"Bearer {self.key}",
+                "Content-Type": "application/json",
+                "Prefer": "resolution=ignore-duplicates",  # 중복 스킵
+            }
 
-            if "error" not in result:
-                success_count += len(batch)
+            try:
+                response = requests.post(url, json=batch, headers=headers, timeout=30)
+                if response.status_code < 400:
+                    success_count += len(batch)
+                else:
+                    print(f"[Supabase] stock_names upsert error: {response.status_code}")
+            except Exception as e:
+                print(f"[Supabase] stock_names upsert exception: {e}")
 
         return success_count
 
