@@ -1253,8 +1253,8 @@ function SyncModal({
                       {item.result.trade_date} | {item.result.quantity}주 @ {item.result.price.toLocaleString()}원
                     </div>
                     {item.status === 'unmatched' && item.stock && (
-                      <p className="text-yellow-300 text-xs mt-1">
-                        → 종목 관리에서 수동으로 매수 기록을 추가/수정하세요
+                      <p className="text-green-300 text-xs mt-1">
+                        → 자동으로 매수 기록이 등록되었습니다
                       </p>
                     )}
                   </div>
