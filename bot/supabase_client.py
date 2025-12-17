@@ -685,34 +685,44 @@ class SupabaseClient:
 
         return "error" not in result
 
-    def upsert_stock_names(self, stocks: list[dict], batch_size: int = 100) -> int:
-        """stock_names 테이블에 종목 upsert"""
+    def upsert_stock_names(self, stocks: list[dict], batch_size: int = 50) -> int:
+        """stock_names 테이블에 종목 추가 (중복 무시)"""
         if not self.is_configured or not stocks:
             return 0
 
+        url = f"{self.url}/rest/v1/stock_names"
+        headers = {
+            "apikey": self.key,
+            "Authorization": f"Bearer {self.key}",
+            "Content-Type": "application/json",
+        }
+
         success_count = 0
+        skip_count = 0
+
         for i in range(0, len(stocks), batch_size):
             batch = stocks[i:i + batch_size]
 
-            # 중복 무시하고 새 종목만 추가
-            url = f"{self.url}/rest/v1/stock_names"
-            headers = {
-                "apikey": self.key,
-                "Authorization": f"Bearer {self.key}",
-                "Content-Type": "application/json",
-                "Prefer": "resolution=ignore-duplicates",  # 중복 스킵
-            }
+            # 개별 insert (중복 409 무시)
+            for stock in batch:
+                try:
+                    response = requests.post(url, json=stock, headers=headers, timeout=10)
+                    if response.status_code == 201:
+                        success_count += 1
+                    elif response.status_code == 409:
+                        skip_count += 1  # 이미 존재
+                    else:
+                        pass  # 기타 에러 무시
+                except:
+                    pass
 
-            try:
-                response = requests.post(url, json=batch, headers=headers, timeout=30)
-                if response.status_code < 400:
-                    success_count += len(batch)
-                else:
-                    print(f"[Supabase] stock_names upsert error: {response.status_code}")
-            except Exception as e:
-                print(f"[Supabase] stock_names upsert exception: {e}")
+            # 진행상황 로그
+            total_done = success_count + skip_count
+            if total_done % 500 == 0:
+                print(f"[Supabase] 진행: {total_done}/{len(stocks)} (신규: {success_count}, 기존: {skip_count})")
 
-        return success_count
+        print(f"[Supabase] 완료: 신규 {success_count}개, 기존 {skip_count}개")
+        return success_count + skip_count
 
 
 # 싱글톤 인스턴스
