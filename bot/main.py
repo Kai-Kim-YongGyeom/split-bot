@@ -346,6 +346,9 @@ class SplitBot:
             # 동기화 요청은 장 운영과 무관하게 처리
             await self.process_sync_requests()
 
+            # 종목 동기화 요청 처리 (KRX -> stock_names)
+            await self.process_stock_sync_requests()
+
             # 장 운영 시간이 아니면 매수/매도 스킵
             if not self.is_market_open():
                 continue
@@ -368,6 +371,56 @@ class SplitBot:
                 await self.execute_sync_request(req)
         except Exception as e:
             print(f"[Bot] 동기화 요청 처리 오류: {e}")
+
+    async def process_stock_sync_requests(self) -> None:
+        """대기 중인 종목 동기화 요청 처리 (KRX -> stock_names)"""
+        try:
+            requests = supabase.get_pending_stock_sync_requests()
+            for req in requests:
+                await self.execute_stock_sync_request(req)
+        except Exception as e:
+            print(f"[Bot] 종목 동기화 요청 처리 오류: {e}")
+
+    async def execute_stock_sync_request(self, req: dict) -> None:
+        """종목 동기화 요청 실행 (KRX에서 KOSPI/KOSDAQ 종목 가져오기)"""
+        request_id = req.get("id")
+        print(f"[Bot] 종목 동기화 요청 처리: {request_id}")
+
+        # 처리 중 상태로 변경
+        supabase.update_stock_sync_request(request_id, "processing", "KRX에서 종목 조회 중...")
+
+        try:
+            from sync_stock_names import get_krx_stocks
+
+            # KOSPI 종목
+            print("[Bot] KOSPI 종목 조회 중...")
+            kospi_stocks = get_krx_stocks("STK")
+
+            # KOSDAQ 종목
+            print("[Bot] KOSDAQ 종목 조회 중...")
+            kosdaq_stocks = get_krx_stocks("KSQ")
+
+            all_stocks = kospi_stocks + kosdaq_stocks
+            total = len(all_stocks)
+            print(f"[Bot] 총 {total} 종목 조회됨 (KOSPI: {len(kospi_stocks)}, KOSDAQ: {len(kosdaq_stocks)})")
+
+            if total == 0:
+                supabase.update_stock_sync_request(request_id, "failed", "KRX에서 종목을 가져오지 못했습니다.")
+                return
+
+            # Supabase에 저장
+            print("[Bot] Supabase에 저장 중...")
+            success_count = supabase.upsert_stock_names(all_stocks)
+
+            # 완료 처리
+            message = f"KOSPI {len(kospi_stocks)}개 + KOSDAQ {len(kosdaq_stocks)}개 = 총 {success_count}개 동기화 완료"
+            supabase.update_stock_sync_request(request_id, "completed", message, success_count)
+            print(f"[Bot] 종목 동기화 완료: {message}")
+
+        except Exception as e:
+            error_msg = f"오류: {str(e)}"
+            supabase.update_stock_sync_request(request_id, "failed", error_msg)
+            print(f"[Bot] 종목 동기화 실패: {error_msg}")
 
     async def execute_sync_request(self, req: dict) -> None:
         """동기화 요청 실행"""

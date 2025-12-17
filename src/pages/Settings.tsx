@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle, Power, Loader2, Eye, EyeOff } from 'lucide-react';
-import { getOrCreateBotConfig, updateBotConfig } from '../lib/api';
+import { useState, useEffect, useRef } from 'react';
+import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle, Power, Loader2, Eye, EyeOff, Database, RefreshCw } from 'lucide-react';
+import { getOrCreateBotConfig, updateBotConfig, createStockSyncRequest, getLatestStockSyncRequest } from '../lib/api';
 import type { BotConfig } from '../types';
 
 export function Settings() {
@@ -11,6 +11,11 @@ export function Settings() {
   const [config, setConfig] = useState<BotConfig | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [showToken, setShowToken] = useState(false);
+
+  // 종목 동기화 상태
+  const [stockSyncStatus, setStockSyncStatus] = useState<'idle' | 'pending' | 'processing' | 'completed' | 'failed'>('idle');
+  const [stockSyncMessage, setStockSyncMessage] = useState('');
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // DB에서 설정 로드
   useEffect(() => {
@@ -76,6 +81,58 @@ export function Settings() {
       setConfig({ ...config, is_running: newStatus });
     }
   };
+
+  // 종목 동기화 요청
+  const handleStockSync = async () => {
+    setStockSyncStatus('pending');
+    setStockSyncMessage('요청 생성 중...');
+
+    const request = await createStockSyncRequest();
+    if (!request) {
+      setStockSyncStatus('failed');
+      setStockSyncMessage('동기화 요청 생성 실패');
+      return;
+    }
+
+    setStockSyncStatus('processing');
+    setStockSyncMessage('봇에서 KRX 데이터를 가져오는 중...');
+
+    // 폴링으로 결과 확인
+    pollIntervalRef.current = setInterval(async () => {
+      const latest = await getLatestStockSyncRequest();
+      if (latest) {
+        if (latest.status === 'completed') {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setStockSyncStatus('completed');
+          setStockSyncMessage(latest.result_message || `${latest.sync_count || 0}개 종목 동기화 완료`);
+        } else if (latest.status === 'failed') {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setStockSyncStatus('failed');
+          setStockSyncMessage(latest.result_message || '동기화 실패');
+        } else if (latest.status === 'processing') {
+          setStockSyncMessage(latest.result_message || 'KRX에서 종목 조회 중...');
+        }
+      }
+    }, 2000);
+
+    // 2분 타임아웃
+    setTimeout(() => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        if (stockSyncStatus === 'processing') {
+          setStockSyncStatus('failed');
+          setStockSyncMessage('타임아웃 - 봇 서버가 응답하지 않습니다.');
+        }
+      }
+    }, 120000);
+  };
+
+  // cleanup
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    };
+  }, []);
 
   if (loading) {
     return (
@@ -287,6 +344,53 @@ export function Settings() {
             <p className="text-xs text-gray-500 mt-1">종목별 설정이 없을 때 사용되는 기본값</p>
           </div>
         </div>
+      </div>
+
+      {/* 종목 데이터 동기화 */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
+        <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+          <Database className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+          <h2 className="text-base md:text-lg font-bold">종목 데이터 동기화</h2>
+        </div>
+
+        <p className="text-gray-400 text-sm mb-4">
+          KRX(한국거래소)에서 전체 상장 종목 리스트를 가져와 DB에 저장합니다.
+          종목 검색 시 사용됩니다.
+        </p>
+
+        {stockSyncStatus !== 'idle' && (
+          <div className={`mb-4 p-3 rounded-lg text-sm ${
+            stockSyncStatus === 'completed' ? 'bg-green-900/20 border border-green-800 text-green-400' :
+            stockSyncStatus === 'failed' ? 'bg-red-900/20 border border-red-800 text-red-400' :
+            'bg-blue-900/20 border border-blue-800 text-blue-400'
+          }`}>
+            <div className="flex items-center gap-2">
+              {(stockSyncStatus === 'pending' || stockSyncStatus === 'processing') && (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              )}
+              {stockSyncStatus === 'completed' && <CheckCircle className="w-4 h-4" />}
+              {stockSyncStatus === 'failed' && <AlertCircle className="w-4 h-4" />}
+              <span>{stockSyncMessage}</span>
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={handleStockSync}
+          disabled={stockSyncStatus === 'pending' || stockSyncStatus === 'processing'}
+          className="flex items-center gap-2 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-500 transition disabled:opacity-50"
+        >
+          {(stockSyncStatus === 'pending' || stockSyncStatus === 'processing') ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <RefreshCw className="w-4 h-4" />
+          )}
+          KRX 종목 동기화
+        </button>
+
+        <p className="text-xs text-gray-500 mt-2">
+          KOSPI + KOSDAQ 전체 종목 (약 2,700개)
+        </p>
       </div>
 
       {/* 서버 설정 안내 */}

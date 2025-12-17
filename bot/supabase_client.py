@@ -641,6 +641,71 @@ class SupabaseClient:
 
         return "error" not in result
 
+    # ==================== 종목 동기화 (stock_names) ====================
+
+    def get_pending_stock_sync_requests(self) -> list[dict]:
+        """대기 중인 종목 동기화 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "bot_stock_sync_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+                "limit": "1",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_stock_sync_request(self, request_id: str, status: str, message: str = "", count: int = 0) -> bool:
+        """종목 동기화 요청 상태 업데이트"""
+        if not self.is_configured:
+            return False
+
+        data = {
+            "status": status,
+            "result_message": message,
+            "sync_count": count,
+        }
+        if status in ["completed", "failed"]:
+            data["completed_at"] = datetime.now().isoformat()
+
+        result = self._request(
+            "PATCH",
+            "bot_stock_sync_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
+        )
+
+        return "error" not in result
+
+    def upsert_stock_names(self, stocks: list[dict], batch_size: int = 100) -> int:
+        """stock_names 테이블에 종목 upsert"""
+        if not self.is_configured or not stocks:
+            return 0
+
+        success_count = 0
+        for i in range(0, len(stocks), batch_size):
+            batch = stocks[i:i + batch_size]
+
+            result = self._request(
+                "POST",
+                "stock_names",
+                data=batch,
+                params={"on_conflict": "code"},  # code 기준 upsert
+            )
+
+            if "error" not in result:
+                success_count += len(batch)
+
+        return success_count
+
 
 # 싱글톤 인스턴스
 supabase = SupabaseClient()

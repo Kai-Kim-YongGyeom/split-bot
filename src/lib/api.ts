@@ -537,6 +537,60 @@ export async function getSyncResults(syncRequestId: string): Promise<SyncResult[
   return data || [];
 }
 
+// ==================== 종목 동기화 (bot_stock_sync_requests) ====================
+
+export interface StockSyncRequest {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  result_message?: string;
+  sync_count?: number;
+  created_at: string;
+  completed_at?: string;
+}
+
+export async function createStockSyncRequest(): Promise<StockSyncRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('bot_stock_sync_requests')
+    .insert([{
+      user_id: userId,
+      status: 'pending',
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating stock sync request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getLatestStockSyncRequest(): Promise<StockSyncRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('bot_stock_sync_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching stock sync request:', error);
+    return null;
+  }
+  return data;
+}
+
 // ==================== 매수 기록 수동 관리 ====================
 
 export async function updatePurchaseManual(
