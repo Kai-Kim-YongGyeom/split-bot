@@ -351,10 +351,12 @@ class SplitBot:
 
             # 장 운영 시간이 아니면 매수/매도 스킵
             if not self.is_market_open():
+                print("[Bot] 장 운영시간 아님 - 매수/매도 스킵")
                 continue
 
             # 봇 활성화 상태 확인
             if not self._bot_enabled:
+                print("[Bot] 봇 비활성화 상태 - 매수/매도 스킵")
                 continue
 
             # 매수 요청 처리
@@ -519,6 +521,8 @@ class SplitBot:
         """대기 중인 매수 요청 처리"""
         try:
             requests = supabase.get_pending_buy_requests()
+            if requests:
+                print(f"[Bot] 매수 요청 {len(requests)}건 발견")
             for req in requests:
                 await self.execute_web_buy_request(req)
         except Exception as e:
