@@ -294,13 +294,19 @@ class SplitBot:
                 print(f"[Bot] Heartbeat 오류: {e}")
             await asyncio.sleep(30)
 
+    def _calculate_polling_interval(self) -> int:
+        """종목 수에 따른 동적 폴링 간격 계산"""
+        num_stocks = len(strategy.stocks)
+        # 종목당 0.5초 + 여유 1초, 최소 3초
+        interval = max(3, int(num_stocks * 0.5) + 1)
+        return interval
+
     async def poll_prices(self) -> None:
         """REST API로 가격 폴링 (WebSocket 대안)"""
-        print(f"[Bot] REST API 폴링 모드 시작 (간격: {self._polling_interval}초)")
-
         while self._running:
             try:
                 is_market_open = self.is_market_open()
+                num_stocks = len(strategy.stocks)
 
                 # 각 종목의 현재가 조회 (장 외 시간에도 조회 - 웹 표시용)
                 for code, stock in strategy.stocks.items():
@@ -337,8 +343,11 @@ class SplitBot:
             except Exception as e:
                 print(f"[Bot] 폴링 오류: {e}")
 
-            # 폴링 간격 (장 외 시간에는 더 느리게)
-            interval = self._polling_interval if is_market_open else 30
+            # 동적 폴링 간격 (장중: 종목수 기반, 장외: 5분)
+            if is_market_open:
+                interval = self._calculate_polling_interval()
+            else:
+                interval = 300  # 장외 5분
             await asyncio.sleep(interval)
 
     async def process_web_requests(self) -> None:
