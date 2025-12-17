@@ -726,18 +726,26 @@ class SplitBot:
         print("[Bot] REST API 폴링 활성화 (5초 간격)")
 
         try:
-            # WebSocket도 시도 (연결되면 더 빠른 업데이트)
+            # WebSocket은 백그라운드에서 시도 (실패해도 폴링으로 동작)
             print("[Bot] WebSocket 연결 시도 중... (실패해도 폴링으로 동작)")
-            try:
-                await kis_ws.connect(
-                    on_price=lambda data: asyncio.create_task(self.on_price_update(data))
-                )
-            except Exception as e:
-                print(f"[Bot] WebSocket 오류: {e}")
-                print("[Bot] REST API 폴링만 사용합니다.")
-                # 폴링이 계속 돌아가니까 여기서 대기
-                while self._running:
-                    await asyncio.sleep(1)
+
+            async def run_websocket():
+                try:
+                    await kis_ws.connect(
+                        on_price=lambda data: asyncio.create_task(self.on_price_update(data))
+                    )
+                except Exception as e:
+                    print(f"[Bot] WebSocket 종료: {e}")
+                print("[Bot] WebSocket 중단됨, REST API 폴링 계속 사용")
+
+            # WebSocket을 별도 태스크로 실행 (메인 루프 블로킹 안 함)
+            ws_task = asyncio.create_task(run_websocket())
+
+            # 메인 루프 - 폴링이 계속 돌아가도록 대기
+            while self._running:
+                await asyncio.sleep(10)
+
+            ws_task.cancel()
         except asyncio.CancelledError:
             print("[Bot] 종료 요청")
         finally:
