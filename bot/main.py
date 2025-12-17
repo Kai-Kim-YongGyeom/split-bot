@@ -537,10 +537,11 @@ class SplitBot:
         stock_code = req.get("stock_code")
         stock_name = req.get("stock_name")
         quantity = req.get("quantity")
+        buy_amount = req.get("buy_amount")  # 요청에서 매수금액 가져오기
         price = req.get("price", 0)
         order_type = req.get("order_type", "market")
 
-        print(f"[Bot] 웹 매수 요청: {stock_name}({stock_code}) {quantity}주")
+        print(f"[Bot] 웹 매수 요청: {stock_name}({stock_code}) 수량={quantity}, 금액={buy_amount}")
 
         # 종목 확인
         stock = strategy.stocks.get(stock_code)
@@ -553,14 +554,17 @@ class SplitBot:
             supabase.update_buy_request(request_id, "failed", "이미 매수 주문 처리 중")
             return
 
-        # 수량이 없으면 기본 매수금액으로 계산
+        # 수량이 없으면 매수금액으로 계산
         if not quantity:
+            # 요청의 buy_amount 우선, 없으면 종목 기본값
+            target_amount = buy_amount if buy_amount else stock.buy_amount
             current_price = self._prices.get(stock_code, 0)
             if current_price <= 0:
                 # 현재가 조회
                 current_price = kis_api.get_current_price(stock_code)
             if current_price > 0:
-                quantity = stock.buy_amount // current_price
+                quantity = target_amount // current_price
+                print(f"[Bot] 매수 수량 계산: {target_amount}원 / {current_price}원 = {quantity}주")
             else:
                 supabase.update_buy_request(request_id, "failed", "현재가 조회 실패")
                 return
