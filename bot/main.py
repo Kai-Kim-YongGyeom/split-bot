@@ -10,8 +10,11 @@ Supabase DB와 연동하여 웹 프론트엔드와 데이터 공유합니다.
 import asyncio
 import signal
 import sys
-from datetime import datetime, time as dtime
+from datetime import datetime, time as dtime, timezone, timedelta
 from typing import Optional
+
+# 한국 시간대 (UTC+9)
+KST = timezone(timedelta(hours=9))
 
 from config import Config
 from kis_api import kis_api
@@ -37,8 +40,8 @@ class SplitBot:
         self._ws_fail_count = 0  # WebSocket 연속 실패 횟수
 
     def is_market_open(self) -> bool:
-        """장 운영 시간 체크 (09:00 ~ 15:30)"""
-        now = datetime.now()
+        """장 운영 시간 체크 (09:00 ~ 15:30 KST)"""
+        now = datetime.now(KST)  # 한국 시간 기준
 
         # 주말 제외
         if now.weekday() >= 5:
