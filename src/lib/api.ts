@@ -4,7 +4,7 @@ import { encrypt, decrypt } from '../utils/crypto';
 
 // ==================== 유저 ID 헬퍼 ====================
 
-async function getCurrentUserId(): Promise<string | null> {
+export async function getCurrentUserId(): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser();
   return user?.id || null;
 }
@@ -52,9 +52,16 @@ export async function searchStockNames(query: string): Promise<StockNameInfo[]> 
 // ==================== 종목 (bot_stocks) ====================
 
 export async function getStocks(): Promise<Stock[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('bot_stocks')
     .select('*')
+    .eq('user_id', userId)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -134,10 +141,17 @@ export async function deleteStock(id: string): Promise<boolean> {
 // ==================== 매수 기록 (bot_purchases) ====================
 
 export async function getPurchases(stockId: string): Promise<Purchase[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('bot_purchases')
     .select('*')
     .eq('stock_id', stockId)
+    .eq('user_id', userId)
     .order('round', { ascending: true });
 
   if (error) {

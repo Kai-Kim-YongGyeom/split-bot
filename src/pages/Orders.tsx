@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, ShoppingCart, TrendingUp, XCircle, CheckCircle, Clock, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCurrentUserId } from '../lib/api';
 import type { BuyRequest, SellRequest } from '../types';
 
 type TabType = 'buy' | 'sell';
@@ -49,15 +50,23 @@ export function Orders() {
   const fetchOrders = async () => {
     setLoading(true);
 
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
     const [buyResult, sellResult] = await Promise.all([
       supabase
         .from('bot_buy_requests')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100),
       supabase
         .from('bot_sell_requests')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false })
         .limit(100),
     ]);

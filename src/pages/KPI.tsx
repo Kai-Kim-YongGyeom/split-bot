@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Calendar, TrendingUp, TrendingDown, DollarSign, BarChart3 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCurrentUserId } from '../lib/api';
 import type { Purchase } from '../types';
 
 interface KPIData {
@@ -130,9 +131,18 @@ export function KPI() {
 
   const fetchPurchases = async () => {
     setLoading(true);
+
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      console.error('No user logged in');
+      setLoading(false);
+      return;
+    }
+
     const { data, error } = await supabase
       .from('bot_purchases')
       .select('*, bot_stocks(name, code)')
+      .eq('user_id', userId)
       .order('date', { ascending: false });
 
     if (error) {
