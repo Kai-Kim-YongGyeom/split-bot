@@ -722,15 +722,17 @@ function StockCard({
               <h3 className="font-bold text-base">{stock.name}</h3>
               <div className="flex items-center gap-2">
                 <span className="text-gray-400 text-xs">{stock.code}</span>
-                {stock.current_price && (
+                {stock.current_price ? (
                   <>
                     <span className="text-white text-xs font-medium">{stock.current_price.toLocaleString()}원</span>
-                    {stock.price_change !== undefined && (
+                    {stock.price_change !== undefined && stock.price_change !== null && (
                       <span className={`text-xs ${stock.price_change >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
                         {stock.price_change >= 0 ? '+' : ''}{stock.price_change.toFixed(2)}%
                       </span>
                     )}
                   </>
+                ) : (
+                  <span className="text-gray-500 text-xs">현재가 대기중...</span>
                 )}
               </div>
             </div>

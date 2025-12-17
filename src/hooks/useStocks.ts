@@ -7,8 +7,11 @@ export function useStocks() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStocks = useCallback(async () => {
-    setLoading(true);
+  const fetchStocks = useCallback(async (silent = false) => {
+    // silent=true면 로딩 표시 안 함 (깜빡임 방지)
+    if (!silent) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const data = await api.getAllStocksWithPurchases();
@@ -17,14 +20,16 @@ export function useStocks() {
       setError('종목을 불러오는데 실패했습니다.');
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchStocks();
-    // 15초마다 갱신 (현재가 업데이트용)
-    const interval = setInterval(fetchStocks, 15000);
+    fetchStocks();  // 초기 로드
+    // 15초마다 갱신 (현재가 업데이트용) - silent 모드로 깜빡임 방지
+    const interval = setInterval(() => fetchStocks(true), 15000);
     return () => clearInterval(interval);
   }, [fetchStocks]);
 

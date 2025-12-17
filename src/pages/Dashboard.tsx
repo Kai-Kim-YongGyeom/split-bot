@@ -69,27 +69,34 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
       </div>
 
       {/* 현재가 표시 */}
-      {stock.current_price && stock.current_price > 0 && (
-        <div className="mb-3 p-2 bg-blue-900/30 rounded border border-blue-800">
-          <div className="flex justify-between items-center">
-            <span className="text-gray-400 text-xs">현재가</span>
+      <div className="mb-3 p-2 bg-blue-900/30 rounded border border-blue-800">
+        <div className="flex justify-between items-center">
+          <span className="text-gray-400 text-xs">현재가</span>
+          {stock.current_price && stock.current_price > 0 ? (
             <span className="font-bold text-lg text-blue-400">
               {stock.current_price.toLocaleString()}원
+              {stock.price_change !== undefined && stock.price_change !== null && (
+                <span className={`text-sm ml-1 ${stock.price_change >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                  ({stock.price_change >= 0 ? '+' : ''}{stock.price_change.toFixed(1)}%)
+                </span>
+              )}
             </span>
-          </div>
-          {avgPrice > 0 && (
-            <div className="flex justify-between items-center mt-1">
-              <span className="text-gray-400 text-xs">평가손익</span>
-              <span className={`font-bold ${
-                stock.current_price >= avgPrice ? 'text-red-400' : 'text-blue-400'
-              }`}>
-                {((stock.current_price - avgPrice) * totalQuantity).toLocaleString()}원
-                ({((stock.current_price / avgPrice - 1) * 100).toFixed(1)}%)
-              </span>
-            </div>
+          ) : (
+            <span className="text-gray-500 text-sm">대기중...</span>
           )}
         </div>
-      )}
+        {stock.current_price && stock.current_price > 0 && avgPrice > 0 && (
+          <div className="flex justify-between items-center mt-1">
+            <span className="text-gray-400 text-xs">평가손익</span>
+            <span className={`font-bold ${
+              stock.current_price >= avgPrice ? 'text-red-400' : 'text-blue-400'
+            }`}>
+              {((stock.current_price - avgPrice) * totalQuantity).toLocaleString()}원
+              ({((stock.current_price / avgPrice - 1) * 100).toFixed(1)}%)
+            </span>
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-2 md:gap-3 text-sm">
         <div className="bg-gray-700/50 rounded p-2">
