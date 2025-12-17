@@ -1,6 +1,7 @@
 """한국투자증권 WebSocket 실시간 시세 모듈"""
 import json
 import asyncio
+import ssl
 from typing import Callable, Optional
 from datetime import datetime
 import websockets
@@ -17,7 +18,7 @@ class KisWebSocket:
 
     def __init__(self):
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
-        self._approval_key: Optional[str] = None
+        self._access_token: Optional[str] = None  # approval_key 대신 access_token 사용
         self._subscribed_codes: set[str] = set()
         self._price_callback: Optional[Callable] = None
         self._running = False
@@ -26,22 +27,23 @@ class KisWebSocket:
         self._aes_key: Optional[bytes] = None
         self._aes_iv: Optional[bytes] = None
 
-    def _get_approval_key(self) -> str:
-        """WebSocket 접속 승인키 발급"""
-        url = f"{Config.KIS_BASE_URL}/oauth2/Approval"
+    def _get_access_token(self) -> str:
+        """REST API access_token 발급 (WebSocket 인증용)"""
+        url = f"{Config.KIS_BASE_URL}/oauth2/tokenP"
+        headers = {"content-type": "application/json"}
         data = {
             "grant_type": "client_credentials",
             "appkey": Config.KIS_APP_KEY,
-            "secretkey": Config.KIS_APP_SECRET,
+            "appsecret": Config.KIS_APP_SECRET,
         }
 
-        response = requests.post(url, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=10)
         result = response.json()
 
-        if "approval_key" in result:
-            print(f"[WS] 승인키 발급 완료")
-            return result["approval_key"]
-        raise Exception(f"승인키 발급 실패: {result}")
+        if "access_token" in result:
+            print(f"[WS] Access Token 발급 완료")
+            return result["access_token"]
+        raise Exception(f"Access Token 발급 실패: {result}")
 
     def _decrypt_data(self, encrypted_data: str) -> str:
         """AES 복호화 (실시간 데이터)"""
@@ -101,17 +103,26 @@ class KisWebSocket:
             on_price: 시세 수신 콜백 함수 (dict 인자)
         """
         self._price_callback = on_price
-        self._approval_key = self._get_approval_key()
+        self._access_token = self._get_access_token()
         self._running = True
 
         print(f"[WS] 연결 시도: {Config.KIS_WS_URL}")
+
+        # SSL 컨텍스트 설정 (wss:// 필수)
+        ssl_context = ssl.create_default_context()
 
         while self._running:
             try:
                 async with websockets.connect(
                     Config.KIS_WS_URL,
+                    ssl=ssl_context,
                     ping_interval=30,
                     ping_timeout=10,
+                    extra_headers={
+                        "authorization": f"Bearer {self._access_token}",
+                        "appkey": Config.KIS_APP_KEY,
+                        "appsecret": Config.KIS_APP_SECRET,
+                    }
                 ) as ws:
                     self._ws = ws
                     print("[WS] 연결 성공")
@@ -132,11 +143,11 @@ class KisWebSocket:
             if self._running:
                 print("[WS] 5초 후 재연결...")
                 await asyncio.sleep(5)
-                # 재연결 시 승인키 갱신
+                # 재연결 시 토큰 갱신
                 try:
-                    self._approval_key = self._get_approval_key()
+                    self._access_token = self._get_access_token()
                 except Exception as e:
-                    print(f"[WS] 승인키 갱신 실패: {e}")
+                    print(f"[WS] 토큰 갱신 실패: {e}")
 
     async def _handle_message(self, message: str) -> None:
         """메시지 처리"""
@@ -171,7 +182,7 @@ class KisWebSocket:
 
         message = {
             "header": {
-                "approval_key": self._approval_key,
+                "approval_key": self._access_token,  # access_token 사용
                 "custtype": "P",
                 "tr_type": "1",  # 1: 등록
                 "content-type": "utf-8",
@@ -202,7 +213,7 @@ class KisWebSocket:
 
         message = {
             "header": {
-                "approval_key": self._approval_key,
+                "approval_key": self._access_token,  # access_token 사용
                 "custtype": "P",
                 "tr_type": "2",  # 2: 해제
                 "content-type": "utf-8",

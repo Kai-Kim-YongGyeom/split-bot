@@ -31,7 +31,7 @@ class Config:
 
     # API URL (실전/모의) - load_from_db 후 설정됨
     KIS_BASE_URL: str = "https://openapivts.koreainvestment.com:29443"
-    KIS_WS_URL: str = "ws://ops.koreainvestment.com:31000"
+    KIS_WS_URL: str = "wss://ops.koreainvestment.com:31000"  # wss:// 필수!
 
     # 텔레그램 (.env에서 로드 - user_settings에 없음)
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -98,13 +98,13 @@ class Config:
             cls.KIS_ACCOUNT_NO = settings.get("account_no") or ""
             cls.KIS_IS_REAL = not settings.get("is_demo", True)  # is_demo의 반대
 
-            # KIS URL 설정
+            # KIS URL 설정 (wss:// 필수!)
             if cls.KIS_IS_REAL:
                 cls.KIS_BASE_URL = "https://openapi.koreainvestment.com:9443"
-                cls.KIS_WS_URL = "ws://ops.koreainvestment.com:21000"
+                cls.KIS_WS_URL = "wss://ops.koreainvestment.com:21000"  # 실전
             else:
                 cls.KIS_BASE_URL = "https://openapivts.koreainvestment.com:29443"
-                cls.KIS_WS_URL = "ws://ops.koreainvestment.com:31000"
+                cls.KIS_WS_URL = "wss://ops.koreainvestment.com:31000"  # 모의
 
             # 텔레그램 설정
             cls.TELEGRAM_BOT_TOKEN = settings.get("telegram_bot_token") or ""
