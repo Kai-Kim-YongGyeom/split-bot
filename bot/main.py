@@ -158,8 +158,13 @@ class SplitBot:
             order = kis_api.buy_stock(stock.code, quantity, price=0)
 
             if order["success"]:
+                # 체결가 조회 (시장가 주문은 실제 체결가가 다를 수 있음)
+                executed_price = kis_api.get_current_price(stock.code)
+                if executed_price <= 0:
+                    executed_price = price  # 조회 실패 시 기존 가격 사용
+
                 # 메모리에 매수 기록 추가
-                purchase = stock.add_purchase(price, quantity)
+                purchase = stock.add_purchase(executed_price, quantity)
 
                 # DB에 저장
                 db_saved = False
@@ -190,11 +195,12 @@ class SplitBot:
             else:
                 print(f"[Bot] 매수 실패: {order['message']}")
 
-            # 텔레그램 알림
+            # 텔레그램 알림 (체결가 사용)
+            alert_price = executed_price if order["success"] else price
             await notifier.send_buy_alert(
                 stock_name=stock.name,
                 stock_code=stock.code,
-                price=price,
+                price=alert_price,
                 quantity=quantity,
                 round_num=round_num,
                 success=order["success"],
