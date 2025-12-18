@@ -90,6 +90,9 @@ class KisAPI:
 
     def _refresh_token(self) -> None:
         """토큰 발급/갱신 후 DB 저장"""
+        # 쿨다운 체크용 시간 기록
+        self._last_token_refresh = datetime.now()
+
         url = f"{self.base_url}/oauth2/tokenP"
         data = {
             "grant_type": "client_credentials",
@@ -109,6 +112,9 @@ class KisAPI:
                 self._token_expires = datetime.now() + timedelta(seconds=expires_in)
                 print(f"[KIS] 토큰 발급 완료 (만료: {self._token_expires})")
 
+                # 성공 시 실패 카운트 리셋
+                self._token_refresh_failures = 0
+
                 # DB에 토큰 저장
                 if self._user_id:
                     from supabase_client import supabase
@@ -119,10 +125,13 @@ class KisAPI:
                     )
                     print(f"[KIS] 토큰 DB 저장 완료")
             else:
+                self._token_refresh_failures += 1
                 raise Exception(f"토큰 발급 실패: {result}")
         except requests.exceptions.Timeout:
+            self._token_refresh_failures += 1
             raise Exception("토큰 발급 타임아웃")
         except requests.exceptions.RequestException as e:
+            self._token_refresh_failures += 1
             raise Exception(f"토큰 발급 네트워크 오류: {e}")
 
     def _get_headers(self, tr_id: str) -> dict:
@@ -151,6 +160,31 @@ class KisAPI:
             print(f"[KIS] 해시키 생성 실패: {e}")
             return ""
 
+    def invalidate_token(self) -> None:
+        """토큰 무효화 (강제 재발급 유도)"""
+        self._access_token = None
+        self._token_expires = None
+        print("[KIS] 토큰 무효화됨 - 다음 요청 시 재발급")
+
+    # 토큰 재발급 쿨다운 (연속 실패 방지)
+    _last_token_refresh: Optional[datetime] = None
+    _token_refresh_failures: int = 0
+
+    def _can_refresh_token(self) -> bool:
+        """토큰 재발급 가능 여부 (쿨다운 체크)"""
+        if self._last_token_refresh is None:
+            return True
+
+        elapsed = (datetime.now() - self._last_token_refresh).total_seconds()
+
+        # 연속 실패 시 쿨다운 증가: 10초, 30초, 60초, 120초...
+        cooldown = min(120, 10 * (2 ** self._token_refresh_failures))
+
+        if elapsed < cooldown:
+            print(f"[KIS] 토큰 재발급 쿨다운 중... ({cooldown - elapsed:.0f}초 남음)")
+            return False
+        return True
+
     def get_price(self, stock_code: str) -> dict:
         """현재가 조회"""
         url = f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-price"
@@ -162,10 +196,25 @@ class KisAPI:
 
         try:
             response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+
+            # 500 에러 시 토큰 문제일 수 있으므로 토큰 무효화 후 재시도 (쿨다운 체크)
+            if response.status_code >= 500:
+                if self._can_refresh_token():
+                    print(f"[KIS] 서버 오류 {response.status_code}, 토큰 무효화 후 재시도...")
+                    self.invalidate_token()
+                    # 새 토큰으로 재시도
+                    headers = self._get_headers("FHKST01010100")
+                    response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+                else:
+                    # 쿨다운 중이면 재시도 없이 빈 결과 반환
+                    return {}
+
             response.raise_for_status()
             result = response.json()
 
             if result.get("rt_cd") == "0":
+                # 성공 시 실패 카운트 리셋
+                self._token_refresh_failures = 0
                 output = result.get("output", {})
                 return {
                     "code": stock_code,
