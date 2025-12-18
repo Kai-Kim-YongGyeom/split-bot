@@ -161,10 +161,20 @@ class KisAPI:
             return ""
 
     def invalidate_token(self) -> None:
-        """토큰 무효화 (강제 재발급 유도)"""
+        """토큰 무효화 (강제 재발급 유도) - 메모리 + DB 모두 삭제"""
         self._access_token = None
         self._token_expires = None
-        print("[KIS] 토큰 무효화됨 - 다음 요청 시 재발급")
+
+        # DB에서도 토큰 삭제
+        if self._user_id:
+            try:
+                from supabase_client import supabase
+                supabase.delete_kis_token(self._user_id)
+                print("[KIS] 토큰 무효화됨 (메모리 + DB)")
+            except Exception as e:
+                print(f"[KIS] 토큰 무효화됨 (메모리만, DB 삭제 실패: {e})")
+        else:
+            print("[KIS] 토큰 무효화됨 (메모리)")
 
     # 토큰 재발급 쿨다운 (연속 실패 방지)
     _last_token_refresh: Optional[datetime] = None

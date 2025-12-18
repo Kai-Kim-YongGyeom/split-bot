@@ -649,6 +649,19 @@ class SupabaseClient:
 
         return "error" not in result
 
+    def delete_kis_token(self, user_id: str) -> bool:
+        """kis_tokens 테이블에서 토큰 삭제"""
+        if not self.is_configured:
+            return False
+
+        result = self._request(
+            "DELETE",
+            "kis_tokens",
+            params={"user_id": f"eq.{user_id}"},
+        )
+
+        return "error" not in result
+
     # ==================== 종목 동기화 (stock_names) ====================
 
     def get_pending_stock_sync_requests(self) -> list[dict]:
