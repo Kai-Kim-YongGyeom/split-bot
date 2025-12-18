@@ -146,7 +146,9 @@ class KisWebSocket:
                 connect_kwargs = {
                     "ssl": ssl_context,
                     "ping_interval": 30,
-                    "ping_timeout": 10,
+                    "ping_timeout": 30,
+                    "open_timeout": 30,  # 연결 타임아웃 증가
+                    "close_timeout": 10,
                 }
 
                 # WebSocket 연결 시 헤더는 필요 없음 (approval_key는 구독 시 전송)

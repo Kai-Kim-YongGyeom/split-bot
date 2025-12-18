@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Environment (will be mounted separately)
+.env
+.env.*
+!.env.example
+
+# Python cache
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+
+# Virtual environment
+venv/
+.venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Logs
+*.log
+
+# Test files
+tests/
+test_*.py
+*_test.py
