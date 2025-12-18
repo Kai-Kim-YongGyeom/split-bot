@@ -331,12 +331,12 @@ class SplitBot:
     async def _update_balance(self) -> None:
         """예수금/매수가능금액 업데이트"""
         try:
-            if not kis.is_configured:
+            if not kis_api.is_configured:
                 print("[Bot] 예수금 조회 스킵 - KIS 미설정")
                 return
 
             print("[Bot] 예수금 조회 중...")
-            balance = kis.get_balance()
+            balance = kis_api.get_balance()
             print(f"[Bot] KIS 응답: {balance}")
 
             if balance:
