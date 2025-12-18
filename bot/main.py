@@ -312,7 +312,7 @@ class SplitBot:
 
     async def send_heartbeat(self) -> None:
         """서버 상태 heartbeat 전송 + DB 동기화 (30초마다)"""
-        balance_counter = 0  # 예수금 업데이트 카운터
+        balance_counter = 9  # 시작 시 바로 예수금 업데이트 (다음 루프에서 10이 됨)
         while self._running:
             try:
                 supabase.update_heartbeat()
@@ -332,18 +332,27 @@ class SplitBot:
         """예수금/매수가능금액 업데이트"""
         try:
             if not kis.is_configured:
+                print("[Bot] 예수금 조회 스킵 - KIS 미설정")
                 return
 
+            print("[Bot] 예수금 조회 중...")
             balance = kis.get_balance()
-            if balance and (balance.get("cash", 0) > 0 or balance.get("total", 0) > 0):
+            print(f"[Bot] KIS 응답: {balance}")
+
+            if balance:
                 from config import Config
                 if Config.USER_ID:
-                    supabase.update_balance(
-                        Config.USER_ID,
-                        balance.get("cash", 0),
-                        balance.get("total", 0)
-                    )
-                    print(f"[Bot] 예수금 업데이트: {balance.get('cash', 0):,}원")
+                    cash = balance.get("cash", 0)
+                    total = balance.get("total", 0)
+                    success = supabase.update_balance(Config.USER_ID, cash, total)
+                    if success:
+                        print(f"[Bot] 예수금 DB 저장 완료: {cash:,}원")
+                    else:
+                        print("[Bot] 예수금 DB 저장 실패")
+                else:
+                    print("[Bot] 예수금 저장 스킵 - USER_ID 없음")
+            else:
+                print("[Bot] 예수금 조회 실패 - 응답 없음")
         except Exception as e:
             print(f"[Bot] 예수금 업데이트 오류: {e}")
 
