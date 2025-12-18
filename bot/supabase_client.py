@@ -354,6 +354,24 @@ class SupabaseClient:
 
         return "error" not in result
 
+    def update_balance(self, user_id: str, available_cash: int, available_amount: int) -> bool:
+        """예수금/매수가능금액 업데이트"""
+        if not self.is_configured or not user_id:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "user_settings",
+            data={
+                "available_cash": available_cash,
+                "available_amount": available_amount,
+                "balance_updated_at": datetime.now().isoformat(),
+            },
+            params={"user_id": f"eq.{user_id}"},
+        )
+
+        return "error" not in result
+
     # ==================== 동기화 관련 ====================
 
     def get_pending_sync_requests(self) -> list[dict]:

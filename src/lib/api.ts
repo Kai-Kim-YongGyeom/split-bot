@@ -233,6 +233,9 @@ function userSettingsToBotConfig(settings: UserSettings): BotConfig {
     default_buy_amount: settings.default_buy_amount,
     last_started_at: settings.last_started_at,
     last_heartbeat: settings.last_heartbeat,
+    available_cash: settings.available_cash,
+    available_amount: settings.available_amount,
+    balance_updated_at: settings.balance_updated_at,
     created_at: settings.created_at,
     updated_at: settings.updated_at,
   };

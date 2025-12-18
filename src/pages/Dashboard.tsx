@@ -1,5 +1,5 @@
 import { useStocks } from '../hooks/useStocks';
-import { TrendingUp, TrendingDown, Activity, Package, DollarSign, Target, Server } from 'lucide-react';
+import { TrendingUp, TrendingDown, Activity, Package, DollarSign, Target, Server, Wallet, BarChart3 } from 'lucide-react';
 import type { StockWithPurchases } from '../types';
 import { useBotStatus } from '../contexts/BotStatusContext';
 
@@ -165,7 +165,7 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
-  const { botRunning, serverAlive } = useBotStatus();
+  const { botRunning, serverAlive, availableCash } = useBotStatus();
 
   if (loading) {
     return (
@@ -184,11 +184,26 @@ export function Dashboard() {
   }
 
   const activeStocks = stocks.filter(s => s.is_active);
+
+  // 총 투자금액 (매수 원금)
   const totalHolding = stocks.reduce((sum, s) => {
     return sum + s.purchases.filter(p => p.status === 'holding').reduce(
       (pSum, p) => pSum + p.price * p.quantity, 0
     );
   }, 0);
+
+  // 총 평가금액 (현재가 기준)
+  const totalEvaluation = stocks.reduce((sum, s) => {
+    const holdingPurchases = s.purchases.filter(p => p.status === 'holding');
+    const totalQty = holdingPurchases.reduce((q, p) => q + p.quantity, 0);
+    return sum + (s.current_price || 0) * totalQty;
+  }, 0);
+
+  // 총 평가손익 (미실현)
+  const totalUnrealizedProfit = totalEvaluation - totalHolding;
+  const totalUnrealizedRate = totalHolding > 0
+    ? (totalUnrealizedProfit / totalHolding) * 100
+    : 0;
 
   // 총 실현 손익 및 수익률
   const soldPurchases = stocks.flatMap(s => s.purchases.filter(p => p.status === 'sold'));
@@ -204,16 +219,80 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      {/* 요약 카드 - 모바일 2열, 데스크탑 5열 */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-4">
+      {/* 자산 현황 카드 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
+        {/* 예수금 */}
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="p-1.5 md:p-2 bg-yellow-900/50 rounded-lg">
+              <Wallet className="w-4 h-4 md:w-5 md:h-5 text-yellow-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-400 text-xs md:text-sm">예수금</p>
+              <p className="text-base md:text-lg font-bold truncate">
+                {availableCash !== null ? `${availableCash.toLocaleString()}원` : '-'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 총 투자금 */}
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="p-1.5 md:p-2 bg-purple-900/50 rounded-lg">
+              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-400 text-xs md:text-sm">총 투자금</p>
+              <p className="text-base md:text-lg font-bold truncate">{totalHolding.toLocaleString()}원</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 총 평가금액 */}
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className="p-1.5 md:p-2 bg-blue-900/50 rounded-lg">
+              <BarChart3 className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-400 text-xs md:text-sm">총 평가금액</p>
+              <p className="text-base md:text-lg font-bold truncate">{totalEvaluation.toLocaleString()}원</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 총 평가손익 */}
+        <div className={`rounded-lg p-3 md:p-4 border ${
+          totalUnrealizedProfit >= 0
+            ? 'bg-red-900/20 border-red-800'
+            : 'bg-blue-900/20 border-blue-800'
+        }`}>
+          <div className="flex items-center gap-2 md:gap-3">
+            <div className={`p-1.5 md:p-2 rounded-lg ${totalUnrealizedProfit >= 0 ? 'bg-red-900/50' : 'bg-blue-900/50'}`}>
+              <DollarSign className={`w-4 h-4 md:w-5 md:h-5 ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-gray-400 text-xs md:text-sm">평가손익</p>
+              <p className={`text-base md:text-lg font-bold truncate ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                {totalUnrealizedProfit >= 0 ? '+' : ''}{totalUnrealizedProfit.toLocaleString()}원
+                <span className="text-xs ml-1">({totalUnrealizedRate >= 0 ? '+' : ''}{totalUnrealizedRate.toFixed(1)}%)</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 상태 카드 */}
+      <div className="grid grid-cols-4 gap-2 md:gap-4">
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
           <div className="flex items-center gap-2 md:gap-3">
             <div className="p-1.5 md:p-2 bg-blue-900/50 rounded-lg">
               <Package className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
             </div>
             <div>
-              <p className="text-gray-400 text-xs md:text-sm">전체 종목</p>
-              <p className="text-lg md:text-xl font-bold">{stocks.length}개</p>
+              <p className="text-gray-400 text-xs md:text-sm">전체</p>
+              <p className="text-lg md:text-xl font-bold">{stocks.length}</p>
             </div>
           </div>
         </div>
@@ -224,20 +303,8 @@ export function Dashboard() {
               <Activity className="w-4 h-4 md:w-5 md:h-5 text-green-400" />
             </div>
             <div>
-              <p className="text-gray-400 text-xs md:text-sm">활성 종목</p>
-              <p className="text-lg md:text-xl font-bold">{activeStocks.length}개</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700 col-span-2 md:col-span-1">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-1.5 md:p-2 bg-purple-900/50 rounded-lg">
-              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-gray-400 text-xs md:text-sm">총 투자금</p>
-              <p className="text-lg md:text-xl font-bold">{totalHolding.toLocaleString()}원</p>
+              <p className="text-gray-400 text-xs md:text-sm">활성</p>
+              <p className="text-lg md:text-xl font-bold">{activeStocks.length}</p>
             </div>
           </div>
         </div>
@@ -250,7 +317,7 @@ export function Dashboard() {
             <div>
               <p className="text-gray-400 text-xs md:text-sm">서버</p>
               <p className={`text-lg md:text-xl font-bold ${serverAlive ? 'text-green-400' : 'text-red-400'}`}>
-                {serverAlive === null ? '...' : serverAlive ? '정상' : '오프라인'}
+                {serverAlive === null ? '...' : serverAlive ? 'ON' : 'OFF'}
               </p>
             </div>
           </div>
@@ -262,7 +329,7 @@ export function Dashboard() {
               <Activity className={`w-4 h-4 md:w-5 md:h-5 ${botRunning ? 'text-green-400' : 'text-gray-400'}`} />
             </div>
             <div>
-              <p className="text-gray-400 text-xs md:text-sm">자동매매</p>
+              <p className="text-gray-400 text-xs md:text-sm">봇</p>
               <p className={`text-lg md:text-xl font-bold ${botRunning ? 'text-green-400' : 'text-gray-400'}`}>
                 {botRunning === null ? '...' : botRunning ? 'ON' : 'OFF'}
               </p>

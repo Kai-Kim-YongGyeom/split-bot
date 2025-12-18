@@ -312,14 +312,40 @@ class SplitBot:
 
     async def send_heartbeat(self) -> None:
         """서버 상태 heartbeat 전송 + DB 동기화 (30초마다)"""
+        balance_counter = 0  # 예수금 업데이트 카운터
         while self._running:
             try:
                 supabase.update_heartbeat()
                 # 30초마다 DB에서 purchases 리로드 (웹/동기화로 추가된 매수 반영)
                 await self._reload_stocks()
+
+                # 5분마다 예수금 업데이트 (30초 * 10 = 5분)
+                balance_counter += 1
+                if balance_counter >= 10:
+                    balance_counter = 0
+                    await self._update_balance()
             except Exception as e:
                 print(f"[Bot] Heartbeat 오류: {e}")
             await asyncio.sleep(30)
+
+    async def _update_balance(self) -> None:
+        """예수금/매수가능금액 업데이트"""
+        try:
+            if not kis.is_configured:
+                return
+
+            balance = kis.get_balance()
+            if balance and (balance.get("cash", 0) > 0 or balance.get("total", 0) > 0):
+                from config import Config
+                if Config.USER_ID:
+                    supabase.update_balance(
+                        Config.USER_ID,
+                        balance.get("cash", 0),
+                        balance.get("total", 0)
+                    )
+                    print(f"[Bot] 예수금 업데이트: {balance.get('cash', 0):,}원")
+        except Exception as e:
+            print(f"[Bot] 예수금 업데이트 오류: {e}")
 
     def _calculate_polling_interval(self) -> int:
         """종목 수에 따른 동적 폴링 간격 계산"""

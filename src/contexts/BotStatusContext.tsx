@@ -6,6 +6,8 @@ interface BotStatusContextType {
   botRunning: boolean | null;
   serverAlive: boolean | null;
   toggling: boolean;
+  availableCash: number | null;       // 예수금
+  availableAmount: number | null;     // 매수가능금액
   toggleBot: () => Promise<void>;
   refreshStatus: () => Promise<void>;
 }
@@ -16,11 +18,17 @@ export function BotStatusProvider({ children }: { children: ReactNode }) {
   const [botRunning, setBotRunning] = useState<boolean | null>(null);
   const [serverAlive, setServerAlive] = useState<boolean | null>(null);
   const [toggling, setToggling] = useState(false);
+  const [availableCash, setAvailableCash] = useState<number | null>(null);
+  const [availableAmount, setAvailableAmount] = useState<number | null>(null);
 
   const checkStatus = useCallback(async () => {
     const config = await getBotConfig();
     if (config) {
       setBotRunning(config.is_running);
+
+      // 예수금 정보 업데이트
+      setAvailableCash(config.available_cash ?? null);
+      setAvailableAmount(config.available_amount ?? null);
 
       // 하트비트 체크 (45초 이내면 서버 살아있음 - 봇은 30초마다 전송)
       const heartbeat = config.last_heartbeat;
@@ -62,7 +70,7 @@ export function BotStatusProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <BotStatusContext.Provider value={{ botRunning, serverAlive, toggling, toggleBot, refreshStatus }}>
+    <BotStatusContext.Provider value={{ botRunning, serverAlive, toggling, availableCash, availableAmount, toggleBot, refreshStatus }}>
       {children}
     </BotStatusContext.Provider>
   );
