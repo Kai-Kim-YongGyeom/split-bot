@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Stocks } from './pages/Stocks';
+import { SplitStatus } from './pages/SplitStatus';
 import { KPI } from './pages/KPI';
 import { Orders } from './pages/Orders';
 import { Settings } from './pages/Settings';
@@ -35,6 +36,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="stocks" element={<Stocks />} />
+            <Route path="split-status" element={<SplitStatus />} />
             <Route path="kpi" element={<KPI />} />
             <Route path="orders" element={<Orders />} />
             <Route path="settings" element={<Settings />} />
