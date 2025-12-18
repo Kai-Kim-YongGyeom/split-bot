@@ -3,7 +3,7 @@ import json
 import asyncio
 import ssl
 from typing import Callable, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import websockets
 from Crypto.Cipher import AES
 from Crypto.Util.Padding import unpad
@@ -18,8 +18,8 @@ class KisWebSocket:
 
     def __init__(self):
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
-        self._access_token: Optional[str] = None  # approval_key 대신 access_token 사용
-        self._token_expires: Optional[datetime] = None  # 토큰 만료 시간
+        self._approval_key: Optional[str] = None  # WebSocket 전용 approval_key
+        self._approval_key_expires: Optional[datetime] = None  # approval_key 만료 시간
         self._subscribed_codes: set[str] = set()
         self._price_callback: Optional[Callable] = None
         self._running = False
@@ -29,19 +29,46 @@ class KisWebSocket:
         self._aes_key: Optional[bytes] = None
         self._aes_iv: Optional[bytes] = None
 
-    def _get_access_token(self, force: bool = False) -> str:
-        """REST API access_token 가져오기 (kis_api 토큰 재사용)
+    def _get_approval_key(self, force: bool = False) -> str:
+        """WebSocket 전용 approval_key 발급 (/oauth2/Approval)
 
         Args:
-            force: 사용되지 않음 (호환성 유지용)
+            force: True면 강제 재발급
         """
-        # kis_api의 토큰 재사용 (DB 조회 + 캐싱 로직이 이미 구현됨)
-        from kis_api import kis_api
-        token = kis_api.access_token  # 이 property가 DB 조회 + 자동 갱신 처리
-        self._access_token = token
-        self._token_expires = kis_api._token_expires
-        print(f"[WS] kis_api 토큰 재사용 (만료: {self._token_expires})")
-        return token
+        # 캐싱된 키가 유효하면 재사용
+        if not force and self._approval_key and self._approval_key_expires:
+            if datetime.now() < self._approval_key_expires:
+                print(f"[WS] approval_key 캐시 사용 (만료: {self._approval_key_expires})")
+                return self._approval_key
+
+        # /oauth2/Approval로 approval_key 발급
+        url = f"{Config.KIS_BASE_URL}/oauth2/Approval"
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "text/plain",
+            "charset": "UTF-8",
+        }
+        body = {
+            "grant_type": "client_credentials",
+            "appkey": Config.KIS_APP_KEY,
+            "secretkey": Config.KIS_APP_SECRET,  # secretkey로 보내야 함!
+        }
+
+        try:
+            response = requests.post(url, json=body, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                self._approval_key = data.get("approval_key")
+                # approval_key는 24시간 유효
+                self._approval_key_expires = datetime.now() + timedelta(hours=23)
+                print(f"[WS] approval_key 발급 성공 (만료: {self._approval_key_expires})")
+                return self._approval_key
+            else:
+                print(f"[WS] approval_key 발급 실패: {response.status_code} - {response.text}")
+                return ""
+        except Exception as e:
+            print(f"[WS] approval_key 발급 오류: {e}")
+            return ""
 
     def _decrypt_data(self, encrypted_data: str) -> str:
         """AES 복호화 (실시간 데이터)"""
@@ -101,7 +128,10 @@ class KisWebSocket:
             on_price: 시세 수신 콜백 함수 (dict 인자)
         """
         self._price_callback = on_price
-        self._access_token = self._get_access_token()
+        approval_key = self._get_approval_key()
+        if not approval_key:
+            print("[WS] approval_key 발급 실패 - WebSocket 연결 불가")
+            return
         self._running = True
 
         print(f"[WS] 연결 시도: {Config.KIS_WS_URL}")
@@ -119,12 +149,8 @@ class KisWebSocket:
                     "ping_timeout": 10,
                 }
 
-                # 헤더 설정 시도 (버전 호환성)
-                headers = [
-                    ("authorization", f"Bearer {self._access_token}"),
-                    ("appkey", Config.KIS_APP_KEY),
-                    ("appsecret", Config.KIS_APP_SECRET),
-                ]
+                # WebSocket 연결 시 헤더는 필요 없음 (approval_key는 구독 시 전송)
+                headers = []
 
                 try:
                     # 최신 websockets (10.x+)
@@ -205,12 +231,12 @@ class KisWebSocket:
 
     async def _subscribe(self, stock_code: str) -> None:
         """종목 시세 구독"""
-        if not self._ws:
+        if not self._ws or not self._approval_key:
             return
 
         message = {
             "header": {
-                "approval_key": self._access_token,  # access_token 사용
+                "approval_key": self._approval_key,  # WebSocket 전용 approval_key 사용
                 "custtype": "P",
                 "tr_type": "1",  # 1: 등록
                 "content-type": "utf-8",
@@ -236,12 +262,12 @@ class KisWebSocket:
         """종목 구독 해제"""
         self._subscribed_codes.discard(stock_code)
 
-        if not self._ws:
+        if not self._ws or not self._approval_key:
             return
 
         message = {
             "header": {
-                "approval_key": self._access_token,  # access_token 사용
+                "approval_key": self._approval_key,  # WebSocket 전용 approval_key 사용
                 "custtype": "P",
                 "tr_type": "2",  # 2: 해제
                 "content-type": "utf-8",
