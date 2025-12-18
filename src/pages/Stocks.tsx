@@ -27,16 +27,16 @@ function StockModal({
     name: initialData?.name || '',
     buy_amount: initialData?.buy_amount || 100000,
     max_rounds: initialData?.max_rounds || 10,
-    split_rates: initialData?.split_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
-    target_rates: initialData?.target_rates || [5, 5, 5, 5, 5, 5, 5, 5, 5, 5],
+    split_rates: initialData?.split_rates || [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+    target_rates: initialData?.target_rates || [50, 3, 3, 3, 3, 3, 3, 3, 3, 3],
     stop_loss_rate: initialData?.stop_loss_rate || 0,
   });
 
   const [formData, setFormData] = useState<StockFormData>(getInitialFormData());
 
   // 일괄 적용용 상태
-  const [bulkSplitRate, setBulkSplitRate] = useState<number>(5);
-  const [bulkTargetRate, setBulkTargetRate] = useState<number>(5);
+  const [bulkSplitRate, setBulkSplitRate] = useState<number>(2);
+  const [bulkTargetRate, setBulkTargetRate] = useState<number>(3);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<StockNameInfo[]>([]);

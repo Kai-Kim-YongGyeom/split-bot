@@ -18,18 +18,8 @@ const formatRate = (rate: number): string => {
   return `${sign}${rate.toFixed(1)}%`;
 };
 
-// 최대 차수 계산
-const getMaxRound = (stocks: { purchases: Purchase[] }[]): number => {
-  let max = 0;
-  for (const stock of stocks) {
-    for (const p of stock.purchases) {
-      if (p.status === 'holding' && p.round > max) {
-        max = p.round;
-      }
-    }
-  }
-  return Math.max(max, 3); // 최소 3차까지 표시
-};
+// 최대 차수 (항상 10차까지 표시)
+const MAX_ROUNDS = 10;
 
 export function SplitStatus() {
   const { stocks, loading, refetch } = useStocks();
@@ -39,8 +29,7 @@ export function SplitStatus() {
     stock.purchases.some((p) => p.status === 'holding')
   );
 
-  const maxRound = getMaxRound(activeStocks);
-  const rounds = Array.from({ length: maxRound }, (_, i) => i + 1);
+  const rounds = Array.from({ length: MAX_ROUNDS }, (_, i) => i + 1);
 
   // 새로고침
   const handleRefresh = () => {
