@@ -606,6 +606,14 @@ class SplitBot:
                             print(f"[Bot] {new_stock.name} purchases 업데이트: {len(new_stock.purchases)}건")
                         # is_active 상태도 DB에서 반영 (웹에서 변경 시)
                         existing.is_active = new_stock.is_active
+                        # 종목 설정도 DB에서 반영 (웹에서 변경 시)
+                        if existing.buy_amount != new_stock.buy_amount:
+                            print(f"[Bot] {new_stock.name} 매수금액 변경: {existing.buy_amount:,}원 → {new_stock.buy_amount:,}원")
+                        existing.buy_amount = new_stock.buy_amount
+                        existing.max_rounds = new_stock.max_rounds
+                        existing.split_rates = new_stock.split_rates
+                        existing.target_rates = new_stock.target_rates
+                        existing.stop_loss_rate = new_stock.stop_loss_rate
                     else:
                         # 새 종목 추가
                         strategy.stocks[new_stock.code] = new_stock
