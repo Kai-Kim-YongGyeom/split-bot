@@ -184,11 +184,12 @@ class KisWebSocket:
             if self._running:
                 self._connection_failed_count += 1
 
-                # 연속 5회 실패 시 WebSocket 포기 (REST 폴링만 사용)
+                # 연속 5회 실패 시 30분 대기 후 재시도 (포기하지 않음)
                 if self._connection_failed_count >= 5:
-                    print("[WS] 연속 5회 연결 실패 - WebSocket 포기, REST 폴링만 사용")
-                    self._running = False
-                    return
+                    print("[WS] 연속 5회 연결 실패 - 30분 후 재시도 (폴링으로 대체 중)")
+                    self._connection_failed_count = 0  # 카운트 리셋
+                    await asyncio.sleep(1800)  # 30분 대기
+                    continue
 
                 # 기존 토큰 재사용 (재발급 안 함)
                 wait_time = min(60 * self._connection_failed_count, 300)  # 최대 5분
