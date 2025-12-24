@@ -44,10 +44,8 @@ export function useStocks() {
   const updateStock = async (id: string, updates: Partial<Stock>): Promise<boolean> => {
     const success = await api.updateStock(id, updates);
     if (success) {
-      // 로컬 상태만 업데이트 (전체 refetch 안 함 - 깜빡임 방지)
-      setStocks(prev => prev.map(stock =>
-        stock.id === id ? { ...stock, ...updates } : stock
-      ));
+      // silent 모드로 refetch (로딩 표시 없이 깜빡임 방지)
+      await fetchStocks(true);
     }
     return success;
   };
