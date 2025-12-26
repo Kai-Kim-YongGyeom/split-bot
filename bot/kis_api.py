@@ -660,7 +660,12 @@ class KisAPI:
                             "low": int(item.get("stck_lwpr", 0) or 0),
                         }
             else:
-                print(f"[KIS] 배치 현재가 조회 실패: rt_cd={result.get('rt_cd')}, msg_cd={result.get('msg_cd')}, msg1={result.get('msg1', '')}")
+                # 실패 시 전체 응답 출력
+                import json
+                print(f"[KIS] 배치 현재가 조회 실패:")
+                print(f"      rt_cd={result.get('rt_cd')}, msg_cd={result.get('msg_cd')}")
+                print(f"      msg1={result.get('msg1', '')}")
+                print(f"      요청 종목: {codes[:5]}... (총 {len(codes)}개)")
 
         except requests.exceptions.RequestException as e:
             print(f"[KIS] 배치 현재가 조회 오류: {e}")
