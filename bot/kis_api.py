@@ -617,7 +617,7 @@ class KisAPI:
         codes = stock_codes[:30]
 
         url = f"{self.base_url}/uapi/domestic-stock/v1/quotations/intstock-multprice"
-        headers = self._get_headers("FHKST01010200")
+        headers = self._get_headers("FHKST11300006")
 
         # 파라미터 구성 (각 종목에 대해 시장코드와 종목코드 설정)
         params = {}
@@ -635,7 +635,7 @@ class KisAPI:
                 if self._can_refresh_token():
                     print(f"[KIS] 배치조회 서버 오류 {response.status_code}, 토큰 무효화 후 재시도...")
                     self.invalidate_token()
-                    headers = self._get_headers("FHKST01010200")
+                    headers = self._get_headers("FHKST11300006")
                     response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
                 else:
                     return {}
@@ -660,7 +660,7 @@ class KisAPI:
                             "low": int(item.get("stck_lwpr", 0) or 0),
                         }
             else:
-                print(f"[KIS] 배치 현재가 조회 실패: {result.get('msg1', '')}")
+                print(f"[KIS] 배치 현재가 조회 실패: rt_cd={result.get('rt_cd')}, msg_cd={result.get('msg_cd')}, msg1={result.get('msg1', '')}")
 
         except requests.exceptions.RequestException as e:
             print(f"[KIS] 배치 현재가 조회 오류: {e}")
