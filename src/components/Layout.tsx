@@ -7,6 +7,7 @@ import { useBotStatus } from '../contexts/BotStatusContext';
 const navItems = [
   { path: '/', label: '대시보드', emoji: '📊' },
   { path: '/stocks', label: '종목 관리', emoji: '📋' },
+  { path: '/recommend', label: '종목 추천', emoji: '🔍' },
   { path: '/split-status', label: 'Split 현황', emoji: '📉' },
   { path: '/kpi', label: 'KPI', emoji: '📈' },
   { path: '/orders', label: '주문내역', emoji: '🛒' },
