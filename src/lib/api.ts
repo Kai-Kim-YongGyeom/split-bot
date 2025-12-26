@@ -235,6 +235,7 @@ function userSettingsToBotConfig(settings: UserSettings): BotConfig {
     last_heartbeat: settings.last_heartbeat,
     available_cash: settings.available_cash,
     available_amount: settings.available_amount,
+    d2_deposit: settings.d2_deposit,
     balance_updated_at: settings.balance_updated_at,
     created_at: settings.created_at,
     updated_at: settings.updated_at,
