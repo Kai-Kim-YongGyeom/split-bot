@@ -698,14 +698,14 @@ class KisAPI:
 
                 for item in result.get("output", []):
                     all_stocks.append({
-                        "code": item.get("stck_shrn_iscd", ""),
+                        "code": item.get("mksc_shrn_iscd", ""),  # 유가증권 단축 종목코드
                         "name": item.get("hts_kor_isnm", ""),
-                        "price": int(item.get("stck_prpr", 0)),
-                        "change_rate": float(item.get("prdy_ctrt", 0)),
-                        "volume": int(item.get("acml_vol", 0)),
-                        "trading_value": int(item.get("acml_tr_pbmn", 0)),
-                        "market_cap": int(item.get("stck_avls", 0)),  # 시가총액 (억원)
-                        "rank": int(item.get("data_rank", 0)),
+                        "price": int(item.get("stck_prpr", 0) or 0),
+                        "change_rate": float(item.get("prdy_ctrt", 0) or 0),
+                        "volume": int(item.get("acml_vol", 0) or 0),
+                        "trading_value": int(item.get("acml_tr_pbmn", 0) or 0),
+                        "market_cap": int(item.get("stck_avls", 0) or 0),  # 시가총액 (억원)
+                        "rank": int(item.get("data_rank", 0) or 0),
                     })
 
                 # 연속 조회
