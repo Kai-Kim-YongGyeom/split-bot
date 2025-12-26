@@ -247,6 +247,19 @@ class SupabaseClient:
             print(f"[Supabase] 매도 처리 완료: {purchase_id}")
         return success
 
+    def delete_purchase(self, purchase_id: str) -> bool:
+        """매수 기록 삭제"""
+        if not self.is_configured:
+            return False
+
+        result = self._request(
+            "DELETE",
+            "bot_purchases",
+            params={"id": f"eq.{purchase_id}"},
+        )
+
+        return "error" not in result
+
     # ==================== 통합 로드 ====================
 
     def load_all_stocks(self) -> list[StockConfig]:
@@ -573,10 +586,12 @@ class SupabaseClient:
         if existing:
             return existing.get("id")  # 이미 존재함
 
-        # 새로운 매수 기록 추가 (round는 holding 개수 + 1)
+        # 새로운 매수 기록 추가 (round는 기존 최대 round + 1)
         purchases = self.get_purchases(stock_id)
-        holding_count = sum(1 for p in purchases if p.get("status") == "holding")
-        new_round = holding_count + 1
+        # 기존 round 값들 중 최대값 찾기 (중복 방지)
+        existing_rounds = [p.get("round", 0) for p in purchases]
+        max_round = max(existing_rounds) if existing_rounds else 0
+        new_round = max_round + 1
 
         data = {
             "stock_id": stock_id,
