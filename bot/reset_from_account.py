@@ -39,14 +39,8 @@ def main():
         log("user_id를 찾을 수 없습니다.")
         return
 
-    # KIS 토큰 로드
-    token_data = supabase.get_kis_token(user_id)
-    if not token_data:
-        log("KIS 토큰이 없습니다.")
-        return
-
-    kis.access_token = token_data.get("access_token")
-    kis.token_expired = token_data.get("token_expired")
+    # KIS API에 user_id 설정 (DB에서 토큰 자동 조회)
+    kis._user_id = user_id
 
     log(f"사용자: {user_id}")
     log("-" * 60)
