@@ -165,7 +165,7 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
-  const { botRunning, serverAlive, availableCash, d2Deposit } = useBotStatus();
+  const { botRunning, serverAlive, availableCash, availableAmount, d2Deposit } = useBotStatus();
 
   if (loading) {
     return (
@@ -230,10 +230,10 @@ export function Dashboard() {
             <div className="min-w-0 flex-1">
               <p className="text-gray-400 text-xs md:text-sm">주문가능</p>
               <p className="text-base md:text-lg font-bold truncate">
-                {availableCash !== null ? `${availableCash.toLocaleString()}원` : '-'}
+                {availableAmount !== null ? `${availableAmount.toLocaleString()}원` : '-'}
               </p>
               <p className="text-gray-500 text-xs truncate">
-                D+2: {d2Deposit !== null ? `${d2Deposit.toLocaleString()}원` : '-'}
+                현금: {availableCash !== null ? `${availableCash.toLocaleString()}` : '-'} / D+2: {d2Deposit !== null ? `${d2Deposit.toLocaleString()}` : '-'}
               </p>
             </div>
           </div>
