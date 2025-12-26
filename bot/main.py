@@ -408,55 +408,106 @@ class SplitBot:
             print(f"[Bot] 예수금 업데이트 오류: {e}")
 
     def _calculate_polling_interval(self) -> int:
-        """종목 수에 따른 동적 폴링 간격 계산"""
+        """종목 수에 따른 동적 폴링 간격 계산 (배치 처리 기준)"""
         num_stocks = len(strategy.stocks)
-        # 종목당 0.5초 + 여유 1초, 최소 3초
-        interval = max(3, int(num_stocks * 0.5) + 1)
+        # 30종목당 1배치, 배치당 1초 + 여유 2초, 최소 3초
+        num_batches = (num_stocks + 29) // 30  # 올림 나눗셈
+        interval = max(3, num_batches + 2)
         return interval
 
     async def poll_prices(self) -> None:
-        """REST API로 가격 폴링 (WebSocket 대안)"""
+        """REST API로 가격 폴링 (배치 처리 - 30종목씩)"""
         while self._running:
             try:
                 is_market_open = self.is_market_open()
-                num_stocks = len(strategy.stocks)
+                stock_codes = list(strategy.stocks.keys())
+                num_stocks = len(stock_codes)
 
-                # 각 종목의 현재가 조회 (장 외 시간에도 조회 - 웹 표시용)
-                for code, stock in strategy.stocks.items():
+                if num_stocks == 0:
+                    await asyncio.sleep(10)
+                    continue
+
+                # 30종목씩 배치 처리
+                batch_size = 30
+                total_batches = (num_stocks + batch_size - 1) // batch_size
+
+                for batch_idx in range(total_batches):
                     if not self._running:
                         break
 
+                    start_idx = batch_idx * batch_size
+                    end_idx = min(start_idx + batch_size, num_stocks)
+                    batch_codes = stock_codes[start_idx:end_idx]
+
                     try:
-                        price_data = kis_api.get_price(code)
-                        if price_data and price_data.get("price", 0) > 0:
-                            price = price_data["price"]
-                            change_rate = price_data.get("change", 0.0)
+                        # 배치로 여러 종목 한 번에 조회
+                        batch_results = kis_api.get_prices_batch(batch_codes)
 
-                            # 가격 저장 및 DB 업데이트 (항상)
-                            self._prices[code] = price
-                            from supabase_client import supabase
-                            saved = supabase.update_stock_price(code, price, change_rate)
-                            status = "저장" if saved else "실패"
-                            log(f"[Poll] {stock.name}({code}): {price:,}원 ({change_rate:+.2f}%) - DB {status}")
+                        if batch_results:
+                            log(f"[Poll] 배치 {batch_idx + 1}/{total_batches}: {len(batch_results)}종목 조회 완료")
 
-                            # 자동매매는 장 시간에만
-                            if is_market_open and self.check_bot_enabled():
-                                data = {
-                                    "code": code,
-                                    "price": price,
-                                    "change_rate": change_rate,
-                                }
-                                await self.on_price_update(data)
+                            for code, price_data in batch_results.items():
+                                if not self._running:
+                                    break
+
+                                price = price_data.get("price", 0)
+                                change_rate = price_data.get("change", 0.0)
+
+                                if price > 0:
+                                    stock = strategy.stocks.get(code)
+                                    stock_name = stock.name if stock else code
+
+                                    # 가격 저장 및 DB 업데이트
+                                    self._prices[code] = price
+                                    saved = supabase.update_stock_price(code, price, change_rate)
+                                    status = "저장" if saved else "실패"
+                                    log(f"[Poll] {stock_name}({code}): {price:,}원 ({change_rate:+.2f}%) - DB {status}")
+
+                                    # 자동매매는 장 시간에만
+                                    if is_market_open and self.check_bot_enabled():
+                                        data = {
+                                            "code": code,
+                                            "price": price,
+                                            "change_rate": change_rate,
+                                        }
+                                        await self.on_price_update(data)
+                        else:
+                            log(f"[Poll] 배치 {batch_idx + 1}/{total_batches}: 조회 실패, 개별 조회로 폴백")
+                            # 배치 실패 시 개별 조회로 폴백
+                            for code in batch_codes:
+                                if not self._running:
+                                    break
+                                try:
+                                    price_data = kis_api.get_price(code)
+                                    if price_data and price_data.get("price", 0) > 0:
+                                        price = price_data["price"]
+                                        change_rate = price_data.get("change", 0.0)
+                                        stock = strategy.stocks.get(code)
+                                        stock_name = stock.name if stock else code
+
+                                        self._prices[code] = price
+                                        saved = supabase.update_stock_price(code, price, change_rate)
+                                        status = "저장" if saved else "실패"
+                                        log(f"[Poll] {stock_name}({code}): {price:,}원 ({change_rate:+.2f}%) - DB {status}")
+
+                                        if is_market_open and self.check_bot_enabled():
+                                            data = {"code": code, "price": price, "change_rate": change_rate}
+                                            await self.on_price_update(data)
+                                except Exception as e:
+                                    log(f"[Bot] {code} 개별 조회 오류: {e}")
+                                await asyncio.sleep(0.3)
+
                     except Exception as e:
-                        log(f"[Bot] {code} 가격 조회 오류: {e}")
+                        log(f"[Bot] 배치 {batch_idx + 1} 조회 오류: {e}")
 
-                    # API 호출 간 0.5초 대기 (rate limit 방지)
-                    await asyncio.sleep(0.5)
+                    # 배치 간 0.5초 대기 (rate limit 방지)
+                    if batch_idx < total_batches - 1:
+                        await asyncio.sleep(0.5)
 
             except Exception as e:
                 log(f"[Bot] 폴링 오류: {e}")
 
-            # 동적 폴링 간격 (장중: 종목수 기반, 장외: 5분)
+            # 동적 폴링 간격 (장중: 배치 수 기반, 장외: 5분)
             if is_market_open:
                 interval = self._calculate_polling_interval()
             else:
@@ -1032,9 +1083,10 @@ class SplitBot:
         heartbeat_task = asyncio.create_task(self.send_heartbeat())
         print("[Bot] Heartbeat 활성화 (30초 간격)")
 
-        # 폴링 태스크 (항상 활성화 - WebSocket과 병행)
+        # 폴링 태스크 (항상 활성화 - WebSocket과 병행, 배치 처리)
         polling_task = asyncio.create_task(self.poll_prices())
-        print("[Bot] REST API 폴링 활성화 (5초 간격)")
+        num_batches = (len(strategy.stocks) + 29) // 30
+        print(f"[Bot] REST API 폴링 활성화 (배치 처리: {len(strategy.stocks)}종목 → {num_batches}배치)")
 
         try:
             # WebSocket은 백그라운드에서 시도 (실패해도 폴링으로 동작)

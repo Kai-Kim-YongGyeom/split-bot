@@ -600,6 +600,73 @@ class KisAPI:
         result = self.get_price(stock_code)
         return result.get("price", 0)
 
+    def get_prices_batch(self, stock_codes: list[str]) -> dict[str, dict]:
+        """여러 종목 현재가 일괄 조회 (최대 30개)
+
+        Args:
+            stock_codes: 종목코드 리스트 (최대 30개)
+
+        Returns:
+            종목코드를 키로 하는 시세 정보 딕셔너리
+            예: {"005930": {"price": 70000, "change": 1.5, ...}, ...}
+        """
+        if not stock_codes:
+            return {}
+
+        # 최대 30개까지만 처리
+        codes = stock_codes[:30]
+
+        url = f"{self.base_url}/uapi/domestic-stock/v1/quotations/intstock-multprice"
+        headers = self._get_headers("FHKST01010200")
+
+        # 파라미터 구성 (각 종목에 대해 시장코드와 종목코드 설정)
+        params = {}
+        for i, code in enumerate(codes, 1):
+            params[f"FID_COND_MRKT_DIV_CODE_{i}"] = "J"  # J: 주식
+            params[f"FID_INPUT_ISCD_{i}"] = code
+
+        results = {}
+
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+
+            # 500 에러 시 토큰 문제일 수 있으므로 토큰 무효화 후 재시도
+            if response.status_code >= 500:
+                if self._can_refresh_token():
+                    print(f"[KIS] 배치조회 서버 오류 {response.status_code}, 토큰 무효화 후 재시도...")
+                    self.invalidate_token()
+                    headers = self._get_headers("FHKST01010200")
+                    response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+                else:
+                    return {}
+
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("rt_cd") == "0":
+                self._token_refresh_failures = 0
+
+                for item in result.get("output", []):
+                    code = item.get("stck_shrn_iscd", "")
+                    if code:
+                        results[code] = {
+                            "code": code,
+                            "name": item.get("hts_kor_isnm", ""),
+                            "price": int(item.get("stck_prpr", 0) or 0),
+                            "change": float(item.get("prdy_ctrt", 0) or 0),
+                            "volume": int(item.get("acml_vol", 0) or 0),
+                            "open": int(item.get("stck_oprc", 0) or 0),
+                            "high": int(item.get("stck_hgpr", 0) or 0),
+                            "low": int(item.get("stck_lwpr", 0) or 0),
+                        }
+            else:
+                print(f"[KIS] 배치 현재가 조회 실패: {result.get('msg1', '')}")
+
+        except requests.exceptions.RequestException as e:
+            print(f"[KIS] 배치 현재가 조회 오류: {e}")
+
+        return results
+
     def get_executed_price(self, stock_code: str, order_no: str) -> int:
         """특정 주문의 체결가 조회
 
