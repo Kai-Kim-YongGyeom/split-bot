@@ -645,8 +645,18 @@ class KisAPI:
 
             if result.get("rt_cd") == "0":
                 self._token_refresh_failures = 0
+                output = result.get("output", [])
 
-                for item in result.get("output", []):
+                # 디버그: output 확인
+                if not output:
+                    print(f"[KIS] 배치 조회 성공했지만 output 비어있음")
+                    print(f"      요청 종목: {codes[:3]}... (총 {len(codes)}개)")
+                    print(f"      응답 키: {list(result.keys())}")
+                    if len(codes) > 0:
+                        # 첫 번째 종목 파라미터 확인
+                        print(f"      첫 파라미터: FID_COND_MRKT_DIV_CODE_1=J, FID_INPUT_ISCD_1={codes[0]}")
+
+                for item in output:
                     code = item.get("stck_shrn_iscd", "")
                     if code:
                         results[code] = {
