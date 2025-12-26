@@ -1,5 +1,5 @@
 import { useStocks } from '../hooks/useStocks';
-import { TrendingUp, TrendingDown, Activity, Package, DollarSign, Target, Server, Wallet, BarChart3 } from 'lucide-react';
+import { TrendingDown, Activity, Package, DollarSign, Target, Server } from 'lucide-react';
 import type { StockWithPurchases } from '../types';
 import { useBotStatus } from '../contexts/BotStatusContext';
 
@@ -219,70 +219,55 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      {/* 자산 현황 카드 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-        {/* 예수금 */}
-        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-1.5 md:p-2 bg-yellow-900/50 rounded-lg">
-              <Wallet className="w-4 h-4 md:w-5 md:h-5 text-yellow-400" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-gray-400 text-xs md:text-sm">주문가능</p>
-              <p className="text-base md:text-lg font-bold truncate">
-                {availableAmount !== null ? `${availableAmount.toLocaleString()}원` : '-'}
-              </p>
-              <p className="text-gray-500 text-xs truncate">
-                현금: {availableCash !== null ? `${availableCash.toLocaleString()}` : '-'} / D+2: {d2Deposit !== null ? `${d2Deposit.toLocaleString()}` : '-'}
-              </p>
-            </div>
-          </div>
+      {/* 자산 현황 카드 - 3개 행 */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
+        {/* 주문가능 */}
+        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
+          <p className="text-gray-400 text-xs">주문가능</p>
+          <p className="text-sm md:text-base font-bold text-yellow-400 truncate">
+            {availableAmount !== null ? `${availableAmount.toLocaleString()}` : '-'}
+          </p>
+        </div>
+
+        {/* 현금 */}
+        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
+          <p className="text-gray-400 text-xs">현금</p>
+          <p className="text-sm md:text-base font-bold truncate">
+            {availableCash !== null ? `${availableCash.toLocaleString()}` : '-'}
+          </p>
+        </div>
+
+        {/* D+2 예수금 */}
+        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
+          <p className="text-gray-400 text-xs">D+2</p>
+          <p className="text-sm md:text-base font-bold truncate">
+            {d2Deposit !== null ? `${d2Deposit.toLocaleString()}` : '-'}
+          </p>
         </div>
 
         {/* 총 투자금 */}
-        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-1.5 md:p-2 bg-purple-900/50 rounded-lg">
-              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-gray-400 text-xs md:text-sm">총 투자금</p>
-              <p className="text-base md:text-lg font-bold truncate">{totalHolding.toLocaleString()}원</p>
-            </div>
-          </div>
+        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
+          <p className="text-gray-400 text-xs">투자금</p>
+          <p className="text-sm md:text-base font-bold text-purple-400 truncate">{totalHolding.toLocaleString()}</p>
         </div>
 
         {/* 총 평가금액 */}
-        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-1.5 md:p-2 bg-blue-900/50 rounded-lg">
-              <BarChart3 className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-gray-400 text-xs md:text-sm">총 평가금액</p>
-              <p className="text-base md:text-lg font-bold truncate">{totalEvaluation.toLocaleString()}원</p>
-            </div>
-          </div>
+        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
+          <p className="text-gray-400 text-xs">평가금액</p>
+          <p className="text-sm md:text-base font-bold text-blue-400 truncate">{totalEvaluation.toLocaleString()}</p>
         </div>
 
-        {/* 총 평가손익 */}
-        <div className={`rounded-lg p-3 md:p-4 border ${
+        {/* 평가손익 */}
+        <div className={`rounded-lg p-2.5 md:p-3 border ${
           totalUnrealizedProfit >= 0
             ? 'bg-red-900/20 border-red-800'
             : 'bg-blue-900/20 border-blue-800'
         }`}>
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className={`p-1.5 md:p-2 rounded-lg ${totalUnrealizedProfit >= 0 ? 'bg-red-900/50' : 'bg-blue-900/50'}`}>
-              <DollarSign className={`w-4 h-4 md:w-5 md:h-5 ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-gray-400 text-xs md:text-sm">평가손익</p>
-              <p className={`text-base md:text-lg font-bold truncate ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
-                {totalUnrealizedProfit >= 0 ? '+' : ''}{totalUnrealizedProfit.toLocaleString()}원
-                <span className="text-xs ml-1">({totalUnrealizedRate >= 0 ? '+' : ''}{totalUnrealizedRate.toFixed(1)}%)</span>
-              </p>
-            </div>
-          </div>
+          <p className="text-gray-400 text-xs">평가손익</p>
+          <p className={`text-sm md:text-base font-bold truncate ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+            {totalUnrealizedProfit >= 0 ? '+' : ''}{totalUnrealizedProfit.toLocaleString()}
+            <span className="text-xs ml-0.5">({totalUnrealizedRate >= 0 ? '+' : ''}{totalUnrealizedRate.toFixed(1)}%)</span>
+          </p>
         </div>
       </div>
 

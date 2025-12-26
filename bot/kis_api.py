@@ -675,9 +675,9 @@ class KisAPI:
             "fid_div_cls_code": stock_type,
             "fid_trgt_cls_code": "0",
             "fid_trgt_exls_cls_code": "0",
-            "fid_input_price_1": min_price,
-            "fid_input_price_2": max_price,
-            "fid_vol_cnt": min_volume,
+            "fid_input_price_1": min_price if min_price else "",
+            "fid_input_price_2": max_price if max_price else "",
+            "fid_vol_cnt": min_volume if min_volume else "",
         }
 
         all_stocks = []
