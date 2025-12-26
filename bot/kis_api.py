@@ -301,18 +301,14 @@ class KisAPI:
                 output2 = result2.get("output2", [])
                 if output2 and len(output2) > 0:
                     summary = output2[0]
-                    # D+2 예수금 계산
-                    # 예수금총금액 + 익일정산금액 + 가수도정산금액 = D+2 출금가능
+                    # D+2 예수금 = 가수도정산금액 (실제 D+2 출금가능금액)
                     dnca_tot = int(summary.get("dnca_tot_amt", 0))           # 예수금총금액
-                    nxdy_excc = int(summary.get("nxdy_excc_amt", 0))         # 익일정산금액
-                    prvs_rcdl = int(summary.get("prvs_rcdl_excc_amt", 0))    # 가수도정산금액
-                    d2_auto_rdpt = int(summary.get("d2_auto_rdpt_amt", 0))   # D+2자동상환금액
+                    prvs_rcdl = int(summary.get("prvs_rcdl_excc_amt", 0))    # 가수도정산금액 = D+2
 
                     result_data["deposit_total"] = dnca_tot
-                    # D+2 예수금 = 예수금 + 정산예정금액 - 자동상환금액
-                    result_data["d2_deposit"] = dnca_tot + nxdy_excc + prvs_rcdl - d2_auto_rdpt
+                    result_data["d2_deposit"] = prvs_rcdl  # 가수도정산금액이 D+2
 
-                    print(f"[KIS] D+2 상세: 예수금={dnca_tot:,}, 익일정산={nxdy_excc:,}, 가수도={prvs_rcdl:,}, 자동상환={d2_auto_rdpt:,}")
+                    print(f"[KIS] 예수금={dnca_tot:,}, D+2(가수도)={prvs_rcdl:,}")
             else:
                 print(f"[KIS] D+2 예수금 조회 실패: {result2.get('msg1', '')}")
         except requests.exceptions.RequestException as e:
