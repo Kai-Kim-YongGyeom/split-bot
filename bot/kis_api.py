@@ -559,6 +559,246 @@ class KisAPI:
         result = self.get_price(stock_code)
         return result.get("price", 0)
 
+    def get_executed_price(self, stock_code: str, order_no: str) -> int:
+        """특정 주문의 체결가 조회
+
+        시장가 주문 후 실제 체결가를 조회합니다.
+        체결 반영에 시간이 걸릴 수 있어 최대 3회 재시도합니다.
+
+        Args:
+            stock_code: 종목코드
+            order_no: 주문번호
+
+        Returns:
+            체결가 (조회 실패 시 0)
+        """
+        if not self.is_configured or not order_no:
+            return 0
+
+        today = datetime.now().strftime("%Y%m%d")
+
+        # 최대 3회 재시도 (체결 반영 대기)
+        for attempt in range(3):
+            try:
+                # 오늘 해당 종목의 체결 내역 조회
+                orders = self.get_order_history(
+                    start_date=today,
+                    end_date=today,
+                    stock_code=stock_code
+                )
+
+                # 주문번호로 찾기
+                for order in orders:
+                    if order.get("order_no") == order_no:
+                        executed_price = order.get("price", 0)
+                        if executed_price > 0:
+                            print(f"[KIS] 체결가 조회 성공: {executed_price:,}원 (주문번호: {order_no})")
+                            return executed_price
+
+                # 못 찾으면 잠시 대기 후 재시도
+                if attempt < 2:
+                    time.sleep(0.5)
+
+            except Exception as e:
+                print(f"[KIS] 체결가 조회 오류: {e}")
+
+        print(f"[KIS] 체결가 조회 실패 - 주문번호: {order_no}")
+        return 0
+
+    def get_market_cap_ranking(
+        self,
+        market: str = "0000",  # 0000:전체, 0001:KOSPI, 1001:KOSDAQ, 2001:KOSPI200
+        stock_type: str = "1",  # 0:전체, 1:보통주, 2:우선주
+        min_price: str = "",
+        max_price: str = "",
+        min_volume: str = "",
+    ) -> list[dict]:
+        """시가총액 상위 종목 조회
+
+        Args:
+            market: 시장 구분 (0000:전체, 0001:KOSPI, 1001:KOSDAQ, 2001:KOSPI200)
+            stock_type: 종목 구분 (0:전체, 1:보통주, 2:우선주)
+            min_price: 최소 가격
+            max_price: 최대 가격
+            min_volume: 최소 거래량
+
+        Returns:
+            시가총액 상위 종목 리스트
+        """
+        url = f"{self.base_url}/uapi/domestic-stock/v1/ranking/market-cap"
+        headers = self._get_headers("FHPST01740000")
+        params = {
+            "fid_cond_mrkt_div_code": "J",
+            "fid_cond_scr_div_code": "20174",
+            "fid_input_iscd": market,
+            "fid_div_cls_code": stock_type,
+            "fid_trgt_cls_code": "0",
+            "fid_trgt_exls_cls_code": "0",
+            "fid_input_price_1": min_price,
+            "fid_input_price_2": max_price,
+            "fid_vol_cnt": min_volume,
+        }
+
+        all_stocks = []
+        tr_cont = ""
+
+        try:
+            while True:
+                if tr_cont:
+                    headers["tr_cont"] = "N"
+
+                response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+                response.raise_for_status()
+                result = response.json()
+
+                if result.get("rt_cd") != "0":
+                    print(f"[KIS] 시가총액 순위 조회 실패: {result.get('msg1', '')}")
+                    break
+
+                for item in result.get("output", []):
+                    all_stocks.append({
+                        "code": item.get("stck_shrn_iscd", ""),
+                        "name": item.get("hts_kor_isnm", ""),
+                        "price": int(item.get("stck_prpr", 0)),
+                        "change_rate": float(item.get("prdy_ctrt", 0)),
+                        "volume": int(item.get("acml_vol", 0)),
+                        "trading_value": int(item.get("acml_tr_pbmn", 0)),
+                        "market_cap": int(item.get("stck_avls", 0)),  # 시가총액 (억원)
+                        "rank": int(item.get("data_rank", 0)),
+                    })
+
+                # 연속 조회
+                tr_cont = result.get("tr_cont", "")
+                if tr_cont not in ["M", "F"]:
+                    break
+
+                time.sleep(0.5)
+
+        except requests.exceptions.RequestException as e:
+            print(f"[KIS] 시가총액 순위 조회 오류: {e}")
+
+        return all_stocks
+
+    def get_daily_chart(
+        self,
+        stock_code: str,
+        start_date: str,
+        end_date: str,
+        period: str = "D",  # D:일봉, W:주봉, M:월봉, Y:년봉
+    ) -> list[dict]:
+        """기간별 시세 조회 (일봉/주봉/월봉)
+
+        Args:
+            stock_code: 종목코드
+            start_date: 조회 시작일 (YYYYMMDD)
+            end_date: 조회 종료일 (YYYYMMDD)
+            period: D:일봉, W:주봉, M:월봉, Y:년봉
+
+        Returns:
+            시세 데이터 리스트 (최근 날짜가 먼저)
+        """
+        url = f"{self.base_url}/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice"
+        headers = self._get_headers("FHKST03010100")
+        params = {
+            "FID_COND_MRKT_DIV_CODE": "J",
+            "FID_INPUT_ISCD": stock_code,
+            "FID_INPUT_DATE_1": start_date,
+            "FID_INPUT_DATE_2": end_date,
+            "FID_PERIOD_DIV_CODE": period,
+            "FID_ORG_ADJ_PRC": "0",  # 수정주가
+        }
+
+        all_data = []
+
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("rt_cd") != "0":
+                print(f"[KIS] 일봉 조회 실패 ({stock_code}): {result.get('msg1', '')}")
+                return []
+
+            for item in result.get("output2", []):
+                date_str = item.get("stck_bsop_date", "")
+                if not date_str:
+                    continue
+
+                all_data.append({
+                    "date": f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}",
+                    "open": int(item.get("stck_oprc", 0)),
+                    "high": int(item.get("stck_hgpr", 0)),
+                    "low": int(item.get("stck_lwpr", 0)),
+                    "close": int(item.get("stck_clpr", 0)),
+                    "volume": int(item.get("acml_vol", 0)),
+                    "trading_value": int(item.get("acml_tr_pbmn", 0)),
+                    "change_rate": float(item.get("prdy_ctrt", 0)),
+                })
+
+        except requests.exceptions.RequestException as e:
+            print(f"[KIS] 일봉 조회 오류 ({stock_code}): {e}")
+
+        return all_data
+
+    def get_daily_chart_extended(
+        self,
+        stock_code: str,
+        days: int = 365,
+    ) -> list[dict]:
+        """연장된 기간별 시세 조회 (페이지네이션 처리)
+
+        한 번에 100건만 조회되므로, 여러 번 호출하여 원하는 기간만큼 데이터 수집
+
+        Args:
+            stock_code: 종목코드
+            days: 조회할 일수 (기본 365일)
+
+        Returns:
+            시세 데이터 리스트
+        """
+        from datetime import datetime, timedelta
+
+        end_date = datetime.now()
+        all_data = []
+        calls_needed = (days // 100) + 1  # 대략적인 호출 횟수
+
+        for i in range(calls_needed):
+            # 100일씩 구간 나누기
+            segment_end = end_date - timedelta(days=i * 100)
+            segment_start = segment_end - timedelta(days=100)
+
+            data = self.get_daily_chart(
+                stock_code,
+                segment_start.strftime("%Y%m%d"),
+                segment_end.strftime("%Y%m%d"),
+            )
+
+            if not data:
+                break
+
+            all_data.extend(data)
+
+            # 원하는 일수 이상 수집했으면 종료
+            if len(all_data) >= days:
+                break
+
+            time.sleep(0.3)  # API 호출 제한 방지
+
+        # 날짜순 정렬 (최신순)
+        all_data.sort(key=lambda x: x["date"], reverse=True)
+
+        # 중복 제거 및 원하는 일수만큼 반환
+        seen_dates = set()
+        unique_data = []
+        for item in all_data:
+            if item["date"] not in seen_dates:
+                seen_dates.add(item["date"])
+                unique_data.append(item)
+                if len(unique_data) >= days:
+                    break
+
+        return unique_data
+
 
 # 싱글톤 인스턴스
 kis_api = KisAPI()

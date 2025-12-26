@@ -64,16 +64,19 @@ export function SplitStatus() {
         </div>
       ) : (
         <>
-          {/* Grid Table (Desktop + Mobile) */}
-          <div className="overflow-x-auto bg-gray-800 rounded-lg border border-gray-700">
+          {/* Grid Table with Sticky Header & First Column */}
+          <div className="overflow-auto bg-gray-800 rounded-lg border border-gray-700 max-h-[70vh]">
             <table className="w-full border-collapse min-w-[600px]">
-              <thead>
+              <thead className="sticky top-0 z-20 bg-gray-800">
                 <tr className="text-gray-400 text-sm border-b border-gray-700">
-                  <th className="text-left py-3 px-4 font-medium">종목</th>
-                  <th className="text-right py-3 px-3 font-medium">현재가</th>
-                  <th className="text-right py-3 px-3 font-medium">등락률</th>
+                  {/* 종목 헤더 - 왼쪽 고정 */}
+                  <th className="sticky left-0 z-30 bg-gray-800 text-left py-3 px-4 font-medium min-w-[120px] border-r border-gray-700">
+                    종목
+                  </th>
+                  <th className="text-right py-3 px-3 font-medium bg-gray-800">현재가</th>
+                  <th className="text-right py-3 px-3 font-medium bg-gray-800">등락률</th>
                   {rounds.map((r) => (
-                    <th key={r} className="text-center py-3 px-2 font-medium min-w-[80px]">
+                    <th key={r} className="text-center py-3 px-2 font-medium min-w-[80px] bg-gray-800">
                       {r}차
                     </th>
                   ))}
@@ -94,10 +97,10 @@ export function SplitStatus() {
                   return (
                     <tr
                       key={stock.id}
-                      className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"
+                      className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors group"
                     >
-                      {/* 종목 */}
-                      <td className="py-3 px-4">
+                      {/* 종목 - 왼쪽 고정 */}
+                      <td className="sticky left-0 z-10 bg-gray-800 group-hover:bg-gray-700/30 py-3 px-4 min-w-[120px] border-r border-gray-700 transition-colors">
                         <div className="font-medium">{stock.name}</div>
                         <div className="text-xs text-gray-500">{stock.code}</div>
                       </td>

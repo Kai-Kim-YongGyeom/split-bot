@@ -15,12 +15,13 @@ class Purchase:
     """매수 기록"""
     id: Optional[str] = None   # DB ID
     round: int = 0             # 차수 (1, 2, 3...)
-    price: int = 0             # 매수가
+    price: int = 0             # 체결가 (실제 매수된 가격)
     quantity: int = 0          # 수량
     date: str = ""             # 매수일
     status: str = "holding"    # holding, sold
     sold_price: Optional[int] = None   # 매도가
     sold_date: Optional[str] = None    # 매도일
+    trigger_price: Optional[int] = None  # 트리거가 (매수 조건 도달 시점의 가격)
 
 
 @dataclass
@@ -30,7 +31,9 @@ class StockConfig:
     code: str = ""                      # 종목코드
     name: str = ""                      # 종목명
     is_active: bool = True              # 활성화 여부
-    buy_amount: int = 100000            # 1회 매수 금액
+    buy_amount: int = 100000            # 1회 매수 금액 (buy_mode='amount'일 때)
+    buy_mode: str = "amount"            # 매수 방식: 'amount'=금액, 'quantity'=수량
+    buy_quantity: int = 1               # 1회 매수 수량 (buy_mode='quantity'일 때)
 
     # 최대 차수 (1~10) - 사용자 설정 가능
     max_rounds: int = 10
@@ -234,13 +237,31 @@ class StockConfig:
         return False
 
     def calculate_buy_quantity(self, current_price: int) -> int:
-        """매수 수량 계산"""
+        """매수 수량 계산
+
+        buy_mode에 따라:
+        - 'amount': 금액 기준 → buy_amount / 현재가
+        - 'quantity': 수량 기준 → 고정 buy_quantity
+        """
         if current_price <= 0:
             return 0
-        return max(1, self.buy_amount // current_price)
 
-    def add_purchase(self, price: int, quantity: int, purchase_id: str = None) -> Purchase:
-        """매수 기록 추가"""
+        if self.buy_mode == "quantity":
+            # 수량 기준: 고정 수량 반환
+            return max(1, self.buy_quantity)
+        else:
+            # 금액 기준: 금액 / 현재가
+            return max(1, self.buy_amount // current_price)
+
+    def add_purchase(self, price: int, quantity: int, purchase_id: str = None, trigger_price: int = None) -> Purchase:
+        """매수 기록 추가
+
+        Args:
+            price: 체결가 (실제 매수된 가격)
+            quantity: 수량
+            purchase_id: DB ID (선택)
+            trigger_price: 트리거가 (매수 조건 도달 시점의 가격)
+        """
         new_round = self.current_round + 1
         purchase = Purchase(
             id=purchase_id,
@@ -249,6 +270,7 @@ class StockConfig:
             quantity=quantity,
             date=datetime.now().isoformat(),
             status="holding",
+            trigger_price=trigger_price,
         )
         self.purchases.append(purchase)
         self.last_order_time = datetime.now()
@@ -268,6 +290,8 @@ class StockConfig:
             "name": self.name,
             "is_active": self.is_active,
             "buy_amount": self.buy_amount,
+            "buy_mode": self.buy_mode,
+            "buy_quantity": self.buy_quantity,
             "max_rounds": self.max_rounds,
             "split_rates": self.split_rates,
             "target_rates": self.target_rates,
@@ -282,6 +306,7 @@ class StockConfig:
                     "status": p.status,
                     "sold_price": p.sold_price,
                     "sold_date": p.sold_date,
+                    "trigger_price": p.trigger_price,
                 }
                 for p in self.purchases
             ],
@@ -300,6 +325,7 @@ class StockConfig:
                 status=p.get("status", "holding"),
                 sold_price=p.get("sold_price"),
                 sold_date=p.get("sold_date"),
+                trigger_price=p.get("trigger_price"),
             )
             for p in data.get("purchases", [])
         ]
@@ -310,6 +336,8 @@ class StockConfig:
             name=data["name"],
             is_active=data.get("is_active", True),
             buy_amount=data.get("buy_amount", Config.DEFAULT_BUY_AMOUNT),
+            buy_mode=data.get("buy_mode", "amount"),
+            buy_quantity=data.get("buy_quantity", 1),
             max_rounds=data.get("max_rounds", 10),
             split_rates=data.get("split_rates", [5.0] * 10),
             target_rates=data.get("target_rates", [5.0] * 10),

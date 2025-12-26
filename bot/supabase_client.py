@@ -203,7 +203,11 @@ class SupabaseClient:
             "status": purchase.status,
         }
 
-        print(f"[Supabase] 매수 저장 시도: stock_id={stock_id}, round={purchase.round}, price={purchase.price}")
+        # trigger_price가 있으면 추가
+        if purchase.trigger_price is not None:
+            data["trigger_price"] = purchase.trigger_price
+
+        print(f"[Supabase] 매수 저장 시도: stock_id={stock_id}, round={purchase.round}, price={purchase.price}, trigger={purchase.trigger_price}")
         result = self._request("POST", "bot_purchases", data=data)
 
         if isinstance(result, list) and len(result) > 0:
@@ -264,6 +268,7 @@ class SupabaseClient:
                     status=p.get("status", "holding"),
                     sold_price=p.get("sold_price"),
                     sold_date=p.get("sold_date"),
+                    trigger_price=p.get("trigger_price"),
                 )
                 for p in purchases_data
             ]
@@ -787,6 +792,104 @@ class SupabaseClient:
 
         print(f"[Supabase] 완료: 신규 {success_count}개 저장, 기존 {skip_count}개 스킵")
         return success_count + skip_count
+
+    # ==================== 종목 분석 요청 (stock_analysis_requests) ====================
+
+    def get_pending_analysis_requests(self) -> list[dict]:
+        """대기 중인 분석 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "stock_analysis_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+                "limit": "1",  # 한 번에 하나씩 처리
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_analysis_request(
+        self,
+        request_id: str,
+        status: str,
+        message: str = "",
+        total_analyzed: int = 0,
+        current_stock: str = "",
+    ) -> bool:
+        """분석 요청 상태 업데이트"""
+        if not self.is_configured:
+            return False
+
+        data = {
+            "status": status,
+            "result_message": message,
+            "total_analyzed": total_analyzed,
+        }
+
+        if current_stock:
+            data["current_stock"] = current_stock
+
+        if status in ["completed", "failed"]:
+            data["completed_at"] = datetime.now().isoformat()
+
+        result = self._request(
+            "PATCH",
+            "stock_analysis_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
+        )
+
+        return "error" not in result
+
+    def save_analysis_results(self, request_id: str, user_id: str, results: list[dict]) -> bool:
+        """분석 결과 저장 (stock_analysis_results)"""
+        if not self.is_configured or not results:
+            return False
+
+        # 기존 결과 삭제 (동일 request_id)
+        self._request(
+            "DELETE",
+            "stock_analysis_results",
+            params={"request_id": f"eq.{request_id}"},
+        )
+
+        # 새 결과 저장
+        records = []
+        for r in results:
+            records.append({
+                "request_id": request_id,
+                "user_id": user_id,
+                "stock_code": r.get("stock_code", ""),
+                "stock_name": r.get("stock_name", ""),
+                "market": r.get("market", ""),
+                "market_cap": r.get("market_cap", 0),
+                "current_price": r.get("current_price", 0),
+                "volatility_score": r.get("volatility_score", 0),
+                "recovery_count": r.get("recovery_count", 0),
+                "avg_recovery_days": r.get("avg_recovery_days", 0),
+                "recovery_success_rate": r.get("recovery_success_rate", 0),
+                "trend_1y": r.get("trend_1y", 0),
+                "trend_6m": r.get("trend_6m", 0),
+                "trend_3m": r.get("trend_3m", 0),
+                "avg_volume": r.get("avg_volume", 0),
+                "avg_trading_value": r.get("avg_trading_value", 0),
+                "suitability_score": r.get("suitability_score", 0),
+                "recommendation": r.get("recommendation", "neutral"),
+                "analysis_detail": r.get("analysis_detail", {}),
+            })
+
+        result = self._request("POST", "stock_analysis_results", data=records)
+        success = "error" not in result
+        if success:
+            print(f"[Supabase] 분석 결과 저장: {len(records)}건")
+        return success
 
 
 # 싱글톤 인스턴스
