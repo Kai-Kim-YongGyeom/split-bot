@@ -474,14 +474,24 @@ export function StockRecommend() {
 
       {/* 처리 상태 */}
       {(status === 'requesting' || status === 'processing') && (
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-6 flex flex-col items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
-          <p className="text-gray-400">{message}</p>
-          {currentRequest && (
-            <p className="text-xs text-gray-500 mt-2">
-              진행중: {currentRequest.total_analyzed || 0}개 종목 분석됨
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+          <div className="flex flex-col items-center justify-center mb-4">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-4" />
+            <p className="text-gray-400">{message}</p>
+            {currentRequest && (
+              <p className="text-xs text-gray-500 mt-2">
+                진행중: {currentRequest.total_analyzed || 0}개 종목 분석됨
+              </p>
+            )}
+          </div>
+          <div className="bg-blue-900/20 border border-blue-800 rounded-lg p-3 text-center">
+            <p className="text-blue-300 text-sm">
+              📱 분석이 완료되면 <b>텔레그램</b>으로 알림을 보내드립니다.
             </p>
-          )}
+            <p className="text-blue-400/70 text-xs mt-1">
+              페이지를 닫아도 분석은 계속 진행됩니다.
+            </p>
+          </div>
         </div>
       )}
 
@@ -504,7 +514,19 @@ export function StockRecommend() {
           {/* 요약 */}
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold">분석 결과</h2>
+              <div>
+                <h2 className="font-bold">분석 결과</h2>
+                {currentRequest?.completed_at && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {new Date(currentRequest.completed_at).toLocaleString('ko-KR', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })} 분석 완료
+                  </p>
+                )}
+              </div>
               <span className="text-sm text-gray-400">{results.length}개 종목</span>
             </div>
             <div className="grid grid-cols-4 gap-2 text-center text-sm">

@@ -177,6 +177,62 @@ class TelegramNotifier:
 """
         await self.send(message.strip())
 
+    async def send_analysis_complete(
+        self,
+        total_analyzed: int,
+        strong_count: int,
+        good_count: int,
+        top_stocks: list[dict] = None,
+    ) -> None:
+        """종목 분석 완료 알림"""
+        message = f"""
+📊 <b>종목 분석 완료</b>
+
+분석 종목: {total_analyzed}개
+- 강력 추천: {strong_count}개
+- 추천: {good_count}개
+
+"""
+        if top_stocks:
+            message += "🏆 <b>Top 5 종목</b>\n"
+            for i, stock in enumerate(top_stocks[:5], 1):
+                name = stock.get("stock_name", "")
+                score = stock.get("suitability_score", 0)
+                rec = stock.get("recommendation", "")
+                rec_label = {"strong": "강추", "good": "추천", "neutral": "보통", "weak": "비추"}.get(rec, rec)
+                message += f"{i}. {name} ({score:.0f}점, {rec_label})\n"
+
+        message += f"\n웹에서 상세 결과를 확인하세요.\n시간: {datetime.now().strftime('%H:%M:%S')}"
+
+        await self.send(message.strip())
+
+    async def send_stop_loss_alert(
+        self,
+        stock_name: str,
+        stock_code: str,
+        price: int,
+        quantity: int,
+        avg_price: int,
+        profit: int,
+        profit_rate: float,
+        success: bool,
+    ) -> None:
+        """손절 알림"""
+        status = "완료" if success else "실패"
+        emoji = "🚨" if success else "🔴"
+
+        message = f"""
+{emoji} <b>손절 매도 {status}</b>
+
+종목: {stock_name} ({stock_code})
+평균단가: {avg_price:,}원
+매도가: {price:,}원
+수량: {quantity}주
+📉 손익: {profit:+,}원 ({profit_rate:+.2f}%)
+시간: {datetime.now().strftime('%H:%M:%S')}
+"""
+        await self.send(message.strip())
+
 
 # 텔레그램 봇 명령어 핸들러 (선택적)
 class TelegramBotHandler:

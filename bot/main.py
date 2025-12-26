@@ -697,6 +697,15 @@ class SplitBot:
             )
             print(f"[Bot] 종목 분석 완료: {message}")
 
+            # 텔레그램 알림 전송
+            top_stocks = sorted(result_dicts, key=lambda x: x.get("suitability_score", 0), reverse=True)[:5]
+            await notifier.send_analysis_complete(
+                total_analyzed=len(results),
+                strong_count=strong_count,
+                good_count=good_count,
+                top_stocks=top_stocks,
+            )
+
         except Exception as e:
             error_msg = f"오류: {str(e)}"
             supabase.update_analysis_request(request_id, "failed", error_msg)
