@@ -51,28 +51,16 @@ def main():
     log(f"사용자: {user_id}")
     log("-" * 60)
 
-    # 1. 한투 계좌 잔고 조회
-    log("\n[1단계] 한투 계좌 잔고 조회 중...")
-    balance = kis.get_balance()
+    # 1. 한투 계좌 보유종목 조회
+    log("\n[1단계] 한투 계좌 보유종목 조회 중...")
+    holdings = kis.get_holdings()
 
-    if not balance or "output1" not in balance:
-        log("계좌 잔고 조회 실패!")
+    if holdings is None:
+        log("보유종목 조회 실패!")
         return
 
-    holdings = balance.get("output1", [])
-
-    # 보유 종목만 필터 (수량 > 0)
-    actual_holdings = []
-    for h in holdings:
-        qty = int(h.get("hldg_qty", 0))
-        if qty > 0:
-            actual_holdings.append({
-                "code": h.get("pdno"),           # 종목코드
-                "name": h.get("prdt_name"),      # 종목명
-                "quantity": qty,                  # 보유수량
-                "avg_price": int(float(h.get("pchs_avg_pric", 0))),  # 매입평균가
-                "current_price": int(h.get("prpr", 0)),  # 현재가
-            })
+    # get_holdings()는 이미 수량 > 0인 종목만 반환함
+    actual_holdings = holdings
 
     log(f"현재 보유종목: {len(actual_holdings)}개")
 
