@@ -26,6 +26,8 @@ function StockModal({
     code: initialData?.code || '',
     name: initialData?.name || '',
     buy_amount: initialData?.buy_amount || 100000,
+    buy_mode: initialData?.buy_mode || 'amount',
+    buy_quantity: initialData?.buy_quantity || 1,
     max_rounds: initialData?.max_rounds || 10,
     split_rates: initialData?.split_rates || [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
     target_rates: initialData?.target_rates || [50, 3, 3, 3, 3, 3, 3, 3, 3, 3],
@@ -168,18 +170,66 @@ function StockModal({
               />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">회당 매수 금액</label>
-              <input
-                type="number"
-                value={formData.buy_amount || ''}
-                onChange={e => setFormData({ ...formData, buy_amount: Number(e.target.value) || 0 })}
-                onFocus={handleNumberFocus}
-                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
-                required
-              />
+          {/* 매수 방식 선택 */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">매수 방식</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, buy_mode: 'amount' })}
+                className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${
+                  formData.buy_mode === 'amount'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+              >
+                금액 기준
+              </button>
+              <button
+                type="button"
+                onClick={() => setFormData({ ...formData, buy_mode: 'quantity' })}
+                className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${
+                  formData.buy_mode === 'quantity'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+              >
+                수량 기준
+              </button>
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {formData.buy_mode === 'amount' ? (
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">회당 매수 금액</label>
+                <input
+                  type="number"
+                  value={formData.buy_amount || ''}
+                  onChange={e => setFormData({ ...formData, buy_amount: Number(e.target.value) || 0 })}
+                  onFocus={handleNumberFocus}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+                  placeholder="100000"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">현재가 기준 수량 자동 계산</p>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">회당 매수 수량</label>
+                <input
+                  type="number"
+                  value={formData.buy_quantity || ''}
+                  onChange={e => setFormData({ ...formData, buy_quantity: Number(e.target.value) || 0 })}
+                  onFocus={handleNumberFocus}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+                  placeholder="10"
+                  min="1"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">고정 수량으로 매수</p>
+              </div>
+            )}
             <div>
               <label className="block text-sm text-gray-400 mb-1">손절 비율 (%)</label>
               <input
@@ -887,8 +937,15 @@ function StockCard({
           {/* 설정 정보 */}
           <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
             <div className="bg-gray-700/30 rounded p-2">
-              <p className="text-xs text-gray-400">회당 매수금액</p>
-              <p className="font-bold">{stock.buy_amount.toLocaleString()}원</p>
+              <p className="text-xs text-gray-400">
+                {stock.buy_mode === 'quantity' ? '회당 매수수량' : '회당 매수금액'}
+              </p>
+              <p className="font-bold">
+                {stock.buy_mode === 'quantity'
+                  ? `${stock.buy_quantity || 1}주`
+                  : `${stock.buy_amount.toLocaleString()}원`
+                }
+              </p>
             </div>
             <div className="bg-gray-700/30 rounded p-2">
               <p className="text-xs text-gray-400">물타기 비율</p>
@@ -1032,6 +1089,8 @@ function SyncModal({
   const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
   const [syncDays, setSyncDays] = useState(30);
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+  const [applyingId, setApplyingId] = useState<string | null>(null);
 
   // cleanup을 위한 refs
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1059,9 +1118,24 @@ function SyncModal({
   useEffect(() => {
     if (!isOpen) {
       cleanup();
+      setAppliedIds(new Set());
+      setApplyingId(null);
     }
     return () => cleanup();
   }, [isOpen]);
+
+  // 개별 항목 적용
+  const handleApply = async (result: SyncResult) => {
+    setApplyingId(result.id);
+    const success = await api.applySyncResult(result);
+    setApplyingId(null);
+
+    if (success) {
+      setAppliedIds(prev => new Set([...prev, result.id]));
+    } else {
+      alert('적용 실패: 해당 종목이 등록되어 있는지 확인하세요.');
+    }
+  };
 
   const handleSync = async () => {
     // 기존 타이머 정리
@@ -1231,34 +1305,48 @@ function SyncModal({
             {comparison.length > 0 && (
               <div className="space-y-2 max-h-60 overflow-y-auto">
                 <h3 className="font-bold text-sm">매수 내역 비교</h3>
-                {comparison.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className={`p-3 rounded text-sm ${
-                      item.status === 'matched'
-                        ? 'bg-green-900/20 border border-green-800'
-                        : 'bg-yellow-900/20 border border-yellow-800'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <span className="font-bold">{item.result.stock_name}</span>
-                        <span className="text-gray-400 ml-2">{item.result.stock_code}</span>
+                {comparison.map((item, idx) => {
+                  const isApplied = appliedIds.has(item.result.id);
+                  const isApplying = applyingId === item.result.id;
+
+                  return (
+                    <div
+                      key={idx}
+                      className={`p-3 rounded text-sm ${
+                        item.status === 'matched' || isApplied
+                          ? 'bg-green-900/20 border border-green-800'
+                          : 'bg-yellow-900/20 border border-yellow-800'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="font-bold">{item.result.stock_name}</span>
+                          <span className="text-gray-400 ml-2">{item.result.stock_code}</span>
+                        </div>
+                        <span className={item.status === 'matched' || isApplied ? 'text-green-400' : 'text-yellow-400'}>
+                          {isApplied ? '적용됨' : item.status === 'matched' ? '일치' : '불일치'}
+                        </span>
                       </div>
-                      <span className={item.status === 'matched' ? 'text-green-400' : 'text-yellow-400'}>
-                        {item.status === 'matched' ? '일치' : '불일치'}
-                      </span>
+                      <div className="text-gray-400 mt-1">
+                        {item.result.trade_date} | {item.result.quantity}주 @ {item.result.price.toLocaleString()}원
+                      </div>
+                      {item.status === 'unmatched' && !isApplied && (
+                        <button
+                          onClick={() => handleApply(item.result)}
+                          disabled={isApplying}
+                          className="mt-2 px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded disabled:opacity-50"
+                        >
+                          {isApplying ? '적용 중...' : '이 항목 적용'}
+                        </button>
+                      )}
+                      {isApplied && (
+                        <p className="text-green-300 text-xs mt-1">
+                          ✓ 매수 기록이 등록되었습니다
+                        </p>
+                      )}
                     </div>
-                    <div className="text-gray-400 mt-1">
-                      {item.result.trade_date} | {item.result.quantity}주 @ {item.result.price.toLocaleString()}원
-                    </div>
-                    {item.status === 'unmatched' && item.stock && (
-                      <p className="text-green-300 text-xs mt-1">
-                        → 자동으로 매수 기록이 등록되었습니다
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

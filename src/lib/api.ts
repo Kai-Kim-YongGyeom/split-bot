@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult } from '../types';
+import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm } from '../types';
 import { encrypt, decrypt } from '../utils/crypto';
 
 // ==================== 유저 ID 헬퍼 ====================
@@ -554,6 +554,68 @@ export async function getSyncResults(syncRequestId: string): Promise<SyncResult[
   return data || [];
 }
 
+// 개별 동기화 결과 적용 (매수 기록 추가)
+export async function applySyncResult(syncResult: SyncResult): Promise<boolean> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return false;
+  }
+
+  // 매수만 적용 (매도는 처리 안 함)
+  if (syncResult.side !== 'buy') {
+    console.error('Only buy orders can be applied');
+    return false;
+  }
+
+  // 해당 종목 찾기
+  const { data: stock, error: stockError } = await supabase
+    .from('bot_stocks')
+    .select('id')
+    .eq('code', syncResult.stock_code)
+    .single();
+
+  if (stockError || !stock) {
+    console.error('Stock not found:', syncResult.stock_code);
+    return false;
+  }
+
+  // 기존 매수 기록 중 최대 round 조회
+  const { data: purchases } = await supabase
+    .from('bot_purchases')
+    .select('round')
+    .eq('stock_id', stock.id);
+
+  const maxRound = purchases?.reduce((max, p) => Math.max(max, p.round || 0), 0) || 0;
+  const newRound = maxRound + 1;
+
+  // 매수 기록 추가
+  const { error: insertError } = await supabase
+    .from('bot_purchases')
+    .insert([{
+      stock_id: stock.id,
+      user_id: userId,
+      round: newRound,
+      price: syncResult.price,
+      quantity: syncResult.quantity,
+      date: syncResult.trade_date,
+      status: 'holding',
+    }]);
+
+  if (insertError) {
+    console.error('Error applying sync result:', insertError);
+    return false;
+  }
+
+  // sync_result에 applied 표시 (있으면)
+  await supabase
+    .from('bot_sync_results')
+    .update({ applied: true })
+    .eq('id', syncResult.id);
+
+  return true;
+}
+
 // ==================== 종목 동기화 (bot_stock_sync_requests) ====================
 
 export interface StockSyncRequest {
@@ -658,4 +720,101 @@ export async function createPurchaseManual(
     return null;
   }
   return data;
+}
+
+// ==================== 종목 분석 (stock_analysis) ====================
+
+export async function createAnalysisRequest(
+  form: AnalysisRequestForm
+): Promise<StockAnalysisRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('stock_analysis_requests')
+    .insert([{
+      user_id: userId,
+      status: 'pending',
+      market: form.market,
+      min_market_cap: form.min_market_cap,
+      min_volume: form.min_volume,
+      stock_type: form.stock_type,
+      analysis_period: form.analysis_period,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating analysis request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getLatestAnalysisRequest(): Promise<StockAnalysisRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('stock_analysis_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching analysis request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getAnalysisRequest(id: string): Promise<StockAnalysisRequest | null> {
+  const { data, error } = await supabase
+    .from('stock_analysis_requests')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('Error fetching analysis request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getAnalysisResults(requestId: string): Promise<StockAnalysisResult[]> {
+  const { data, error } = await supabase
+    .from('stock_analysis_results')
+    .select('*')
+    .eq('request_id', requestId)
+    .order('suitability_score', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching analysis results:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function getAnalysisHistory(): Promise<StockAnalysisRequest[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('stock_analysis_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error('Error fetching analysis history:', error);
+    return [];
+  }
+  return data || [];
 }

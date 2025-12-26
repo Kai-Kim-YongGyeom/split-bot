@@ -656,56 +656,38 @@ class SplitBot:
                 supabase.update_sync_request(request_id, "completed", "체결내역이 없습니다.")
                 return
 
-            # 결과 저장 (bot_sync_results)
+            # 결과 저장 (bot_sync_results) - 비교만 수행, 자동 적용 안 함
             supabase.save_sync_results(request_id, user_id, orders)
 
-            # 체결내역을 bot_purchases에 반영
-            buy_synced = 0
-            sell_synced = 0
-            stocks_created = 0
-            skipped = 0
+            # 체결내역과 DB 비교 (적용하지 않음)
+            buy_count = sum(1 for o in orders if o.get("side") == "buy")
+            sell_count = sum(1 for o in orders if o.get("side") == "sell")
+            unmatched_count = 0
 
             for order in orders:
                 stock_code = order.get("code", "")
-                stock_name = order.get("name", "")
                 side = order.get("side", "")
 
-                # 해당 종목 찾기
                 stock = supabase.get_stock_by_code(stock_code)
-
-                # 미등록 종목이면 자동 생성 (매수 체결인 경우)
-                if not stock and side == "buy" and stock_name:
-                    stock = supabase.create_stock(stock_code, stock_name, user_id)
-                    if stock:
-                        stocks_created += 1
-                        print(f"[Bot] 새 종목 자동 등록: {stock_name} ({stock_code})")
-
                 if not stock:
-                    skipped += 1
+                    unmatched_count += 1
                     continue
 
-                stock_id = stock.get("id")
-
                 if side == "buy":
-                    result = supabase.sync_buy_order_to_purchase(stock_id, user_id, order)
-                    if result:
-                        buy_synced += 1
-                elif side == "sell":
-                    result = supabase.sync_sell_order_to_purchase(stock_id, order)
-                    if result:
-                        sell_synced += 1
+                    # 매칭되는 purchase가 있는지 확인
+                    existing = supabase.find_matching_purchase(
+                        stock["id"],
+                        order.get("price", 0),
+                        order.get("quantity", 0),
+                        order.get("date", "")
+                    )
+                    if not existing:
+                        unmatched_count += 1
 
-            # 메모리 상태도 갱신 (동기화 후에는 전체 리로드)
-            await self._reload_stocks(full_reload=True)
-
-            # 완료 처리
-            parts = [f"{len(orders)}건 조회"]
-            if stocks_created > 0:
-                parts.append(f"신규 종목 {stocks_created}개 등록")
-            parts.append(f"매수 {buy_synced}건, 매도 {sell_synced}건 동기화")
-            if skipped > 0:
-                parts.append(f"{skipped}건 스킵")
-            message = ", ".join(parts)
+            # 완료 처리 (비교만 완료, 적용은 사용자가 선택)
+            message = f"{len(orders)}건 조회 (매수 {buy_count}, 매도 {sell_count})"
+            if unmatched_count > 0:
+                message += f", {unmatched_count}건 불일치"
             supabase.update_sync_request(request_id, "completed", message)
             print(f"[Bot] 동기화 완료: {message}")
 
