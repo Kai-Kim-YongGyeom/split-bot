@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from supabase_client import SupabaseClient
-from kis_api import KISApi
+from kis_api import KisAPI
 from config import Config
 
 def log(msg: str):
@@ -26,7 +26,7 @@ def main():
 
     # 초기화
     supabase = SupabaseClient()
-    kis = KISApi()
+    kis = KisAPI()
 
     # 사용자 정보 조회
     stocks = supabase.get_stocks()

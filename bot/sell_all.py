@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from supabase_client import SupabaseClient
-from kis_api import KISApi
+from kis_api import KisAPI
 from config import Config
 
 def log(msg: str):
@@ -20,7 +20,7 @@ def log(msg: str):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{now}] {msg}")
 
-def get_current_price(kis: KISApi, code: str) -> int:
+def get_current_price(kis: KisAPI, code: str) -> int:
     """현재가 조회"""
     try:
         result = kis.get_stock_price(code)
@@ -30,7 +30,7 @@ def get_current_price(kis: KISApi, code: str) -> int:
         log(f"현재가 조회 실패 ({code}): {e}")
     return 0
 
-def sell_stock(kis: KISApi, code: str, quantity: int) -> bool:
+def sell_stock(kis: KisAPI, code: str, quantity: int) -> bool:
     """시장가 매도 주문"""
     try:
         result = kis.sell_stock(code, quantity, 0)  # 0 = 시장가
@@ -72,7 +72,7 @@ def main():
         return
 
     # KIS API 초기화
-    kis = KISApi()
+    kis = KisAPI()
     token_data = supabase.get_kis_token(user_id)
     if not token_data:
         log("KIS 토큰이 없습니다.")
