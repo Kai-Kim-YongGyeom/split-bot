@@ -1,11 +1,16 @@
+// 매수 방식
+export type BuyMode = 'amount' | 'quantity';
+
 // 종목 설정
 export interface Stock {
   id: string;
   code: string;
   name: string;
   is_active: boolean;
-  buy_amount: number;
-  max_rounds: number; // 최대 차수 (1~10)
+  buy_amount: number;          // 1회 매수 금액 (buy_mode가 'amount'일 때 사용)
+  buy_mode: BuyMode;           // 매수 방식: 'amount'=금액, 'quantity'=수량
+  buy_quantity: number;        // 1회 매수 수량 (buy_mode가 'quantity'일 때 사용)
+  max_rounds: number;          // 최대 차수 (1~10)
   split_rates: number[];
   target_rates: number[];
   stop_loss_rate: number;
@@ -84,6 +89,8 @@ export interface StockFormData {
   code: string;
   name: string;
   buy_amount: number;
+  buy_mode: BuyMode;
+  buy_quantity: number;
   max_rounds: number; // 최대 차수 (1~10)
   split_rates: number[];
   target_rates: number[];
@@ -154,4 +161,59 @@ export interface SyncResult {
   order_no: string;
   match_status: 'matched' | 'unmatched' | 'partial';
   matched_purchase_id: string | null;
+}
+
+// ==================== 종목 분석 관련 타입 ====================
+
+// 분석 요청
+export interface StockAnalysisRequest {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  market: 'all' | 'kospi' | 'kosdaq' | 'kospi200';
+  min_market_cap: number;    // 최소 시가총액 (억원)
+  min_volume: number;        // 최소 거래대금 (억원)
+  stock_type: 'common' | 'preferred' | 'all';
+  analysis_period: number;   // 분석 기간 (일)
+  total_analyzed: number;
+  result_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+// 분석 결과
+export interface StockAnalysisResult {
+  id: string;
+  request_id: string;
+  user_id: string;
+  // 종목 기본 정보
+  stock_code: string;
+  stock_name: string;
+  market: string;
+  market_cap: number;        // 시가총액 (억원)
+  current_price: number;
+  // 분석 지표
+  volatility_score: number;  // 변동성 점수 (일 평균 변동폭 %)
+  recovery_count: number;    // 10%+ 하락 후 회복 횟수
+  avg_recovery_days: number; // 평균 회복 기간 (일)
+  recovery_success_rate: number; // 회복 성공률 (%)
+  trend_1y: number;          // 1년 수익률 (%)
+  trend_6m: number;          // 6개월 수익률 (%)
+  trend_3m: number;          // 3개월 수익률 (%)
+  avg_volume: number;        // 일평균 거래량
+  avg_trading_value: number; // 일평균 거래대금 (억원)
+  // 종합 점수
+  suitability_score: number; // 물타기 적합도 (0~100)
+  recommendation: 'strong' | 'good' | 'neutral' | 'weak';
+  analysis_detail: Record<string, unknown>;
+  created_at: string;
+}
+
+// 분석 요청 폼
+export interface AnalysisRequestForm {
+  market: 'all' | 'kospi' | 'kosdaq' | 'kospi200';
+  min_market_cap: number;
+  min_volume: number;
+  stock_type: 'common' | 'preferred' | 'all';
+  analysis_period: number;
 }
