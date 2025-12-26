@@ -57,6 +57,11 @@ def main():
         log("취소되었습니다.")
         return
 
+    # Config 로드 (DB에서 KIS 설정 가져오기)
+    if not Config.load_from_db():
+        log("Config 로드 실패! .env 파일을 확인하세요.")
+        return
+
     # 초기화
     supabase = SupabaseClient()
 
@@ -71,9 +76,9 @@ def main():
         log("user_id를 찾을 수 없습니다.")
         return
 
-    # KIS API 초기화 (user_id 설정하면 DB에서 토큰 자동 조회)
+    # KIS API 초기화
     kis = KisAPI()
-    kis._user_id = user_id
+    kis.reload_config(user_id)
 
     log(f"사용자: {user_id}")
     log("-" * 50)

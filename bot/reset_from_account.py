@@ -24,9 +24,15 @@ def main():
     log("현재 계좌 보유종목 → 모두 1차로 DB 저장")
     log("=" * 60)
 
+    # Config 로드 (DB에서 KIS 설정 가져오기)
+    if not Config.load_from_db():
+        log("Config 로드 실패! .env 파일을 확인하세요.")
+        return
+
     # 초기화
     supabase = SupabaseClient()
     kis = KisAPI()
+    kis.reload_config(Config.USER_ID)
 
     # 사용자 정보 조회
     stocks = supabase.get_stocks()
