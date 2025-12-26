@@ -569,15 +569,32 @@ class SplitBot:
         """종목 분석 요청 실행"""
         request_id = req.get("id")
         user_id = req.get("user_id")
-        market = req.get("market", "2001")  # 기본값: KOSPI200
+        market_input = req.get("market", "kospi200")
         max_stocks = req.get("max_stocks", 50)
         min_market_cap = req.get("min_market_cap", 0)
         min_volume = req.get("min_volume", 0)  # 최소 거래량 (현재 미사용)
-        stock_type = req.get("stock_type", "1")  # 보통주
+        stock_type_input = req.get("stock_type", "common")
         analysis_period = req.get("analysis_period", 365)
 
+        # 시장 코드 변환 (프론트엔드 → KIS API)
+        market_code_map = {
+            "kospi200": "2001",
+            "kospi": "0001",
+            "kosdaq": "1001",
+            "all": "0000",
+        }
+        market = market_code_map.get(market_input, market_input)  # 이미 코드면 그대로 사용
+
+        # 종목유형 코드 변환
+        stock_type_map = {
+            "common": "1",   # 보통주
+            "preferred": "2",  # 우선주
+            "all": "0",      # 전체
+        }
+        stock_type = stock_type_map.get(stock_type_input, stock_type_input)
+
         print(f"[Bot] 종목 분석 요청 처리: {request_id}")
-        print(f"      시장: {market}, 최대종목수: {max_stocks}, 최소시총: {min_market_cap}억원")
+        print(f"      시장: {market_input}({market}), 최대종목수: {max_stocks}, 최소시총: {min_market_cap}억원")
 
         # 처리 중 상태로 변경
         supabase.update_analysis_request(request_id, "processing", "분석 시작...")
