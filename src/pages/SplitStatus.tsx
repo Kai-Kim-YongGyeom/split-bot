@@ -65,7 +65,7 @@ export function SplitStatus() {
       ) : (
         <>
           {/* Grid Table with Sticky Header & First Column */}
-          <div className="overflow-auto bg-gray-800 rounded-lg border border-gray-700 max-h-[70vh]">
+          <div className="overflow-x-auto bg-gray-800 rounded-lg border border-gray-700">
             <table className="w-full border-collapse min-w-[600px]">
               <thead className="sticky top-0 z-20 bg-gray-800">
                 <tr className="text-gray-400 text-sm border-b border-gray-700">
