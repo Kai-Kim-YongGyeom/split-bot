@@ -379,7 +379,7 @@ class SplitBot:
             await asyncio.sleep(30)
 
     async def _update_balance(self) -> None:
-        """예수금/매수가능금액 업데이트"""
+        """예수금/매수가능금액 업데이트 (D+2 포함)"""
         try:
             if not kis_api.is_configured:
                 print("[Bot] 예수금 조회 스킵 - KIS 미설정")
@@ -394,9 +394,10 @@ class SplitBot:
                 if Config.USER_ID:
                     cash = balance.get("cash", 0)
                     total = balance.get("total", 0)
-                    success = supabase.update_balance(Config.USER_ID, cash, total)
+                    d2_deposit = balance.get("d2_deposit", 0)
+                    success = supabase.update_balance(Config.USER_ID, cash, total, d2_deposit)
                     if success:
-                        print(f"[Bot] 예수금 DB 저장 완료: {cash:,}원")
+                        print(f"[Bot] 예수금 DB 저장 완료: 주문가능 {cash:,}원, D+2 {d2_deposit:,}원")
                     else:
                         print("[Bot] 예수금 DB 저장 실패")
                 else:

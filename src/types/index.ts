@@ -50,8 +50,9 @@ export interface UserSettings {
   default_buy_amount?: number;
   last_started_at?: string;
   last_heartbeat?: string;
-  available_cash?: number;              // 예수금 (주문가능현금)
+  available_cash?: number;              // 주문가능현금
   available_amount?: number;            // 매수가능금액
+  d2_deposit?: number;                  // D+2 예수금
   balance_updated_at?: string;          // 잔고 업데이트 시간
   created_at: string;
   updated_at: string;
@@ -72,8 +73,9 @@ export interface BotConfig {
   default_buy_amount?: number;
   last_started_at?: string;
   last_heartbeat?: string;
-  available_cash?: number;              // 예수금 (주문가능현금)
+  available_cash?: number;              // 주문가능현금
   available_amount?: number;            // 매수가능금액
+  d2_deposit?: number;                  // D+2 예수금
   balance_updated_at?: string;          // 잔고 업데이트 시간
   created_at: string;
   updated_at: string;

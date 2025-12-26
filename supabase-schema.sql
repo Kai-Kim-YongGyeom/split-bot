@@ -18,6 +18,10 @@ CREATE TABLE IF NOT EXISTS bot_stocks (
 -- stop_loss_rate 컬럼 추가 (기존 테이블용)
 ALTER TABLE bot_stocks ADD COLUMN IF NOT EXISTS stop_loss_rate DECIMAL DEFAULT 0;
 
+-- 매수 방식 컬럼 추가 (금액/수량 선택)
+ALTER TABLE bot_stocks ADD COLUMN IF NOT EXISTS buy_mode VARCHAR(10) DEFAULT 'amount';
+ALTER TABLE bot_stocks ADD COLUMN IF NOT EXISTS buy_quantity INTEGER DEFAULT 1;
+
 -- 종목 코드 유니크 인덱스
 CREATE UNIQUE INDEX IF NOT EXISTS idx_bot_stocks_code ON bot_stocks(code);
 
@@ -154,4 +158,66 @@ CREATE POLICY "Allow all for bot_buy_requests" ON bot_buy_requests
     FOR ALL USING (true) WITH CHECK (true);
 
 CREATE POLICY "Allow all for bot_sell_requests" ON bot_sell_requests
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- ==================== 종목 분석 요청 테이블 ====================
+CREATE TABLE IF NOT EXISTS stock_analysis_requests (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL,
+    status VARCHAR(20) DEFAULT 'pending',  -- pending, processing, completed, failed
+    -- 필터 조건
+    market VARCHAR(10) DEFAULT 'all',       -- all, kospi, kosdaq, kospi200
+    min_market_cap BIGINT DEFAULT 0,        -- 최소 시가총액 (억원)
+    min_volume BIGINT DEFAULT 0,            -- 최소 거래대금 (억원)
+    stock_type VARCHAR(10) DEFAULT 'common', -- common(보통주), preferred(우선주), all
+    analysis_period INTEGER DEFAULT 365,    -- 분석 기간 (일)
+    -- 결과
+    total_analyzed INTEGER DEFAULT 0,
+    result_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    completed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- ==================== 종목 분석 결과 테이블 ====================
+CREATE TABLE IF NOT EXISTS stock_analysis_results (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    request_id UUID REFERENCES stock_analysis_requests(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL,
+    -- 종목 기본 정보
+    stock_code VARCHAR(10) NOT NULL,
+    stock_name VARCHAR(100) NOT NULL,
+    market VARCHAR(10),                     -- kospi, kosdaq
+    market_cap BIGINT,                      -- 시가총액 (억원)
+    current_price INTEGER,                  -- 현재가
+    -- 분석 지표
+    volatility_score DECIMAL,               -- 변동성 점수 (일 평균 변동폭 %)
+    recovery_count INTEGER,                 -- 10%+ 하락 후 회복 횟수
+    avg_recovery_days DECIMAL,              -- 평균 회복 기간 (일)
+    recovery_success_rate DECIMAL,          -- 회복 성공률 (%)
+    trend_1y DECIMAL,                       -- 1년 수익률 (%)
+    trend_6m DECIMAL,                       -- 6개월 수익률 (%)
+    trend_3m DECIMAL,                       -- 3개월 수익률 (%)
+    avg_volume BIGINT,                      -- 일평균 거래량
+    avg_trading_value BIGINT,               -- 일평균 거래대금 (억원)
+    -- 종합 점수
+    suitability_score DECIMAL,              -- 물타기 적합도 (0~100)
+    recommendation VARCHAR(10),             -- strong, good, neutral, weak
+    -- 상세 분석
+    analysis_detail JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 분석 결과 인덱스
+CREATE INDEX IF NOT EXISTS idx_stock_analysis_results_request ON stock_analysis_results(request_id);
+CREATE INDEX IF NOT EXISTS idx_stock_analysis_results_score ON stock_analysis_results(suitability_score DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_analysis_results_user ON stock_analysis_results(user_id);
+
+-- RLS
+ALTER TABLE stock_analysis_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_analysis_results ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all for stock_analysis_requests" ON stock_analysis_requests
+    FOR ALL USING (true) WITH CHECK (true);
+
+CREATE POLICY "Allow all for stock_analysis_results" ON stock_analysis_results
     FOR ALL USING (true) WITH CHECK (true);

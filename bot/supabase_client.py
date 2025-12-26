@@ -372,8 +372,8 @@ class SupabaseClient:
 
         return "error" not in result
 
-    def update_balance(self, user_id: str, available_cash: int, available_amount: int) -> bool:
-        """예수금/매수가능금액 업데이트"""
+    def update_balance(self, user_id: str, available_cash: int, available_amount: int, d2_deposit: int = 0) -> bool:
+        """예수금/매수가능금액 업데이트 (D+2 포함)"""
         if not self.is_configured or not user_id:
             return False
 
@@ -383,6 +383,7 @@ class SupabaseClient:
             data={
                 "available_cash": available_cash,
                 "available_amount": available_amount,
+                "d2_deposit": d2_deposit,
                 "balance_updated_at": datetime.now().isoformat(),
             },
             params={"user_id": f"eq.{user_id}"},

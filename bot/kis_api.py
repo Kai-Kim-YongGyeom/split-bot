@@ -240,10 +240,11 @@ class KisAPI:
             return {}
 
     def get_balance(self) -> dict:
-        """예수금 조회"""
-        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+        """예수금 조회 (D+2 포함)"""
+        result_data = {"cash": 0, "total": 0, "d2_deposit": 0, "deposit_total": 0}
 
-        # 실전/모의 tr_id
+        # 1. 주문가능금액 조회 (inquire-psbl-order)
+        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-psbl-order"
         tr_id = "TTTC8908R" if self.is_real else "VTTC8908R"
         headers = self._get_headers(tr_id)
 
@@ -265,15 +266,52 @@ class KisAPI:
 
             if result.get("rt_cd") == "0":
                 output = result.get("output", {})
-                return {
-                    "cash": int(output.get("ord_psbl_cash", 0)),
-                    "total": int(output.get("nrcvb_buy_amt", 0)),
-                }
-            print(f"[KIS] 예수금 조회 실패: {result.get('msg1', '')}")
-            return {"cash": 0, "total": 0}
+                result_data["cash"] = int(output.get("ord_psbl_cash", 0))
+                result_data["total"] = int(output.get("nrcvb_buy_amt", 0))
+            else:
+                print(f"[KIS] 주문가능금액 조회 실패: {result.get('msg1', '')}")
         except requests.exceptions.RequestException as e:
-            print(f"[KIS] 예수금 조회 오류: {e}")
-            return {"cash": 0, "total": 0}
+            print(f"[KIS] 주문가능금액 조회 오류: {e}")
+
+        # 2. D+2 예수금 조회 (inquire-balance output2)
+        url2 = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-balance"
+        tr_id2 = "TTTC8434R" if self.is_real else "VTTC8434R"
+        headers2 = self._get_headers(tr_id2)
+
+        params2 = {
+            "CANO": acct_no,
+            "ACNT_PRDT_CD": acct_suffix,
+            "AFHR_FLPR_YN": "N",
+            "OFL_YN": "",
+            "INQR_DVSN": "02",
+            "UNPR_DVSN": "01",
+            "FUND_STTL_ICLD_YN": "N",
+            "FNCG_AMT_AUTO_RDPT_YN": "N",
+            "PRCS_DVSN": "00",
+            "CTX_AREA_FK100": "",
+            "CTX_AREA_NK100": "",
+        }
+
+        try:
+            response2 = requests.get(url2, headers=headers2, params=params2, timeout=KIS_API_TIMEOUT)
+            response2.raise_for_status()
+            result2 = response2.json()
+
+            if result2.get("rt_cd") == "0":
+                output2 = result2.get("output2", [])
+                if output2 and len(output2) > 0:
+                    summary = output2[0]
+                    # 예수금총금액 - D+2자동상환금액 = D+2 출금가능금액
+                    deposit_total = int(summary.get("dnca_tot_amt", 0))
+                    d2_auto_rdpt = int(summary.get("d2_auto_rdpt_amt", 0))
+                    result_data["deposit_total"] = deposit_total
+                    result_data["d2_deposit"] = deposit_total - d2_auto_rdpt
+            else:
+                print(f"[KIS] D+2 예수금 조회 실패: {result2.get('msg1', '')}")
+        except requests.exceptions.RequestException as e:
+            print(f"[KIS] D+2 예수금 조회 오류: {e}")
+
+        return result_data
 
     def get_holdings(self) -> list[dict]:
         """보유 종목 조회"""

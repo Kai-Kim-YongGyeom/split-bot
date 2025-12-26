@@ -165,7 +165,7 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
-  const { botRunning, serverAlive, availableCash } = useBotStatus();
+  const { botRunning, serverAlive, availableCash, d2Deposit } = useBotStatus();
 
   if (loading) {
     return (
@@ -228,9 +228,12 @@ export function Dashboard() {
               <Wallet className="w-4 h-4 md:w-5 md:h-5 text-yellow-400" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-gray-400 text-xs md:text-sm">예수금</p>
+              <p className="text-gray-400 text-xs md:text-sm">주문가능</p>
               <p className="text-base md:text-lg font-bold truncate">
                 {availableCash !== null ? `${availableCash.toLocaleString()}원` : '-'}
+              </p>
+              <p className="text-gray-500 text-xs truncate">
+                D+2: {d2Deposit !== null ? `${d2Deposit.toLocaleString()}원` : '-'}
               </p>
             </div>
           </div>
