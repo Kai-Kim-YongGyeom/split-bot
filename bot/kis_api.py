@@ -628,7 +628,9 @@ class KisAPI:
         results = {}
 
         try:
+            print(f"[KIS] 배치 조회 시작: {len(codes)}종목")
             response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+            print(f"[KIS] 배치 조회 응답: status={response.status_code}")
 
             # 500 에러 시 토큰 문제일 수 있으므로 토큰 무효화 후 재시도
             if response.status_code >= 500:
@@ -678,7 +680,11 @@ class KisAPI:
                 print(f"      요청 종목: {codes[:5]}... (총 {len(codes)}개)")
 
         except requests.exceptions.RequestException as e:
-            print(f"[KIS] 배치 현재가 조회 오류: {e}")
+            print(f"[KIS] 배치 현재가 조회 네트워크 오류: {e}")
+        except Exception as e:
+            print(f"[KIS] 배치 현재가 조회 예외: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
 
         return results
 
