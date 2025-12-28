@@ -628,9 +628,7 @@ class KisAPI:
         results = {}
 
         try:
-            print(f"[KIS] 배치 조회 시작: {len(codes)}종목")
             response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
-            print(f"[KIS] 배치 조회 응답: status={response.status_code}")
 
             # 500 에러 시 토큰 문제일 수 있으므로 토큰 무효화 후 재시도
             if response.status_code >= 500:
@@ -649,18 +647,6 @@ class KisAPI:
                 self._token_refresh_failures = 0
                 output = result.get("output", [])
 
-                # 디버그: output 확인
-                print(f"[KIS] 배치 조회 rt_cd=0, output 개수: {len(output)}")
-                if output and len(output) > 0:
-                    # 첫 번째 항목의 키 확인
-                    first_item = output[0]
-                    print(f"[KIS] 첫 번째 항목 키: {list(first_item.keys())[:10]}")
-                    print(f"[KIS] 첫 번째 항목 예시: {dict(list(first_item.items())[:5])}")
-                else:
-                    print(f"[KIS] output이 비어있음")
-                    print(f"      요청 종목: {codes[:3]}... (총 {len(codes)}개)")
-                    print(f"      응답 키: {list(result.keys())}")
-
                 for item in output:
                     # 멀티종목 조회는 필드명이 다름 (inter_shrn_iscd, inter_kor_isnm, inter2_prpr)
                     code = item.get("inter_shrn_iscd", "")
@@ -676,19 +662,10 @@ class KisAPI:
                             "low": 0,
                         }
             else:
-                # 실패 시 전체 응답 출력
-                import json
-                print(f"[KIS] 배치 현재가 조회 실패:")
-                print(f"      rt_cd={result.get('rt_cd')}, msg_cd={result.get('msg_cd')}")
-                print(f"      msg1={result.get('msg1', '')}")
-                print(f"      요청 종목: {codes[:5]}... (총 {len(codes)}개)")
+                print(f"[KIS] 배치 현재가 조회 실패: {result.get('msg1', '')}")
 
         except requests.exceptions.RequestException as e:
-            print(f"[KIS] 배치 현재가 조회 네트워크 오류: {e}")
-        except Exception as e:
-            print(f"[KIS] 배치 현재가 조회 예외: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[KIS] 배치 현재가 조회 오류: {e}")
 
         return results
 
