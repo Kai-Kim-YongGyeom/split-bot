@@ -662,17 +662,18 @@ class KisAPI:
                     print(f"      응답 키: {list(result.keys())}")
 
                 for item in output:
-                    code = item.get("stck_shrn_iscd", "")
+                    # 멀티종목 조회는 필드명이 다름 (inter_shrn_iscd, inter_kor_isnm, inter2_prpr)
+                    code = item.get("inter_shrn_iscd", "")
                     if code:
                         results[code] = {
                             "code": code,
-                            "name": item.get("hts_kor_isnm", ""),
-                            "price": int(item.get("stck_prpr", 0) or 0),
+                            "name": item.get("inter_kor_isnm", ""),
+                            "price": int(item.get("inter2_prpr", 0) or 0),
                             "change": float(item.get("prdy_ctrt", 0) or 0),
                             "volume": int(item.get("acml_vol", 0) or 0),
-                            "open": int(item.get("stck_oprc", 0) or 0),
-                            "high": int(item.get("stck_hgpr", 0) or 0),
-                            "low": int(item.get("stck_lwpr", 0) or 0),
+                            "open": 0,  # 멀티조회에서 미제공
+                            "high": 0,
+                            "low": 0,
                         }
             else:
                 # 실패 시 전체 응답 출력
