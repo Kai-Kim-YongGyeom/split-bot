@@ -650,13 +650,16 @@ class KisAPI:
                 output = result.get("output", [])
 
                 # 디버그: output 확인
-                if not output:
-                    print(f"[KIS] 배치 조회 성공했지만 output 비어있음")
+                print(f"[KIS] 배치 조회 rt_cd=0, output 개수: {len(output)}")
+                if output and len(output) > 0:
+                    # 첫 번째 항목의 키 확인
+                    first_item = output[0]
+                    print(f"[KIS] 첫 번째 항목 키: {list(first_item.keys())[:10]}")
+                    print(f"[KIS] 첫 번째 항목 예시: {dict(list(first_item.items())[:5])}")
+                else:
+                    print(f"[KIS] output이 비어있음")
                     print(f"      요청 종목: {codes[:3]}... (총 {len(codes)}개)")
                     print(f"      응답 키: {list(result.keys())}")
-                    if len(codes) > 0:
-                        # 첫 번째 종목 파라미터 확인
-                        print(f"      첫 파라미터: FID_COND_MRKT_DIV_CODE_1=J, FID_INPUT_ISCD_1={codes[0]}")
 
                 for item in output:
                     code = item.get("stck_shrn_iscd", "")
