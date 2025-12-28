@@ -744,6 +744,8 @@ export async function createAnalysisRequest(
       min_volume: form.min_volume,
       stock_type: form.stock_type,
       analysis_period: form.analysis_period,
+      min_price: form.min_price || 0,
+      max_price: form.max_price || 0,
     }])
     .select()
     .single();
