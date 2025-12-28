@@ -623,6 +623,8 @@ class SplitBot:
         min_volume = req.get("min_volume", 0)  # 최소 거래량 (현재 미사용)
         stock_type_input = req.get("stock_type", "common")
         analysis_period = req.get("analysis_period", 365)
+        min_price = req.get("min_price", 0)  # 최소 현재가 (원)
+        max_price = req.get("max_price", 0)  # 최대 현재가 (원)
 
         # 시장 코드 변환 (프론트엔드 → KIS API)
         market_code_map = {
@@ -643,6 +645,8 @@ class SplitBot:
 
         print(f"[Bot] 종목 분석 요청 처리: {request_id}")
         print(f"      시장: {market_input}({market}), 최대종목수: {max_stocks}, 최소시총: {min_market_cap}억원")
+        if min_price > 0 or max_price > 0:
+            print(f"      현재가 필터: {min_price:,}원 ~ {max_price:,}원" if max_price > 0 else f"      현재가 필터: {min_price:,}원 이상")
 
         # 처리 중 상태로 변경
         supabase.update_analysis_request(request_id, "processing", "분석 시작...")
@@ -668,6 +672,8 @@ class SplitBot:
                 max_stocks=max_stocks,
                 analysis_days=analysis_period,
                 min_market_cap=min_market_cap,
+                min_price=min_price,
+                max_price=max_price,
                 progress_callback=progress_callback,
             )
 

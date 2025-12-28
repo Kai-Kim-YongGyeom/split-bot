@@ -237,6 +237,8 @@ export function StockRecommend() {
     min_volume: 50,
     stock_type: 'common',
     analysis_period: 365,
+    min_price: 0,
+    max_price: 0,
   });
 
   const [status, setStatus] = useState<'idle' | 'requesting' | 'processing' | 'completed' | 'failed'>('idle');
@@ -478,6 +480,40 @@ export function StockRecommend() {
                 <option value="preferred">우선주</option>
                 <option value="all">전체</option>
               </select>
+            </div>
+          </div>
+
+          {/* 현재가 필터 */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">최소 현재가</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={formData.min_price || ''}
+                  onChange={e => setFormData({ ...formData, min_price: Number(e.target.value) || 0 })}
+                  onFocus={handleNumberFocus}
+                  placeholder="0 (제한없음)"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 pr-8"
+                  min="0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">원</span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">최대 현재가</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  value={formData.max_price || ''}
+                  onChange={e => setFormData({ ...formData, max_price: Number(e.target.value) || 0 })}
+                  onFocus={handleNumberFocus}
+                  placeholder="0 (제한없음)"
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 pr-8"
+                  min="0"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">원</span>
+              </div>
             </div>
           </div>
 

@@ -218,4 +218,6 @@ export interface AnalysisRequestForm {
   min_volume: number;
   stock_type: 'common' | 'preferred' | 'all';
   analysis_period: number;
+  min_price?: number;  // 최소 현재가 (원)
+  max_price?: number;  // 최대 현재가 (원)
 }

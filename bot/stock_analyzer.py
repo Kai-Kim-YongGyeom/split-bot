@@ -390,6 +390,8 @@ class StockAnalyzer:
         max_stocks: int = 100,
         analysis_days: int = 365,
         min_market_cap: int = 0,  # 최소 시가총액 (억원)
+        min_price: int = 0,  # 최소 현재가 (원)
+        max_price: int = 0,  # 최대 현재가 (원)
         progress_callback=None,
     ) -> list[AnalysisResult]:
         """시장 전체 종목 분석
@@ -400,17 +402,24 @@ class StockAnalyzer:
             max_stocks: 분석할 최대 종목 수
             analysis_days: 분석 기간 (일)
             min_market_cap: 최소 시가총액 (억원)
+            min_price: 최소 현재가 (원)
+            max_price: 최대 현재가 (원)
             progress_callback: 진행률 콜백 함수 (current, total, stock_name)
 
         Returns:
             분석 결과 리스트 (점수 높은 순)
         """
         print(f"[분석] 시장 분석 시작 (market={market}, max={max_stocks})")
+        if min_price > 0 or max_price > 0:
+            price_filter = f"{min_price:,}원 ~ {max_price:,}원" if max_price > 0 else f"{min_price:,}원 이상"
+            print(f"[분석] 현재가 필터: {price_filter}")
 
-        # 1. 시가총액 상위 종목 조회
+        # 1. 시가총액 상위 종목 조회 (현재가 필터 적용)
         stocks = self.api.get_market_cap_ranking(
             market=market,
             stock_type=stock_type,
+            min_price=str(min_price) if min_price > 0 else "",
+            max_price=str(max_price) if max_price > 0 else "",
         )
 
         if not stocks:
