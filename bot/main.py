@@ -615,6 +615,7 @@ class SplitBot:
 
     async def execute_analysis_request(self, req: dict) -> None:
         """종목 분석 요청 실행"""
+        print(f"[DEBUG] 분석 요청 데이터: {req}")  # 디버그용
         request_id = req.get("id")
         user_id = req.get("user_id")
         market_input = req.get("market", "kospi200")
@@ -623,8 +624,8 @@ class SplitBot:
         min_volume = req.get("min_volume", 0)  # 최소 거래량 (현재 미사용)
         stock_type_input = req.get("stock_type", "common")
         analysis_period = req.get("analysis_period", 365)
-        min_price = req.get("min_price", 0)  # 최소 현재가 (원)
-        max_price = req.get("max_price", 0)  # 최대 현재가 (원)
+        min_price = req.get("min_price") or 0  # 최소 현재가 (원)
+        max_price = req.get("max_price") or 0  # 최대 현재가 (원)
 
         # 시장 코드 변환 (프론트엔드 → KIS API)
         market_code_map = {
