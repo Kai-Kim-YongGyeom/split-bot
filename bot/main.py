@@ -512,10 +512,10 @@ class SplitBot:
             await asyncio.sleep(interval)
 
     async def process_web_requests(self) -> None:
-        """웹에서 요청한 매수/매도/동기화 처리 (장중 3초, 장외 5분)"""
+        """웹에서 요청한 매수/매도/동기화 처리 (장중 3초, 장외 10초)"""
         while self._running:
             is_market_open = self.is_market_open()
-            interval = 3 if is_market_open else 300  # 장중 3초, 장외 5분
+            interval = 3 if is_market_open else 10  # 장중 3초, 장외 10초 (분석 요청 빠르게 처리)
             await asyncio.sleep(interval)
 
             # 동기화 요청은 장 운영과 무관하게 처리
