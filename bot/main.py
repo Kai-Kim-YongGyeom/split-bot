@@ -410,9 +410,9 @@ class SplitBot:
     def _calculate_polling_interval(self) -> int:
         """종목 수에 따른 동적 폴링 간격 계산 (배치 처리 기준)"""
         num_stocks = len(strategy.stocks)
-        # 30종목당 1배치, 배치당 1초 + 여유 2초, 최소 3초
+        # 30종목당 1배치, 최소 1초
         num_batches = (num_stocks + 29) // 30  # 올림 나눗셈
-        interval = max(3, num_batches + 2)
+        interval = max(1, num_batches)
         return interval
 
     async def poll_prices(self) -> None:
