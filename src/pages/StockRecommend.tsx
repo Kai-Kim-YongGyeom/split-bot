@@ -84,10 +84,12 @@ function AnalysisResultCard({
   result,
   onAddStock,
   adding,
+  isRegistered,
 }: {
   result: StockAnalysisResult;
   onAddStock: (result: StockAnalysisResult) => void;
   adding: boolean;
+  isRegistered: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -102,13 +104,23 @@ function AnalysisResultCard({
           >
             {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
             <div>
-              <h3 className="font-bold text-base">{result.stock_name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-base">{result.stock_name}</h3>
+                {isRegistered && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-green-900/50 text-green-400 border border-green-700">
+                    등록됨
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-gray-400 text-xs">{result.stock_code}</span>
                 <span className={`text-xs px-1.5 py-0.5 rounded ${
                   result.market === 'kospi' ? 'bg-blue-900/50 text-blue-400' : 'bg-purple-900/50 text-purple-400'
                 }`}>
                   {result.market?.toUpperCase()}
+                </span>
+                <span className="text-white font-medium text-sm">
+                  {result.current_price.toLocaleString()}원
                 </span>
               </div>
             </div>
@@ -151,14 +163,20 @@ function AnalysisResultCard({
 
         {/* 액션 버튼 */}
         <div className="flex justify-end">
-          <button
-            onClick={() => onAddStock(result)}
-            disabled={adding}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-sm disabled:opacity-50"
-          >
-            {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            종목 추가
-          </button>
+          {isRegistered ? (
+            <span className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-600 rounded-lg text-sm text-gray-400 cursor-not-allowed">
+              이미 등록됨
+            </span>
+          ) : (
+            <button
+              onClick={() => onAddStock(result)}
+              disabled={adding}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-sm disabled:opacity-50"
+            >
+              {adding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              종목 추가
+            </button>
+          )}
         </div>
       </div>
 
@@ -227,6 +245,7 @@ export function StockRecommend() {
   const [message, setMessage] = useState('');
   const [addingStock, setAddingStock] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'score' | 'volatility' | 'recovery' | 'trend'>('score');
+  const [registeredCodes, setRegisteredCodes] = useState<Set<string>>(new Set());
 
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -236,9 +255,16 @@ export function StockRecommend() {
     statusRef.current = status;
   }, [status]);
 
+  // 등록된 종목 목록 로드
+  const loadRegisteredStocks = async () => {
+    const stocks = await api.getStocks();
+    setRegisteredCodes(new Set(stocks.map(s => s.code)));
+  };
+
   useEffect(() => {
-    // 페이지 로드 시 최근 분석 결과 로드
+    // 페이지 로드 시 최근 분석 결과와 등록된 종목 로드
     loadLatestAnalysis();
+    loadRegisteredStocks();
     return () => cleanup();
   }, []);
 
@@ -340,12 +366,15 @@ export function StockRecommend() {
         stop_loss_rate: 0,
       });
       if (stock) {
+        // 등록 성공 시 목록 갱신
+        setRegisteredCodes(prev => new Set([...prev, result.stock_code]));
         alert(`${result.stock_name} 종목이 추가되었습니다.`);
       } else {
-        alert('종목 추가 실패. 이미 등록된 종목일 수 있습니다.');
+        alert('종목 추가에 실패했습니다. 잠시 후 다시 시도해주세요.');
       }
-    } catch {
-      alert('종목 추가 실패');
+    } catch (err) {
+      console.error('Stock creation error:', err);
+      alert('종목 추가 중 오류가 발생했습니다.');
     }
     setAddingStock(null);
   };
@@ -582,6 +611,7 @@ export function StockRecommend() {
                 result={result}
                 onAddStock={handleAddStock}
                 adding={addingStock === result.stock_code}
+                isRegistered={registeredCodes.has(result.stock_code)}
               />
             ))}
           </div>
