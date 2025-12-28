@@ -106,7 +106,6 @@ class SupabaseClient:
     def update_stock_price(self, code: str, price: int, change_rate: float = 0.0) -> bool:
         """종목 현재가 업데이트 (실시간 시세용)"""
         if not self.is_configured:
-            print(f"[Supabase] update_stock_price 실패: 설정 없음")
             return False
 
         result = self._request(
@@ -121,15 +120,52 @@ class SupabaseClient:
         )
 
         if "error" in result:
-            print(f"[Supabase] update_stock_price 실패: {code} - {result}")
             return False
 
         # 결과가 빈 배열이면 해당 종목이 없는 것
         if isinstance(result, list) and len(result) == 0:
-            print(f"[Supabase] update_stock_price: 종목 없음 - {code}")
             return False
 
         return True
+
+    def update_stock_prices_batch(self, prices: dict[str, dict]) -> int:
+        """여러 종목 현재가 일괄 업데이트 (배치용)
+
+        Args:
+            prices: {종목코드: {"price": 가격, "change": 등락률}, ...}
+
+        Returns:
+            성공한 종목 수
+        """
+        if not self.is_configured or not prices:
+            return 0
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        now = datetime.now().isoformat()
+        success_count = 0
+
+        def update_single(code: str, data: dict) -> bool:
+            result = self._request(
+                "PATCH",
+                "bot_stocks",
+                data={
+                    "current_price": data.get("price", 0),
+                    "price_change": data.get("change", 0.0),
+                    "price_updated_at": now,
+                },
+                params={"code": f"eq.{code}"},
+            )
+            return "error" not in result and not (isinstance(result, list) and len(result) == 0)
+
+        # 병렬로 업데이트 (최대 10개 동시)
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(update_single, code, data): code for code, data in prices.items()}
+            for future in as_completed(futures):
+                if future.result():
+                    success_count += 1
+
+        return success_count
 
     def create_stock(self, code: str, name: str, user_id: str = None) -> Optional[dict]:
         """새 종목 생성 (기본 설정으로)

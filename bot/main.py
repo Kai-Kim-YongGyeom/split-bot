@@ -444,33 +444,30 @@ class SplitBot:
                         batch_results = kis_api.get_prices_batch(batch_codes)
 
                         if batch_results:
-                            log(f"[Poll] 배치 {batch_idx + 1}/{total_batches}: {len(batch_results)}종목 조회 완료")
-
+                            # 메모리에 가격 저장
+                            valid_prices = {}
                             for code, price_data in batch_results.items():
-                                if not self._running:
-                                    break
-
                                 price = price_data.get("price", 0)
                                 change_rate = price_data.get("change", 0.0)
-
                                 if price > 0:
-                                    stock = strategy.stocks.get(code)
-                                    stock_name = stock.name if stock else code
-
-                                    # 가격 저장 및 DB 업데이트
                                     self._prices[code] = price
-                                    saved = supabase.update_stock_price(code, price, change_rate)
-                                    status = "저장" if saved else "실패"
-                                    log(f"[Poll] {stock_name}({code}): {price:,}원 ({change_rate:+.2f}%) - DB {status}")
+                                    valid_prices[code] = {"price": price, "change": change_rate}
 
-                                    # 자동매매는 장 시간에만
-                                    if is_market_open and self.check_bot_enabled():
-                                        data = {
-                                            "code": code,
-                                            "price": price,
-                                            "change_rate": change_rate,
-                                        }
-                                        await self.on_price_update(data)
+                            # DB 배치 저장
+                            saved_count = supabase.update_stock_prices_batch(valid_prices)
+                            log(f"[Poll] 배치 {batch_idx + 1}/{total_batches}: {len(valid_prices)}종목 조회, {saved_count}종목 DB 저장")
+
+                            # 자동매매 체크 (장 시간에만)
+                            if is_market_open and self.check_bot_enabled():
+                                for code, price_data in valid_prices.items():
+                                    if not self._running:
+                                        break
+                                    data = {
+                                        "code": code,
+                                        "price": price_data["price"],
+                                        "change_rate": price_data["change"],
+                                    }
+                                    await self.on_price_update(data)
                         else:
                             log(f"[Poll] 배치 {batch_idx + 1}/{total_batches}: 조회 실패, 개별 조회로 폴백")
                             # 배치 실패 시 개별 조회로 폴백
