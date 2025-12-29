@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, Plus, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import * as api from '../lib/api';
+import { formatDateTime } from '../lib/dateUtils';
 import type { StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm } from '../types';
 import { useToast } from '../components/Toast';
 
@@ -585,12 +586,7 @@ export function StockRecommend() {
                 <h2 className="font-bold">분석 결과</h2>
                 {currentRequest?.completed_at && (
                   <p className="text-xs text-gray-500 mt-0.5">
-                    {new Date(currentRequest.completed_at).toLocaleString('ko-KR', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })} 분석 완료
+                    {formatDateTime(currentRequest.completed_at)} 분석 완료
                   </p>
                 )}
               </div>

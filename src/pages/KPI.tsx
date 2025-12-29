@@ -14,6 +14,7 @@ import {
 } from 'recharts';
 import { supabase } from '../lib/supabase';
 import { getCurrentUserId } from '../lib/api';
+import { formatDate, getTodayKST, getDateDaysAgoKST } from '../lib/dateUtils';
 import type { Purchase } from '../types';
 
 interface KPIData {
@@ -67,16 +68,12 @@ function DateRangePicker({
   ];
 
   const handlePreset = (days: number) => {
-    const end = new Date();
-    const endStr = end.toISOString().split('T')[0];
-    onEndChange(endStr);
+    onEndChange(getTodayKST());
 
     if (days === -1) {
       onStartChange('2020-01-01');
     } else {
-      const start = new Date();
-      start.setDate(start.getDate() - days);
-      onStartChange(start.toISOString().split('T')[0]);
+      onStartChange(getDateDaysAgoKST(days));
     }
   };
 
@@ -453,14 +450,8 @@ export function KPI() {
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('current');
-  const [startDate, setStartDate] = useState(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30);
-    return date.toISOString().split('T')[0];
-  });
-  const [endDate, setEndDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const [startDate, setStartDate] = useState(() => getDateDaysAgoKST(30));
+  const [endDate, setEndDate] = useState(() => getTodayKST());
 
   // 현재탭 필터 상태
   const [searchQuery, setSearchQuery] = useState('');
@@ -497,7 +488,7 @@ export function KPI() {
   const kpiData = useMemo<KPIData>(() => {
     const filtered = purchases.filter(p => {
       // 날짜만 추출해서 비교 (TIMESTAMPTZ 형식 대응)
-      const date = p.date.split('T')[0].split(' ')[0];
+      const date = formatDate(p.date);
       return date >= startDate && date <= endDate;
     });
 
@@ -553,7 +544,7 @@ export function KPI() {
 
     // 기간 내 모든 매수 건 집계
     purchases.forEach(p => {
-      const date = p.date.split('T')[0].split(' ')[0];
+      const date = formatDate(p.date);
       if (date < startDate || date > endDate) return;
 
       if (!byDate[date]) {
@@ -614,7 +605,7 @@ export function KPI() {
 
     // 기간 내 모든 매수 건 집계
     purchases.forEach(p => {
-      const date = p.date.split('T')[0].split(' ')[0];
+      const date = formatDate(p.date);
       if (date < startDate || date > endDate) return;
 
       const month = date.slice(0, 7); // YYYY-MM
@@ -700,7 +691,7 @@ export function KPI() {
   const filteredPurchases = useMemo(() => {
     let filtered = purchases.filter(p => {
       // 날짜만 추출해서 비교 (TIMESTAMPTZ 형식 대응)
-      const pDate = p.date.split('T')[0].split(' ')[0];
+      const pDate = formatDate(p.date);
       return pDate >= startDate && pDate <= endDate;
     });
 
@@ -842,7 +833,7 @@ export function KPI() {
                         <div className="flex justify-between items-start mb-2">
                           <div>
                             <p className="font-bold">{stockInfo?.name || '-'}</p>
-                            <p className="text-xs text-gray-400">{p.round}차 · {p.date}</p>
+                            <p className="text-xs text-gray-400">{p.round}차 · {formatDate(p.date)}</p>
                           </div>
                           <span
                             className={`px-2 py-0.5 rounded text-xs ${
@@ -908,7 +899,7 @@ export function KPI() {
                             <td className="py-2 px-3">{p.round}차</td>
                             <td className="py-2 px-3 text-right">{p.price.toLocaleString()}원</td>
                             <td className="py-2 px-3 text-right">{p.quantity}주</td>
-                            <td className="py-2 px-3">{p.date}</td>
+                            <td className="py-2 px-3">{formatDate(p.date)}</td>
                             <td className="py-2 px-3">
                               <span
                                 className={`px-2 py-0.5 rounded text-xs ${

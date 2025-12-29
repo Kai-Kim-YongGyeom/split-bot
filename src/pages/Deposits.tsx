@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Trash2, Edit2, X, Check, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 import { useDepositHistory } from '../hooks/useDepositHistory';
+import { formatDate, getTodayKST } from '../lib/dateUtils';
 import type { DepositType, DepositFormData, DepositHistory } from '../types';
 
 function DepositForm({
@@ -15,7 +16,7 @@ function DepositForm({
   const [type, setType] = useState<DepositType>(initialData?.type || 'deposit');
   const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
   const [date, setDate] = useState(
-    initialData?.date?.split('T')[0] || new Date().toISOString().split('T')[0]
+    formatDate(initialData?.date) !== '-' ? formatDate(initialData?.date) : getTodayKST()
   );
   const [memo, setMemo] = useState(initialData?.memo || '');
   const [submitting, setSubmitting] = useState(false);
@@ -271,7 +272,7 @@ export function Deposits() {
                     ) : (
                       <>
                         <td className="px-4 py-3 text-sm">
-                          {item.date.split('T')[0]}
+                          {formatDate(item.date)}
                         </td>
                         <td className="px-4 py-3">
                           <span

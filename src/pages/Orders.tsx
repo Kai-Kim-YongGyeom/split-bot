@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { RefreshCw, ShoppingCart, TrendingUp, XCircle, CheckCircle, Clock, AlertCircle, Search, Filter, ArrowUpDown, ArrowUp, ArrowDown, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getCurrentUserId } from '../lib/api';
+import { formatDateTime, formatDateTimeShort } from '../lib/dateUtils';
 import type { BuyRequest, SellRequest } from '../types';
 
 type TabType = 'buy' | 'sell';
@@ -31,17 +32,6 @@ function StatusBadge({ status }: { status: string }) {
       {label}
     </span>
   );
-}
-
-function formatDate(dateStr: string | null) {
-  if (!dateStr) return '-';
-  const date = new Date(dateStr);
-  return date.toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 export function Orders() {
@@ -259,10 +249,10 @@ export function Orders() {
       </div>
 
       {/* 필터/정렬 섹션 */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* 검색창 */}
-          <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-3 space-y-2">
+        {/* Row 1: 검색창 + 필터 토글 */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -272,28 +262,9 @@ export function Orders() {
               className="w-full pl-9 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:outline-none focus:border-blue-500"
             />
           </div>
-
-          {/* 상태 필터 버튼 그룹 */}
-          <div className="flex gap-1">
-            {(['all', 'pending', 'executed', 'failed', 'cancelled'] as StatusFilter[]).map(status => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-2.5 py-1.5 text-xs rounded transition ${
-                  statusFilter === status
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600'
-                }`}
-              >
-                {{ all: '전체', pending: '대기', executed: '체결', failed: '실패', cancelled: '취소' }[status]}
-              </button>
-            ))}
-          </div>
-
-          {/* 필터 토글 버튼 */}
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition ${
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition shrink-0 ${
               showFilters || hasActiveFilters
                 ? 'bg-blue-600 text-white'
                 : 'bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600'
@@ -307,24 +278,43 @@ export function Orders() {
           </button>
         </div>
 
-        {/* 확장 필터 (날짜 범위) */}
+        {/* Row 2: 상태 필터 버튼 */}
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          {(['all', 'pending', 'executed', 'failed', 'cancelled'] as StatusFilter[]).map(status => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-2.5 py-1.5 text-xs rounded transition whitespace-nowrap ${
+                statusFilter === status
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600'
+              }`}
+            >
+              {{ all: '전체', pending: '대기', executed: '체결', failed: '실패', cancelled: '취소' }[status]}
+            </button>
+          ))}
+        </div>
+
+        {/* Row 3: 확장 필터 (날짜 범위) */}
         {showFilters && (
-          <div className="mt-3 pt-3 border-t border-gray-700 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">기간:</span>
-              <input
-                type="date"
-                value={startDate}
-                onChange={e => setStartDate(e.target.value)}
-                className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
-              />
-              <span className="text-gray-500">~</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={e => setEndDate(e.target.value)}
-                className="px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
-              />
+          <div className="pt-2 border-t border-gray-700 space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <span className="text-sm text-gray-400 shrink-0">기간:</span>
+              <div className="flex items-center gap-2 flex-1">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={e => setStartDate(e.target.value)}
+                  className="flex-1 min-w-0 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
+                />
+                <span className="text-gray-500">~</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={e => setEndDate(e.target.value)}
+                  className="flex-1 min-w-0 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
             </div>
 
             {hasActiveFilters && (
@@ -396,7 +386,7 @@ export function Orders() {
                           </div>
                           <div>
                             <p className="text-xs text-gray-400">요청시간</p>
-                            <p className="text-gray-400">{formatDate(req.created_at)}</p>
+                            <p className="text-gray-400">{formatDateTimeShort(req.created_at)}</p>
                           </div>
                         </div>
                         {req.result_message && (
@@ -460,7 +450,7 @@ export function Orders() {
                               <StatusBadge status={req.status} />
                             </td>
                             <td className="py-3 px-4 text-gray-400">
-                              {formatDate(req.created_at)}
+                              {formatDateTime(req.created_at)}
                             </td>
                             <td className="py-3 px-4 text-gray-400 max-w-[200px] truncate" title={req.result_message || ''}>
                               {req.result_message || '-'}
@@ -526,7 +516,7 @@ export function Orders() {
                           </div>
                           <div>
                             <p className="text-xs text-gray-400">요청시간</p>
-                            <p className="text-gray-400">{formatDate(req.created_at)}</p>
+                            <p className="text-gray-400">{formatDateTimeShort(req.created_at)}</p>
                           </div>
                         </div>
                         {req.result_message && (
@@ -587,10 +577,10 @@ export function Orders() {
                               <StatusBadge status={req.status} />
                             </td>
                             <td className="py-3 px-4 text-gray-400">
-                              {formatDate(req.created_at)}
+                              {formatDateTime(req.created_at)}
                             </td>
                             <td className="py-3 px-4 text-gray-400">
-                              {formatDate(req.executed_at)}
+                              {formatDateTime(req.executed_at)}
                             </td>
                             <td className="py-3 px-4 text-gray-400 max-w-[200px] truncate" title={req.result_message || ''}>
                               {req.result_message || '-'}

@@ -4,6 +4,7 @@ import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loade
 import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult, CompareResult } from '../types';
 import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';
+import { getTodayKST, formatDate } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
 
 // 숫자 입력 시 포커스되면 전체 선택
@@ -448,7 +449,7 @@ function PurchaseModal({
   const [formData, setFormData] = useState<PurchaseFormData>({
     price: 0,
     quantity: 0,
-    date: new Date().toISOString().split('T')[0],
+    date: getTodayKST(),
   });
 
   if (!isOpen) return null;
@@ -534,8 +535,8 @@ function EditPurchaseModal({
 }) {
   // 날짜 기본값: purchase.date가 없으면 오늘 날짜
   const getDateValue = (date: string | undefined | null) => {
-    if (date && date.length >= 10) return date.slice(0, 10); // YYYY-MM-DD 형식
-    return new Date().toISOString().split('T')[0];
+    if (date && date.length >= 10) return formatDate(date);
+    return getTodayKST();
   };
 
   const [formData, setFormData] = useState({
