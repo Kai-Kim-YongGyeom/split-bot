@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Search, Loader2, Plus, ChevronDown, ChevronUp, Info } from 'lucide-react';
 import * as api from '../lib/api';
 import type { StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm } from '../types';
+import { useToast } from '../components/Toast';
 
 // 숫자 입력 시 포커스되면 전체 선택
 const handleNumberFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -231,6 +232,7 @@ const ANALYSIS_POLL_INTERVAL_MS = 3000;
 const ANALYSIS_TIMEOUT_MS = 300000; // 5분
 
 export function StockRecommend() {
+  const { showToast } = useToast();
   const [formData, setFormData] = useState<AnalysisRequestForm>({
     market: 'kospi200',
     min_market_cap: 5000,
@@ -370,13 +372,13 @@ export function StockRecommend() {
       if (stock) {
         // 등록 성공 시 목록 갱신
         setRegisteredCodes(prev => new Set([...prev, result.stock_code]));
-        alert(`${result.stock_name} 종목이 추가되었습니다.`);
+        showToast(`${result.stock_name} 종목이 추가되었습니다.`, 'success');
       } else {
-        alert('종목 추가에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        showToast('종목 추가에 실패했습니다. 잠시 후 다시 시도해주세요.', 'error');
       }
     } catch (err) {
       console.error('Stock creation error:', err);
-      alert('종목 추가 중 오류가 발생했습니다.');
+      showToast('종목 추가 중 오류가 발생했습니다.', 'error');
     }
     setAddingStock(null);
   };

@@ -4,6 +4,7 @@ import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loade
 import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult } from '../types';
 import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';
+import { useToast } from '../components/Toast';
 
 // 숫자 입력 시 포커스되면 전체 선택
 const handleNumberFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -754,6 +755,7 @@ function StockCard({
   onAddPurchase: () => void;
   onRefresh: () => void;
 }) {
+  const { showToast } = useToast();
   const [expanded, setExpanded] = useState(false);
   const [buying, setBuying] = useState(false);
   const [buySuccess, setBuySuccess] = useState(false);
@@ -769,7 +771,7 @@ function StockCard({
       setEditingPurchase(null);
       onRefresh();
     } else {
-      alert('수정 실패. 다시 시도해주세요.');
+      showToast('수정 실패. 다시 시도해주세요.', 'error');
     }
   };
 
@@ -800,7 +802,7 @@ function StockCard({
       setSellSuccess(purchase.id);
       setTimeout(() => setSellSuccess(null), 3000);
     } else {
-      alert('매도 요청 실패. 다시 시도해주세요.');
+      showToast('매도 요청 실패. 다시 시도해주세요.', 'error');
     }
   };
 
@@ -819,7 +821,7 @@ function StockCard({
       setBuySuccess(true);
       setTimeout(() => setBuySuccess(false), 3000);
     } else {
-      alert('매수 요청 실패. 다시 시도해주세요.');
+      showToast('매수 요청 실패. 다시 시도해주세요.', 'error');
     }
   };
 
@@ -1085,6 +1087,7 @@ function SyncModal({
   stocks: StockWithPurchases[];
   onRefresh: () => void;
 }) {
+  const { showToast } = useToast();
   const [syncStatus, setSyncStatus] = useState<'idle' | 'requesting' | 'processing' | 'completed' | 'failed'>('idle');
   const [syncResults, setSyncResults] = useState<SyncResult[]>([]);
   const [syncMessage, setSyncMessage] = useState('');
@@ -1133,7 +1136,7 @@ function SyncModal({
     if (success) {
       setAppliedIds(prev => new Set([...prev, result.id]));
     } else {
-      alert('적용 실패: 해당 종목이 등록되어 있는지 확인하세요.');
+      showToast('적용 실패: 해당 종목이 등록되어 있는지 확인하세요.', 'error');
     }
   };
 

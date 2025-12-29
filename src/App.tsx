@@ -10,6 +10,7 @@ import { Settings } from './pages/Settings';
 import { AuthModal } from './components/AuthModal';
 import { useAuth } from './hooks/useAuth';
 import { BotStatusProvider } from './contexts/BotStatusContext';
+import { ToastProvider } from './components/Toast';
 import { Loader2 } from 'lucide-react';
 
 function App() {
@@ -31,21 +32,23 @@ function App() {
 
   // 로그인 됨
   return (
-    <BotStatusProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="stocks" element={<Stocks />} />
-            <Route path="recommend" element={<StockRecommend />} />
-            <Route path="split-status" element={<SplitStatus />} />
-            <Route path="kpi" element={<KPI />} />
-            <Route path="orders" element={<Orders />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </BotStatusProvider>
+    <ToastProvider>
+      <BotStatusProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="stocks" element={<Stocks />} />
+              <Route path="recommend" element={<StockRecommend />} />
+              <Route path="split-status" element={<SplitStatus />} />
+              <Route path="kpi" element={<KPI />} />
+              <Route path="orders" element={<Orders />} />
+              <Route path="settings" element={<Settings />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </BotStatusProvider>
+    </ToastProvider>
   );
 }
 
