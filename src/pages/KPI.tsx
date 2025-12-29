@@ -99,12 +99,12 @@ function DateRangePicker({
             className="flex-1 md:flex-none bg-gray-700 border border-gray-600 rounded px-2 py-2 text-sm"
           />
         </div>
-        <div className="flex flex-wrap gap-1.5 md:gap-2">
+        <div className="flex gap-1 md:gap-2">
           {presets.map(preset => (
             <button
               key={preset.label}
               onClick={() => handlePreset(preset.days)}
-              className="px-2.5 py-1.5 text-xs md:text-sm bg-gray-700 hover:bg-gray-600 rounded transition"
+              className="flex-1 md:flex-none px-2 md:px-2.5 py-1.5 text-xs md:text-sm bg-gray-700 hover:bg-gray-600 rounded transition"
             >
               {preset.label}
             </button>
