@@ -527,6 +527,9 @@ class SplitBot:
             # 종목 분석 요청 처리 (장 운영과 무관)
             await self.process_analysis_requests()
 
+            # KIS vs Bot 비교 요청 처리 (장 운영과 무관)
+            await self.process_compare_requests()
+
             # 장 운영 시간이 아니면 매수/매도 스킵
             if not is_market_open:
                 continue
@@ -603,6 +606,105 @@ class SplitBot:
             error_msg = f"오류: {str(e)}"
             supabase.update_stock_sync_request(request_id, "failed", error_msg)
             print(f"[Bot] 종목 동기화 실패: {error_msg}")
+
+    async def process_compare_requests(self) -> None:
+        """대기 중인 KIS vs Bot 비교 요청 처리"""
+        try:
+            requests = supabase.get_pending_compare_requests()
+            for req in requests:
+                await self.execute_compare_request(req)
+        except Exception as e:
+            print(f"[Bot] 비교 요청 처리 오류: {e}")
+
+    async def execute_compare_request(self, req: dict) -> None:
+        """KIS vs Bot 비교 요청 실행"""
+        request_id = req.get("id")
+        print(f"[Bot] KIS vs Bot 비교 요청 처리: {request_id}")
+
+        # 처리 중 상태로 변경
+        supabase.update_compare_request(request_id, "processing", "KIS 보유 종목 조회 중...")
+
+        try:
+            # KIS API로 보유 종목 조회
+            kis_holdings = kis_api.get_holdings()
+            print(f"[Bot] KIS 보유 종목: {len(kis_holdings)}개")
+
+            # Bot DB에서 보유 종목 조회
+            bot_holdings = supabase.get_all_bot_holdings()
+            print(f"[Bot] Bot 보유 종목: {len(bot_holdings)}개")
+
+            # 비교 결과 생성
+            results = []
+            all_codes = set()
+
+            # KIS 보유 종목
+            for h in kis_holdings:
+                code = h.get("code", "")
+                all_codes.add(code)
+
+            # Bot 보유 종목
+            for code in bot_holdings.keys():
+                all_codes.add(code)
+
+            # 모든 종목 비교
+            for code in all_codes:
+                kis_qty = 0
+                kis_name = ""
+                bot_qty = 0
+                bot_name = ""
+
+                # KIS 수량
+                for h in kis_holdings:
+                    if h.get("code") == code:
+                        kis_qty = h.get("quantity", 0)
+                        kis_name = h.get("name", "")
+                        break
+
+                # Bot 수량
+                if code in bot_holdings:
+                    bot_qty = bot_holdings[code].get("quantity", 0)
+                    bot_name = bot_holdings[code].get("name", "")
+
+                # 상태 결정
+                diff = kis_qty - bot_qty
+                if kis_qty > 0 and bot_qty == 0:
+                    status = "kis_only"
+                elif kis_qty == 0 and bot_qty > 0:
+                    status = "bot_only"
+                elif kis_qty == bot_qty:
+                    status = "match"
+                else:
+                    status = "mismatch"
+
+                # 이름 결정 (KIS 우선)
+                name = kis_name or bot_name
+
+                results.append({
+                    "stock_code": code,
+                    "stock_name": name,
+                    "kis_quantity": kis_qty,
+                    "bot_quantity": bot_qty,
+                    "quantity_diff": diff,
+                    "status": status,
+                })
+
+            # 결과 저장
+            supabase.save_compare_results(request_id, results)
+
+            # 통계 계산
+            match_count = sum(1 for r in results if r["status"] == "match")
+            mismatch_count = sum(1 for r in results if r["status"] == "mismatch")
+            kis_only_count = sum(1 for r in results if r["status"] == "kis_only")
+            bot_only_count = sum(1 for r in results if r["status"] == "bot_only")
+
+            message = f"비교 완료: 일치 {match_count}, 불일치 {mismatch_count}, KIS만 {kis_only_count}, Bot만 {bot_only_count}"
+            supabase.update_compare_request(request_id, "completed", message)
+            print(f"[Bot] {message}")
+
+        except Exception as e:
+            error_msg = f"오류: {str(e)}"
+            supabase.update_compare_request(request_id, "failed", error_msg)
+            print(f"[Bot] 비교 실패: {error_msg}")
 
     async def process_analysis_requests(self) -> None:
         """대기 중인 종목 분석 요청 처리"""

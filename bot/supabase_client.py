@@ -945,6 +945,122 @@ class SupabaseClient:
             print(f"[Supabase] 분석 결과 저장: {len(records)}건")
         return success
 
+    # ==================== KIS vs Bot 비교 ====================
+
+    def get_pending_compare_requests(self) -> list[dict]:
+        """대기 중인 비교 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "bot_compare_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+                "limit": "1",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_compare_request(self, request_id: str, status: str, message: str = "") -> bool:
+        """비교 요청 상태 업데이트"""
+        if not self.is_configured:
+            return False
+
+        data = {
+            "status": status,
+            "result_message": message,
+        }
+        if status in ["completed", "failed"]:
+            data["completed_at"] = datetime.now().isoformat()
+
+        result = self._request(
+            "PATCH",
+            "bot_compare_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
+        )
+
+        return "error" not in result
+
+    def save_compare_results(self, request_id: str, results: list[dict]) -> bool:
+        """비교 결과 저장"""
+        if not self.is_configured:
+            return False
+
+        # 기존 결과 삭제
+        self._request(
+            "DELETE",
+            "bot_compare_results",
+            params={"compare_request_id": f"eq.{request_id}"},
+        )
+
+        if not results:
+            return True
+
+        # 새 결과 저장
+        records = []
+        for r in results:
+            records.append({
+                "compare_request_id": request_id,
+                "stock_code": r.get("stock_code", ""),
+                "stock_name": r.get("stock_name", ""),
+                "kis_quantity": r.get("kis_quantity", 0),
+                "bot_quantity": r.get("bot_quantity", 0),
+                "quantity_diff": r.get("quantity_diff", 0),
+                "status": r.get("status", "match"),
+            })
+
+        result = self._request("POST", "bot_compare_results", data=records)
+        success = "error" not in result
+        if success:
+            print(f"[Supabase] 비교 결과 저장: {len(records)}건")
+        return success
+
+    def get_all_bot_holdings(self) -> dict[str, dict]:
+        """Bot에서 보유 중인 모든 종목의 수량 조회 (종목코드 -> {name, quantity})"""
+        if not self.is_configured:
+            return {}
+
+        # 활성 종목 목록 조회 (비활성 종목도 포함해서 보유 중인 매수가 있으면 포함)
+        stocks_result = self._request(
+            "GET",
+            "bot_stocks",
+            params={"select": "id,code,name"},
+        )
+
+        if not isinstance(stocks_result, list):
+            return {}
+
+        holdings = {}
+        for stock in stocks_result:
+            stock_id = stock.get("id")
+            code = stock.get("code", "")
+            name = stock.get("name", "")
+
+            # 해당 종목의 보유 중인 매수 조회
+            purchases_result = self._request(
+                "GET",
+                "bot_purchases",
+                params={
+                    "stock_id": f"eq.{stock_id}",
+                    "status": "eq.holding",
+                    "select": "quantity",
+                },
+            )
+
+            if isinstance(purchases_result, list) and purchases_result:
+                total_qty = sum(p.get("quantity", 0) for p in purchases_result)
+                if total_qty > 0:
+                    holdings[code] = {"name": name, "quantity": total_qty}
+
+        return holdings
+
 
 # 싱글톤 인스턴스
 supabase = SupabaseClient()
