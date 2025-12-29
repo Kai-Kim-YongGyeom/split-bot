@@ -252,3 +252,39 @@ export interface DepositSummary {
   totalWithdrawal: number; // 총 출금액
   netDeposit: number;      // 순입금액 (입금 - 출금)
 }
+
+// ==================== KIS 잔고 비교 관련 타입 ====================
+
+// 비교 요청
+export interface CompareRequest {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  result_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+// KIS 보유 종목
+export interface KisHolding {
+  stock_code: string;
+  stock_name: string;
+  quantity: number;
+  avg_price: number;
+  current_price: number;
+  eval_amount: number;
+  profit_loss: number;
+  profit_rate: number;
+}
+
+// 비교 결과
+export interface CompareResult {
+  id: string;
+  compare_request_id: string;
+  stock_code: string;
+  stock_name: string;
+  kis_quantity: number;
+  bot_quantity: number;
+  quantity_diff: number;
+  status: 'match' | 'kis_only' | 'bot_only' | 'mismatch';
+}

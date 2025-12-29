@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStocks } from '../hooks/useStocks';
 import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp, RefreshCw, X } from 'lucide-react';
-import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult } from '../types';
+import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult, CompareResult } from '../types';
 import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';
 import { useToast } from '../components/Toast';
@@ -1413,12 +1413,321 @@ function SyncModal({
   );
 }
 
+// 비교 모달 상수
+const COMPARE_POLL_INTERVAL_MS = 2000;
+const COMPARE_TIMEOUT_MS = 60000;
+
+// KIS vs Bot 비교 모달
+function CompareModal({
+  isOpen,
+  onClose,
+  stocks,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  stocks: StockWithPurchases[];
+}) {
+  const [status, setStatus] = useState<'idle' | 'requesting' | 'processing' | 'completed' | 'failed'>('idle');
+  const [results, setResults] = useState<CompareResult[]>([]);
+  const [message, setMessage] = useState('');
+
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const statusRef = useRef<string>('idle');
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  const cleanup = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      cleanup();
+    }
+    return () => cleanup();
+  }, [isOpen]);
+
+  const handleCompare = async () => {
+    cleanup();
+    setStatus('requesting');
+    setResults([]);
+    setMessage('');
+
+    const request = await api.createCompareRequest();
+    if (!request) {
+      setStatus('failed');
+      setMessage('비교 요청 생성 실패');
+      return;
+    }
+
+    setStatus('processing');
+    setMessage('봇에서 KIS 잔고를 조회하고 있습니다...');
+
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const latestRequest = await api.getLatestCompareRequest();
+        if (latestRequest) {
+          if (latestRequest.status === 'completed') {
+            cleanup();
+            setStatus('completed');
+            setMessage(latestRequest.result_message || '비교 완료');
+            const compareResults = await api.getCompareResults(latestRequest.id);
+            setResults(compareResults);
+          } else if (latestRequest.status === 'failed') {
+            cleanup();
+            setStatus('failed');
+            setMessage(latestRequest.result_message || '비교 실패');
+          }
+        }
+      } catch (err) {
+        console.error('Compare polling error:', err);
+      }
+    }, COMPARE_POLL_INTERVAL_MS);
+
+    timeoutRef.current = setTimeout(() => {
+      cleanup();
+      if (statusRef.current === 'processing') {
+        setStatus('failed');
+        setMessage('타임아웃 - 봇 서버가 응답하지 않습니다.');
+      }
+    }, COMPARE_TIMEOUT_MS);
+  };
+
+  if (!isOpen) return null;
+
+  // 상태별 결과 분류
+  const mismatched = results.filter(r => r.status === 'mismatch');
+  const kisOnly = results.filter(r => r.status === 'kis_only');
+  const botOnly = results.filter(r => r.status === 'bot_only');
+  const matched = results.filter(r => r.status === 'match');
+
+  const getStatusBadge = (resultStatus: CompareResult['status']) => {
+    switch (resultStatus) {
+      case 'match': return 'bg-green-900/50 text-green-400';
+      case 'mismatch': return 'bg-yellow-900/50 text-yellow-400';
+      case 'kis_only': return 'bg-blue-900/50 text-blue-400';
+      case 'bot_only': return 'bg-red-900/50 text-red-400';
+    }
+  };
+
+  const getStatusLabel = (resultStatus: CompareResult['status']) => {
+    switch (resultStatus) {
+      case 'match': return '일치';
+      case 'mismatch': return '수량 불일치';
+      case 'kis_only': return 'KIS만 존재';
+      case 'bot_only': return 'Bot만 존재';
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+      <div className="bg-gray-800 rounded-t-2xl md:rounded-lg p-4 md:p-6 w-full md:max-w-2xl border-t md:border border-gray-700 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg md:text-xl font-bold">KIS 잔고 비교</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {status === 'idle' && (
+          <div className="space-y-4">
+            <p className="text-gray-400 text-sm">
+              증권사(KIS) 계좌의 실제 보유 종목/수량과 봇 DB의 데이터를 비교합니다.
+            </p>
+            <div className="bg-gray-700/50 rounded-lg p-3 text-sm">
+              <p className="text-gray-300 font-medium mb-2">현재 Bot 보유 현황</p>
+              <div className="space-y-1 text-gray-400">
+                {stocks.filter(s => s.purchases.some(p => p.status === 'holding')).map(stock => {
+                  const holdingQty = stock.purchases.filter(p => p.status === 'holding').reduce((sum, p) => sum + p.quantity, 0);
+                  return (
+                    <div key={stock.id} className="flex justify-between">
+                      <span>{stock.name} ({stock.code})</span>
+                      <span className="text-white">{holdingQty.toLocaleString()}주</span>
+                    </div>
+                  );
+                })}
+                {stocks.filter(s => s.purchases.some(p => p.status === 'holding')).length === 0 && (
+                  <p className="text-gray-500">보유 종목 없음</p>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={handleCompare}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-purple-600 rounded-lg hover:bg-purple-500 transition"
+            >
+              <TrendingUp className="w-4 h-4" />
+              비교 시작
+            </button>
+          </div>
+        )}
+
+        {(status === 'requesting' || status === 'processing') && (
+          <div className="flex flex-col items-center justify-center py-8">
+            <Loader2 className="w-8 h-8 animate-spin text-purple-500 mb-4" />
+            <p className="text-gray-400">{message}</p>
+          </div>
+        )}
+
+        {status === 'failed' && (
+          <div className="space-y-4">
+            <div className="bg-red-900/20 border border-red-800 rounded-lg p-4">
+              <p className="text-red-400">{message}</p>
+            </div>
+            <button
+              onClick={() => setStatus('idle')}
+              className="w-full px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
+
+        {status === 'completed' && (
+          <div className="space-y-4">
+            {/* 요약 */}
+            <div className="grid grid-cols-4 gap-2 text-center">
+              <div className="bg-green-900/20 rounded-lg p-2">
+                <p className="text-green-400 text-lg font-bold">{matched.length}</p>
+                <p className="text-gray-400 text-xs">일치</p>
+              </div>
+              <div className="bg-yellow-900/20 rounded-lg p-2">
+                <p className="text-yellow-400 text-lg font-bold">{mismatched.length}</p>
+                <p className="text-gray-400 text-xs">불일치</p>
+              </div>
+              <div className="bg-blue-900/20 rounded-lg p-2">
+                <p className="text-blue-400 text-lg font-bold">{kisOnly.length}</p>
+                <p className="text-gray-400 text-xs">KIS만</p>
+              </div>
+              <div className="bg-red-900/20 rounded-lg p-2">
+                <p className="text-red-400 text-lg font-bold">{botOnly.length}</p>
+                <p className="text-gray-400 text-xs">Bot만</p>
+              </div>
+            </div>
+
+            {/* 불일치/문제 있는 항목 */}
+            {(mismatched.length > 0 || kisOnly.length > 0 || botOnly.length > 0) && (
+              <div className="space-y-2">
+                <h3 className="font-bold text-sm text-yellow-400">확인 필요 항목</h3>
+                {[...mismatched, ...kisOnly, ...botOnly].map((result, idx) => (
+                  <div key={idx} className={`p-3 rounded text-sm ${getStatusBadge(result.status).replace('text-', 'border-').replace('/50', '/30')} border bg-gray-900/50`}>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="font-bold">{result.stock_name}</span>
+                        <span className="text-gray-400 ml-2">{result.stock_code}</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-xs ${getStatusBadge(result.status)}`}>
+                        {getStatusLabel(result.status)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between mt-2 text-xs">
+                      <div>
+                        <span className="text-gray-400">KIS:</span>
+                        <span className="text-blue-400 ml-1">{result.kis_quantity.toLocaleString()}주</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">Bot:</span>
+                        <span className="text-purple-400 ml-1">{result.bot_quantity.toLocaleString()}주</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-400">차이:</span>
+                        <span className={`ml-1 ${result.quantity_diff > 0 ? 'text-green-400' : result.quantity_diff < 0 ? 'text-red-400' : 'text-gray-400'}`}>
+                          {result.quantity_diff > 0 ? '+' : ''}{result.quantity_diff.toLocaleString()}주
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 일치 항목 */}
+            {matched.length > 0 && (
+              <div className="space-y-2">
+                <h3 className="font-bold text-sm text-green-400">일치 항목</h3>
+                <div className="bg-gray-700/30 rounded-lg p-3 space-y-1 text-sm">
+                  {matched.map((result, idx) => (
+                    <div key={idx} className="flex justify-between text-gray-300">
+                      <span>{result.stock_name} ({result.stock_code})</span>
+                      <span>{result.kis_quantity.toLocaleString()}주</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {results.length === 0 && (
+              <div className="text-center text-gray-500 py-4">
+                비교할 데이터가 없습니다.
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setStatus('idle')}
+                className="flex-1 px-4 py-2 bg-gray-700 rounded-lg hover:bg-gray-600"
+              >
+                다시 비교
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 px-4 py-2 bg-purple-600 rounded-lg hover:bg-purple-500"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 필터 타입
+type StatusFilter = 'all' | 'active' | 'inactive';
+type HoldingFilter = 'all' | 'holding' | 'empty';
+
 export function Stocks() {
   const { stocks, loading, error, addStock, updateStock, removeStock, toggleActive, refetch } = useStocks();
   const [showModal, setShowModal] = useState(false);
   const [editingStock, setEditingStock] = useState<StockWithPurchases | undefined>();
   const [purchaseModal, setPurchaseModal] = useState<{ stockId: string; stockName: string } | null>(null);
   const [showSyncModal, setShowSyncModal] = useState(false);
+  const [showCompareModal, setShowCompareModal] = useState(false);
+
+  // 검색 및 필터 상태
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>('all');
+
+  // 필터링된 종목 목록
+  const filteredStocks = stocks.filter(stock => {
+    // 검색어 필터
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      if (!stock.name.toLowerCase().includes(query) && !stock.code.toLowerCase().includes(query)) {
+        return false;
+      }
+    }
+    // 활성 상태 필터
+    if (statusFilter === 'active' && !stock.is_active) return false;
+    if (statusFilter === 'inactive' && stock.is_active) return false;
+    // 보유 상태 필터
+    const hasHolding = stock.purchases.some(p => p.status === 'holding');
+    if (holdingFilter === 'holding' && !hasHolding) return false;
+    if (holdingFilter === 'empty' && hasHolding) return false;
+
+    return true;
+  });
 
   const handleSubmit = async (data: StockFormData) => {
     if (editingStock) {
@@ -1466,6 +1775,14 @@ export function Stocks() {
         <h1 className="text-xl md:text-2xl font-bold">종목 관리</h1>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setShowCompareModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-purple-700 rounded-lg hover:bg-purple-600 transition text-sm"
+            title="KIS 잔고 비교"
+          >
+            <TrendingUp className="w-4 h-4" />
+            <span className="hidden md:inline">비교</span>
+          </button>
+          <button
             onClick={() => setShowSyncModal(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition text-sm"
             title="계좌 동기화"
@@ -1486,6 +1803,93 @@ export function Stocks() {
         </div>
       </div>
 
+      {/* 검색 및 필터 */}
+      <div className="space-y-3">
+        {/* 검색 */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="종목명 또는 코드 검색..."
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 pl-10 text-sm focus:border-blue-500 focus:outline-none"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-700 rounded"
+            >
+              <X className="w-4 h-4 text-gray-400" />
+            </button>
+          )}
+        </div>
+
+        {/* 필터 버튼 */}
+        <div className="flex flex-wrap gap-2">
+          {/* 상태 필터 */}
+          <div className="flex rounded-lg overflow-hidden border border-gray-700">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 text-xs font-medium transition ${
+                statusFilter === 'all' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              전체
+            </button>
+            <button
+              onClick={() => setStatusFilter('active')}
+              className={`px-3 py-1.5 text-xs font-medium transition ${
+                statusFilter === 'active' ? 'bg-green-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              활성
+            </button>
+            <button
+              onClick={() => setStatusFilter('inactive')}
+              className={`px-3 py-1.5 text-xs font-medium transition ${
+                statusFilter === 'inactive' ? 'bg-gray-500 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              비활성
+            </button>
+          </div>
+
+          {/* 보유 필터 */}
+          <div className="flex rounded-lg overflow-hidden border border-gray-700">
+            <button
+              onClick={() => setHoldingFilter('all')}
+              className={`px-3 py-1.5 text-xs font-medium transition ${
+                holdingFilter === 'all' ? 'bg-gray-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              전체
+            </button>
+            <button
+              onClick={() => setHoldingFilter('holding')}
+              className={`px-3 py-1.5 text-xs font-medium transition ${
+                holdingFilter === 'holding' ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              보유중
+            </button>
+            <button
+              onClick={() => setHoldingFilter('empty')}
+              className={`px-3 py-1.5 text-xs font-medium transition ${
+                holdingFilter === 'empty' ? 'bg-orange-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              미보유
+            </button>
+          </div>
+
+          {/* 필터 결과 */}
+          <span className="text-xs text-gray-500 self-center ml-auto">
+            {filteredStocks.length}/{stocks.length}개
+          </span>
+        </div>
+      </div>
+
       {stocks.length === 0 ? (
         <div className="bg-gray-800 rounded-lg p-6 md:p-8 text-center border border-gray-700">
           <p className="text-gray-400">등록된 종목이 없습니다.</p>
@@ -1496,9 +1900,23 @@ export function Stocks() {
             + 첫 번째 종목 추가하기
           </button>
         </div>
+      ) : filteredStocks.length === 0 ? (
+        <div className="bg-gray-800 rounded-lg p-6 md:p-8 text-center border border-gray-700">
+          <p className="text-gray-400">검색 결과가 없습니다.</p>
+          <button
+            onClick={() => {
+              setSearchQuery('');
+              setStatusFilter('all');
+              setHoldingFilter('all');
+            }}
+            className="mt-4 text-blue-400 hover:text-blue-300"
+          >
+            필터 초기화
+          </button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {stocks.map(stock => (
+          {filteredStocks.map(stock => (
             <StockCard
               key={stock.id}
               stock={stock}
@@ -1539,6 +1957,12 @@ export function Stocks() {
         onClose={() => setShowSyncModal(false)}
         stocks={stocks}
         onRefresh={refetch}
+      />
+
+      <CompareModal
+        isOpen={showCompareModal}
+        onClose={() => setShowCompareModal(false)}
+        stocks={stocks}
       />
     </div>
   );

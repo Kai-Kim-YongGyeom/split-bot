@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm, DepositHistory, DepositFormData, DepositSummary } from '../types';
+import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm, DepositHistory, DepositFormData, DepositSummary, CompareRequest, CompareResult } from '../types';
 import { encrypt, decrypt } from '../utils/crypto';
 
 // ==================== 유저 ID 헬퍼 ====================
@@ -982,4 +982,108 @@ export async function deleteDeposit(id: string): Promise<boolean> {
     return false;
   }
   return true;
+}
+
+// ==================== KIS 잔고 비교 (bot_compare_requests) ====================
+
+/*
+Supabase SQL:
+-- 비교 요청 테이블
+CREATE TABLE bot_compare_requests (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+  result_message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  completed_at TIMESTAMP WITH TIME ZONE
+);
+
+-- 비교 결과 테이블
+CREATE TABLE bot_compare_results (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  compare_request_id UUID NOT NULL REFERENCES bot_compare_requests(id) ON DELETE CASCADE,
+  stock_code TEXT NOT NULL,
+  stock_name TEXT NOT NULL,
+  kis_quantity INTEGER NOT NULL DEFAULT 0,
+  bot_quantity INTEGER NOT NULL DEFAULT 0,
+  quantity_diff INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL CHECK (status IN ('match', 'kis_only', 'bot_only', 'mismatch')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 인덱스
+CREATE INDEX idx_compare_requests_user_id ON bot_compare_requests(user_id);
+CREATE INDEX idx_compare_results_request_id ON bot_compare_results(compare_request_id);
+
+-- RLS 정책
+ALTER TABLE bot_compare_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bot_compare_results ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can manage own compare requests"
+  ON bot_compare_requests FOR ALL
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can view own compare results"
+  ON bot_compare_results FOR SELECT
+  USING (
+    compare_request_id IN (
+      SELECT id FROM bot_compare_requests WHERE user_id = auth.uid()
+    )
+  );
+*/
+
+export async function createCompareRequest(): Promise<CompareRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('bot_compare_requests')
+    .insert([{
+      user_id: userId,
+      status: 'pending',
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating compare request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getLatestCompareRequest(): Promise<CompareRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('bot_compare_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching compare request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getCompareResults(compareRequestId: string): Promise<CompareResult[]> {
+  const { data, error } = await supabase
+    .from('bot_compare_results')
+    .select('*')
+    .eq('compare_request_id', compareRequestId)
+    .order('status', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching compare results:', error);
+    return [];
+  }
+  return data || [];
 }
