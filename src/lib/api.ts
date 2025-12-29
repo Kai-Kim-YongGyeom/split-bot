@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm } from '../types';
+import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm, DepositHistory, DepositFormData, DepositSummary } from '../types';
 import { encrypt, decrypt } from '../utils/crypto';
 
 // ==================== 유저 ID 헬퍼 ====================
@@ -853,4 +853,133 @@ export async function getAnalysisHistory(): Promise<StockAnalysisRequest[]> {
     return [];
   }
   return data || [];
+}
+
+// ==================== 입출금 내역 (deposit_history) ====================
+
+/*
+Supabase SQL:
+
+CREATE TABLE deposit_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  type TEXT NOT NULL CHECK (type IN ('deposit', 'withdrawal')),
+  amount INTEGER NOT NULL CHECK (amount > 0),
+  date DATE NOT NULL,
+  memo TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_deposit_history_user_id ON deposit_history(user_id);
+CREATE INDEX idx_deposit_history_date ON deposit_history(date);
+
+ALTER TABLE deposit_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own deposit history"
+  ON deposit_history FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own deposit history"
+  ON deposit_history FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own deposit history"
+  ON deposit_history FOR UPDATE
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own deposit history"
+  ON deposit_history FOR DELETE
+  USING (auth.uid() = user_id);
+*/
+
+export async function getDepositHistory(): Promise<DepositHistory[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from('deposit_history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('date', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching deposit history:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function getDepositSummary(): Promise<DepositSummary> {
+  const history = await getDepositHistory();
+
+  const totalDeposit = history
+    .filter(h => h.type === 'deposit')
+    .reduce((sum, h) => sum + h.amount, 0);
+
+  const totalWithdrawal = history
+    .filter(h => h.type === 'withdrawal')
+    .reduce((sum, h) => sum + h.amount, 0);
+
+  return {
+    totalDeposit,
+    totalWithdrawal,
+    netDeposit: totalDeposit - totalWithdrawal,
+  };
+}
+
+export async function createDeposit(data: DepositFormData): Promise<DepositHistory | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
+  const { data: result, error } = await supabase
+    .from('deposit_history')
+    .insert([{
+      user_id: userId,
+      type: data.type,
+      amount: data.amount,
+      date: data.date,
+      memo: data.memo || null,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating deposit:', error);
+    return null;
+  }
+  return result;
+}
+
+export async function updateDeposit(id: string, data: Partial<DepositFormData>): Promise<boolean> {
+  const { error } = await supabase
+    .from('deposit_history')
+    .update({
+      ...data,
+    })
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error updating deposit:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteDeposit(id: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('deposit_history')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('Error deleting deposit:', error);
+    return false;
+  }
+  return true;
 }

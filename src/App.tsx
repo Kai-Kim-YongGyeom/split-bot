@@ -5,6 +5,7 @@ import { Stocks } from './pages/Stocks';
 import { StockRecommend } from './pages/StockRecommend';
 import { SplitStatus } from './pages/SplitStatus';
 import { KPI } from './pages/KPI';
+import { Deposits } from './pages/Deposits';
 import { Orders } from './pages/Orders';
 import { Settings } from './pages/Settings';
 import { AuthModal } from './components/AuthModal';
@@ -42,6 +43,7 @@ function App() {
               <Route path="recommend" element={<StockRecommend />} />
               <Route path="split-status" element={<SplitStatus />} />
               <Route path="kpi" element={<KPI />} />
+              <Route path="deposits" element={<Deposits />} />
               <Route path="orders" element={<Orders />} />
               <Route path="settings" element={<Settings />} />
             </Route>

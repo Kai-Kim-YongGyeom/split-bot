@@ -1,5 +1,6 @@
 import { useStocks } from '../hooks/useStocks';
-import { TrendingDown, Activity, Package, DollarSign, Target, Server } from 'lucide-react';
+import { useDepositHistory } from '../hooks/useDepositHistory';
+import { TrendingDown, Activity, Package, DollarSign, Target, Server, TrendingUp } from 'lucide-react';
 import type { StockWithPurchases } from '../types';
 import { useBotStatus } from '../contexts/BotStatusContext';
 
@@ -165,6 +166,7 @@ function StockCard({ stock }: { stock: StockWithPurchases }) {
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
+  const { summary: depositSummary } = useDepositHistory();
   const { botRunning, serverAlive, availableCash, availableAmount, d2Deposit } = useBotStatus();
 
   if (loading) {
@@ -217,24 +219,62 @@ export function Dashboard() {
     ? (totalRealizedProfit / totalSoldCost) * 100
     : 0;
 
+  // 총 자산 계산
+  const totalAsset = (availableCash || 0) + totalEvaluation;
+
+  // 투자 수익률 계산 (순입금액 대비)
+  const netDeposit = depositSummary.netDeposit;
+  const investmentProfit = netDeposit > 0 ? totalAsset - netDeposit : 0;
+  const investmentReturnRate = netDeposit > 0 ? (investmentProfit / netDeposit) * 100 : 0;
+
   return (
     <div className="space-y-4 md:space-y-6">
       {/* 총 자산 카드 (강조) */}
       <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 rounded-lg p-3 md:p-4 border border-blue-700">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-gray-400 text-xs md:text-sm">총 자산</p>
-            <p className="text-xl md:text-2xl font-bold text-white">
-              {(availableCash !== null ? availableCash : 0) + totalEvaluation > 0
-                ? `${((availableCash || 0) + totalEvaluation).toLocaleString()}원`
-                : '-'}
-            </p>
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
+          <div className="flex justify-between md:block">
+            <div>
+              <p className="text-gray-400 text-xs md:text-sm">총 자산</p>
+              <p className="text-xl md:text-2xl font-bold text-white">
+                {totalAsset > 0 ? `${totalAsset.toLocaleString()}원` : '-'}
+              </p>
+            </div>
+            <div className="text-right md:hidden">
+              <p className="text-gray-400 text-xs">현금 + 평가금액</p>
+              <p className="text-gray-300 text-sm">
+                {availableCash !== null ? availableCash.toLocaleString() : '-'} + {totalEvaluation.toLocaleString()}
+              </p>
+            </div>
           </div>
-          <div className="text-right">
+
+          {/* 투자 수익률 (순입금액 대비) */}
+          {netDeposit > 0 && (
+            <div className={`flex items-center gap-3 p-2 rounded-lg ${
+              investmentProfit >= 0 ? 'bg-red-900/30' : 'bg-blue-900/30'
+            }`}>
+              <TrendingUp className={`w-5 h-5 ${investmentProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`} />
+              <div>
+                <p className="text-gray-400 text-xs">투자수익률</p>
+                <p className={`text-lg font-bold ${investmentProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                  {investmentProfit >= 0 ? '+' : ''}{investmentReturnRate.toFixed(2)}%
+                  <span className="text-sm ml-1">
+                    ({investmentProfit >= 0 ? '+' : ''}{investmentProfit.toLocaleString()}원)
+                  </span>
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="hidden md:block text-right">
             <p className="text-gray-400 text-xs">현금 + 평가금액</p>
             <p className="text-gray-300 text-sm">
               {availableCash !== null ? availableCash.toLocaleString() : '-'} + {totalEvaluation.toLocaleString()}
             </p>
+            {netDeposit > 0 && (
+              <p className="text-gray-400 text-xs mt-1">
+                순입금: {netDeposit.toLocaleString()}원
+              </p>
+            )}
           </div>
         </div>
       </div>

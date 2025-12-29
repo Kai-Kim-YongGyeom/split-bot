@@ -10,6 +10,7 @@ const navItems = [
   { path: '/recommend', label: '종목 추천', emoji: '🔍' },
   { path: '/split-status', label: 'Split 현황', emoji: '📉' },
   { path: '/kpi', label: 'KPI', emoji: '📈' },
+  { path: '/deposits', label: '입출금', emoji: '💰' },
   { path: '/orders', label: '주문내역', emoji: '🛒' },
   { path: '/settings', label: '설정', emoji: '⚙️' },
 ];

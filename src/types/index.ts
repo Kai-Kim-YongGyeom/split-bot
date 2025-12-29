@@ -221,3 +221,34 @@ export interface AnalysisRequestForm {
   min_price?: number;  // 최소 현재가 (원)
   max_price?: number;  // 최대 현재가 (원)
 }
+
+// ==================== 입출금 관련 타입 ====================
+
+// 입출금 유형
+export type DepositType = 'deposit' | 'withdrawal';
+
+// 입출금 기록
+export interface DepositHistory {
+  id: string;
+  user_id: string;
+  type: DepositType;
+  amount: number;
+  date: string;
+  memo?: string;
+  created_at: string;
+}
+
+// 입출금 폼
+export interface DepositFormData {
+  type: DepositType;
+  amount: number;
+  date: string;
+  memo?: string;
+}
+
+// 입출금 요약
+export interface DepositSummary {
+  totalDeposit: number;    // 총 입금액
+  totalWithdrawal: number; // 총 출금액
+  netDeposit: number;      // 순입금액 (입금 - 출금)
+}
