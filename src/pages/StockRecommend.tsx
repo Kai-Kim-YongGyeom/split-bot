@@ -39,7 +39,7 @@ function ScoreBreakdown({ breakdown }: { breakdown: Record<string, number> }) {
   return (
     <div className="pt-3 border-t border-gray-700">
       <p className="text-gray-400 text-xs mb-2">점수 상세</p>
-      <div className="grid grid-cols-4 gap-2 text-xs">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
         <div className="text-center">
           <p className="text-gray-500">변동성</p>
           <p className="font-bold">{breakdown.volatility ?? 0}/25</p>
@@ -134,7 +134,7 @@ function AnalysisResultCard({
         </div>
 
         {/* 주요 지표 */}
-        <div className="grid grid-cols-4 gap-2 text-xs mb-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
           <div className="bg-gray-700/30 rounded p-2 text-center">
             <p className="text-gray-400">변동성</p>
             <p className="font-bold">{result.volatility_score.toFixed(1)}%</p>

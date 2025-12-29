@@ -247,34 +247,23 @@ export function Deposits() {
             입출금 내역이 없습니다.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-700/50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">날짜</th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">유형</th>
-                  <th className="px-4 py-3 text-right text-sm text-gray-400">금액</th>
-                  <th className="px-4 py-3 text-left text-sm text-gray-400">메모</th>
-                  <th className="px-4 py-3 text-center text-sm text-gray-400">관리</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map(item => (
-                  <tr key={item.id} className="border-t border-gray-700 hover:bg-gray-700/30">
-                    {editingId === item.id ? (
-                      <td colSpan={5} className="p-2">
-                        <DepositForm
-                          onSubmit={handleUpdate}
-                          onCancel={() => setEditingId(null)}
-                          initialData={item}
-                        />
-                      </td>
-                    ) : (
-                      <>
-                        <td className="px-4 py-3 text-sm">
-                          {formatDate(item.date)}
-                        </td>
-                        <td className="px-4 py-3">
+          <>
+            {/* 모바일 카드 뷰 */}
+            <div className="md:hidden divide-y divide-gray-700">
+              {history.map(item => (
+                <div key={item.id}>
+                  {editingId === item.id ? (
+                    <div className="p-3">
+                      <DepositForm
+                        onSubmit={handleUpdate}
+                        onCancel={() => setEditingId(null)}
+                        initialData={item}
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-3">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-2">
                           <span
                             className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
                               item.type === 'deposit'
@@ -294,62 +283,164 @@ export function Deposits() {
                               </>
                             )}
                           </span>
-                        </td>
-                        <td
-                          className={`px-4 py-3 text-right font-medium ${
+                          <span className="text-sm text-gray-400">{formatDate(item.date)}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setEditingId(item.id)}
+                            className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          {deletingId === item.id ? (
+                            <>
+                              <button
+                                onClick={() => handleDelete(item.id)}
+                                className="p-1.5 text-red-400 hover:bg-red-900/50 rounded"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setDeletingId(null)}
+                                className="p-1.5 text-gray-400 hover:bg-gray-700 rounded"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => setDeletingId(item.id)}
+                              className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p
+                          className={`text-lg font-bold ${
                             item.type === 'deposit' ? 'text-green-400' : 'text-red-400'
                           }`}
                         >
                           {item.type === 'deposit' ? '+' : '-'}
                           {item.amount.toLocaleString()}원
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-400">
-                          {item.memo || '-'}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => setEditingId(item.id)}
-                              className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded"
-                              title="수정"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            {deletingId === item.id ? (
-                              <div className="flex items-center gap-1">
-                                <button
-                                  onClick={() => handleDelete(item.id)}
-                                  className="p-1.5 text-red-400 hover:bg-red-900/50 rounded"
-                                  title="삭제 확인"
-                                >
-                                  <Check className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => setDeletingId(null)}
-                                  className="p-1.5 text-gray-400 hover:bg-gray-700 rounded"
-                                  title="취소"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => setDeletingId(item.id)}
-                                className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded"
-                                title="삭제"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </>
-                    )}
+                        </p>
+                        {item.memo && (
+                          <p className="text-sm text-gray-400 truncate max-w-[150px]">{item.memo}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* 데스크탑 테이블 뷰 */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-700/50">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-sm text-gray-400">날짜</th>
+                    <th className="px-4 py-3 text-left text-sm text-gray-400">유형</th>
+                    <th className="px-4 py-3 text-right text-sm text-gray-400">금액</th>
+                    <th className="px-4 py-3 text-left text-sm text-gray-400">메모</th>
+                    <th className="px-4 py-3 text-center text-sm text-gray-400">관리</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {history.map(item => (
+                    <tr key={item.id} className="border-t border-gray-700 hover:bg-gray-700/30">
+                      {editingId === item.id ? (
+                        <td colSpan={5} className="p-2">
+                          <DepositForm
+                            onSubmit={handleUpdate}
+                            onCancel={() => setEditingId(null)}
+                            initialData={item}
+                          />
+                        </td>
+                      ) : (
+                        <>
+                          <td className="px-4 py-3 text-sm">
+                            {formatDate(item.date)}
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
+                                item.type === 'deposit'
+                                  ? 'bg-green-900/50 text-green-400'
+                                  : 'bg-red-900/50 text-red-400'
+                              }`}
+                            >
+                              {item.type === 'deposit' ? (
+                                <>
+                                  <ArrowDownCircle className="w-3 h-3" />
+                                  입금
+                                </>
+                              ) : (
+                                <>
+                                  <ArrowUpCircle className="w-3 h-3" />
+                                  출금
+                                </>
+                              )}
+                            </span>
+                          </td>
+                          <td
+                            className={`px-4 py-3 text-right font-medium ${
+                              item.type === 'deposit' ? 'text-green-400' : 'text-red-400'
+                            }`}
+                          >
+                            {item.type === 'deposit' ? '+' : '-'}
+                            {item.amount.toLocaleString()}원
+                          </td>
+                          <td className="px-4 py-3 text-sm text-gray-400">
+                            {item.memo || '-'}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-center gap-2">
+                              <button
+                                onClick={() => setEditingId(item.id)}
+                                className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-gray-700 rounded"
+                                title="수정"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              {deletingId === item.id ? (
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    onClick={() => handleDelete(item.id)}
+                                    className="p-1.5 text-red-400 hover:bg-red-900/50 rounded"
+                                    title="삭제 확인"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => setDeletingId(null)}
+                                    className="p-1.5 text-gray-400 hover:bg-gray-700 rounded"
+                                    title="취소"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setDeletingId(item.id)}
+                                  className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700 rounded"
+                                  title="삭제"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
 
