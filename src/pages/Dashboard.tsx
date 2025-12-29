@@ -249,12 +249,14 @@ export function Dashboard() {
 
           {/* 투자 수익률 (순입금액 대비) */}
           {netDeposit > 0 && (
-            <div className={`flex items-center gap-3 p-2 rounded-lg ${
+            <div className={`flex items-center gap-3 p-2 md:p-3 rounded-lg ${
               investmentProfit >= 0 ? 'bg-red-900/30' : 'bg-blue-900/30'
             }`}>
               <TrendingUp className={`w-5 h-5 ${investmentProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`} />
               <div>
-                <p className="text-gray-400 text-xs">투자수익률</p>
+                <p className="text-gray-400 text-xs">
+                  투자수익률 <span className="text-gray-500">(순입금 {netDeposit.toLocaleString()}원)</span>
+                </p>
                 <p className={`text-lg font-bold ${investmentProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
                   {investmentProfit >= 0 ? '+' : ''}{investmentReturnRate.toFixed(2)}%
                   <span className="text-sm ml-1">
@@ -270,11 +272,6 @@ export function Dashboard() {
             <p className="text-gray-300 text-sm">
               {availableCash !== null ? availableCash.toLocaleString() : '-'} + {totalEvaluation.toLocaleString()}
             </p>
-            {netDeposit > 0 && (
-              <p className="text-gray-400 text-xs mt-1">
-                순입금: {netDeposit.toLocaleString()}원
-              </p>
-            )}
           </div>
         </div>
       </div>
