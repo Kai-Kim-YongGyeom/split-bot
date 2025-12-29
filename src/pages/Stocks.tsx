@@ -55,7 +55,7 @@ function StockModal({
       max_rounds: botConfig?.default_max_rounds || 5,
       split_rates: botConfig?.default_split_rates ? [...botConfig.default_split_rates] : [...DEFAULT_SPLIT_RATES],
       target_rates: botConfig?.default_target_rates ? [...botConfig.default_target_rates] : [...DEFAULT_TARGET_RATES],
-      stop_loss_rate: botConfig?.default_stop_loss_rate || 30,
+      stop_loss_rate: botConfig?.default_stop_loss_rate ?? 30,
     };
   };
 
@@ -259,8 +259,8 @@ function StockModal({
               <label className="block text-sm text-gray-400 mb-1">손절 비율 (%)</label>
               <input
                 type="number"
-                value={formData.stop_loss_rate || ''}
-                onChange={e => setFormData({ ...formData, stop_loss_rate: Number(e.target.value) || 0 })}
+                value={formData.stop_loss_rate ?? ''}
+                onChange={e => setFormData({ ...formData, stop_loss_rate: Number(e.target.value) })}
                 onFocus={handleNumberFocus}
                 className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
                 placeholder="0 (비활성화)"

@@ -410,8 +410,8 @@ export function Settings() {
             <label className="block text-sm text-gray-400 mb-1">손절 비율 (%)</label>
             <input
               type="number"
-              value={config?.default_stop_loss_rate || ''}
-              onChange={e => setConfig(config ? { ...config, default_stop_loss_rate: Number(e.target.value) || 0 } : null)}
+              value={config?.default_stop_loss_rate ?? ''}
+              onChange={e => setConfig(config ? { ...config, default_stop_loss_rate: Number(e.target.value) } : null)}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
               placeholder="30"
             />
