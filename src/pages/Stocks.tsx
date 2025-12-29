@@ -1457,6 +1457,25 @@ function CompareModal({
     return () => cleanup();
   }, [isOpen]);
 
+  // 모달 열릴 때 마지막 비교 결과 불러오기
+  useEffect(() => {
+    if (isOpen && status === 'idle') {
+      (async () => {
+        try {
+          const latestRequest = await api.getLatestCompareRequest();
+          if (latestRequest && latestRequest.status === 'completed') {
+            const compareResults = await api.getCompareResults(latestRequest.id);
+            setResults(compareResults);
+            setMessage(latestRequest.result_message || '이전 비교 결과');
+            setStatus('completed');
+          }
+        } catch (err) {
+          console.error('Failed to load previous compare results:', err);
+        }
+      })();
+    }
+  }, [isOpen]);
+
   const handleCompare = async () => {
     cleanup();
     setStatus('requesting');
