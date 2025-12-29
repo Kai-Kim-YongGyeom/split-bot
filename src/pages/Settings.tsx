@@ -1,7 +1,36 @@
 import { useState, useEffect, useRef } from 'react';
-import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle, Power, Loader2, Eye, EyeOff, Database, RefreshCw } from 'lucide-react';
+import { Save, Key, MessageSquare, Server, AlertCircle, CheckCircle, Power, Loader2, Eye, EyeOff, Database, RefreshCw, Settings2 } from 'lucide-react';
 import { getOrCreateBotConfig, updateBotConfig, createStockSyncRequest, getLatestStockSyncRequest } from '../lib/api';
-import type { BotConfig } from '../types';
+import type { BotConfig, StockDefaultSettings } from '../types';
+
+// 기본 설정 기본값
+const DEFAULT_STOCK_SETTINGS: StockDefaultSettings = {
+  buy_mode: 'amount',
+  buy_amount: 100000,
+  buy_quantity: 10,
+  max_rounds: 5,
+  split_rates: [-3, -3, -3, -3, -3, -3, -3, -3, -3],
+  target_rates: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+  stop_loss_rate: 30,
+};
+
+// 로컬 스토리지에서 기본 설정 불러오기
+const loadStockDefaults = (): StockDefaultSettings => {
+  try {
+    const saved = localStorage.getItem('stock_default_settings');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch {
+    // 무시
+  }
+  return DEFAULT_STOCK_SETTINGS;
+};
+
+// 로컬 스토리지에 기본 설정 저장
+const saveStockDefaults = (settings: StockDefaultSettings) => {
+  localStorage.setItem('stock_default_settings', JSON.stringify(settings));
+};
 
 export function Settings() {
   const [loading, setLoading] = useState(true);
@@ -11,6 +40,12 @@ export function Settings() {
   const [config, setConfig] = useState<BotConfig | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [showToken, setShowToken] = useState(false);
+
+  // 종목 기본 설정
+  const [stockDefaults, setStockDefaults] = useState<StockDefaultSettings>(loadStockDefaults());
+  const [stockDefaultsSaved, setStockDefaultsSaved] = useState(false);
+  const [bulkSplitRate, setBulkSplitRate] = useState(-3);
+  const [bulkTargetRate, setBulkTargetRate] = useState(3);
 
   // 종목 동기화 상태
   const [stockSyncStatus, setStockSyncStatus] = useState<'idle' | 'pending' | 'processing' | 'completed' | 'failed'>('idle');
@@ -325,24 +360,205 @@ export function Settings() {
         </div>
       </div>
 
-      {/* 매매 설정 */}
+      {/* 종목 추가 기본값 설정 */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 md:p-6">
         <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
-          <Server className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
-          <h2 className="text-base md:text-lg font-bold">매매 설정</h2>
+          <Settings2 className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+          <h2 className="text-base md:text-lg font-bold">종목 추가 기본값</h2>
         </div>
+        <p className="text-gray-400 text-sm mb-4">
+          새 종목 추가 시 자동으로 채워지는 기본값입니다.
+        </p>
+
+        {stockDefaultsSaved && (
+          <div className="bg-green-900/20 border border-green-800 rounded-lg p-3 mb-4 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-green-400" />
+            <p className="text-green-400 text-sm">기본값이 저장되었습니다.</p>
+          </div>
+        )}
 
         <div className="space-y-4">
+          {/* 매수 방식 */}
           <div>
-            <label className="block text-sm text-gray-400 mb-1">기본 매수 금액</label>
+            <label className="block text-sm text-gray-400 mb-2">매수 방식</label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStockDefaults({ ...stockDefaults, buy_mode: 'amount' })}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition ${
+                  stockDefaults.buy_mode === 'amount'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+              >
+                금액 기준
+              </button>
+              <button
+                type="button"
+                onClick={() => setStockDefaults({ ...stockDefaults, buy_mode: 'quantity' })}
+                className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition ${
+                  stockDefaults.buy_mode === 'quantity'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+              >
+                수량 기준
+              </button>
+            </div>
+          </div>
+
+          {/* 매수 금액/수량 */}
+          {stockDefaults.buy_mode === 'amount' ? (
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">1회 매수 금액 (원)</label>
+              <input
+                type="number"
+                value={stockDefaults.buy_amount || ''}
+                onChange={e => setStockDefaults({ ...stockDefaults, buy_amount: Number(e.target.value) || 0 })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                placeholder="100000"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">1회 매수 수량 (주)</label>
+              <input
+                type="number"
+                value={stockDefaults.buy_quantity || ''}
+                onChange={e => setStockDefaults({ ...stockDefaults, buy_quantity: Number(e.target.value) || 0 })}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+                placeholder="10"
+              />
+            </div>
+          )}
+
+          {/* 손절 비율 */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">손절 비율 (%)</label>
             <input
               type="number"
-              value={config?.default_buy_amount || 100000}
-              onChange={e => setConfig(config ? { ...config, default_buy_amount: Number(e.target.value) } : null)}
+              value={stockDefaults.stop_loss_rate || ''}
+              onChange={e => setStockDefaults({ ...stockDefaults, stop_loss_rate: Number(e.target.value) || 0 })}
               className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2"
+              placeholder="30"
             />
-            <p className="text-xs text-gray-500 mt-1">종목별 설정이 없을 때 사용되는 기본값</p>
           </div>
+
+          {/* 최대 차수 */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">최대 차수</label>
+            <div className="flex flex-wrap gap-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(round => (
+                <button
+                  key={round}
+                  type="button"
+                  onClick={() => setStockDefaults({ ...stockDefaults, max_rounds: round })}
+                  className={`w-9 h-9 rounded-lg text-sm font-medium transition ${
+                    stockDefaults.max_rounds >= round
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  {round}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 물타기 비율 */}
+          {stockDefaults.max_rounds >= 2 && (
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">물타기 비율 (%) - 2~{stockDefaults.max_rounds}차</label>
+              <div className="flex gap-2 mb-2">
+                <input
+                  type="number"
+                  value={bulkSplitRate}
+                  onChange={e => setBulkSplitRate(Number(e.target.value))}
+                  className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newRates = stockDefaults.split_rates.map(() => bulkSplitRate);
+                    setStockDefaults({ ...stockDefaults, split_rates: newRates });
+                  }}
+                  className="px-3 py-1 bg-gray-600 rounded text-sm hover:bg-gray-500"
+                >
+                  일괄 적용
+                </button>
+              </div>
+              <div className="grid grid-cols-5 gap-2">
+                {stockDefaults.split_rates.slice(0, stockDefaults.max_rounds - 1).map((rate, i) => (
+                  <div key={i} className="text-center">
+                    <span className="text-xs text-gray-500">{i + 2}차</span>
+                    <input
+                      type="number"
+                      value={rate}
+                      onChange={e => {
+                        const newRates = [...stockDefaults.split_rates];
+                        newRates[i] = Number(e.target.value);
+                        setStockDefaults({ ...stockDefaults, split_rates: newRates });
+                      }}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-center"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 목표 수익률 */}
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">목표 수익률 (%) - 1~{stockDefaults.max_rounds}차</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="number"
+                value={bulkTargetRate}
+                onChange={e => setBulkTargetRate(Number(e.target.value))}
+                className="w-20 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const newRates = stockDefaults.target_rates.map(() => bulkTargetRate);
+                  setStockDefaults({ ...stockDefaults, target_rates: newRates });
+                }}
+                className="px-3 py-1 bg-gray-600 rounded text-sm hover:bg-gray-500"
+              >
+                일괄 적용
+              </button>
+            </div>
+            <div className="grid grid-cols-5 gap-2">
+              {stockDefaults.target_rates.slice(0, stockDefaults.max_rounds).map((rate, i) => (
+                <div key={i} className="text-center">
+                  <span className="text-xs text-gray-500">{i + 1}차</span>
+                  <input
+                    type="number"
+                    value={rate}
+                    onChange={e => {
+                      const newRates = [...stockDefaults.target_rates];
+                      newRates[i] = Number(e.target.value);
+                      setStockDefaults({ ...stockDefaults, target_rates: newRates });
+                    }}
+                    className="w-full bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm text-center"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 기본값 저장 버튼 */}
+          <button
+            onClick={() => {
+              saveStockDefaults(stockDefaults);
+              setStockDefaultsSaved(true);
+              setTimeout(() => setStockDefaultsSaved(false), 3000);
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 rounded-lg hover:bg-green-500 transition"
+          >
+            <Save className="w-4 h-4" />
+            기본값 저장
+          </button>
         </div>
       </div>
 

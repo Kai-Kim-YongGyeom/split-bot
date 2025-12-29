@@ -79,6 +79,24 @@ export interface BotConfig {
   balance_updated_at?: string;          // 잔고 업데이트 시간
   created_at: string;
   updated_at: string;
+  // 종목 추가 기본 설정
+  default_buy_mode?: BuyMode;           // 매수 방식 (amount/quantity)
+  default_buy_quantity?: number;        // 기본 매수 수량
+  default_max_rounds?: number;          // 기본 최대 차수
+  default_split_rates?: number[];       // 기본 물타기 비율
+  default_target_rates?: number[];      // 기본 목표 수익률
+  default_stop_loss_rate?: number;      // 기본 손절 비율
+}
+
+// 종목 추가 기본 설정 (로컬 스토리지용)
+export interface StockDefaultSettings {
+  buy_mode: BuyMode;
+  buy_amount: number;
+  buy_quantity: number;
+  max_rounds: number;
+  split_rates: number[];
+  target_rates: number[];
+  stop_loss_rate: number;
 }
 
 // 종목 + 매수기록 통합

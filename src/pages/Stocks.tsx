@@ -1,11 +1,32 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStocks } from '../hooks/useStocks';
 import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp, RefreshCw, X } from 'lucide-react';
-import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult, CompareResult } from '../types';
+import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult, CompareResult, StockDefaultSettings } from '../types';
 import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';
 import { getTodayKST, formatDate } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
+
+// 로컬 스토리지에서 종목 기본 설정 불러오기
+const getStockDefaults = (): StockDefaultSettings => {
+  try {
+    const saved = localStorage.getItem('stock_default_settings');
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch {
+    // 무시
+  }
+  return {
+    buy_mode: 'amount',
+    buy_amount: 100000,
+    buy_quantity: 10,
+    max_rounds: 5,
+    split_rates: [-3, -3, -3, -3, -3, -3, -3, -3, -3],
+    target_rates: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
+    stop_loss_rate: 30,
+  };
+};
 
 // 숫자 입력 시 포커스되면 전체 선택
 const handleNumberFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -24,17 +45,35 @@ function StockModal({
   onSubmit: (data: StockFormData) => void;
   initialData?: StockWithPurchases;
 }) {
-  const getInitialFormData = (): StockFormData => ({
-    code: initialData?.code || '',
-    name: initialData?.name || '',
-    buy_amount: initialData?.buy_amount || 100000,
-    buy_mode: initialData?.buy_mode || 'amount',
-    buy_quantity: initialData?.buy_quantity || 1,
-    max_rounds: initialData?.max_rounds || 10,
-    split_rates: initialData?.split_rates || [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
-    target_rates: initialData?.target_rates || [50, 3, 3, 3, 3, 3, 3, 3, 3, 3],
-    stop_loss_rate: initialData?.stop_loss_rate || 0,
-  });
+  const getInitialFormData = (): StockFormData => {
+    // 수정 모드면 기존 데이터 사용
+    if (initialData) {
+      return {
+        code: initialData.code,
+        name: initialData.name,
+        buy_amount: initialData.buy_amount,
+        buy_mode: initialData.buy_mode,
+        buy_quantity: initialData.buy_quantity,
+        max_rounds: initialData.max_rounds,
+        split_rates: initialData.split_rates,
+        target_rates: initialData.target_rates,
+        stop_loss_rate: initialData.stop_loss_rate,
+      };
+    }
+    // 새 종목 추가 모드면 설정에서 저장한 기본값 사용
+    const defaults = getStockDefaults();
+    return {
+      code: '',
+      name: '',
+      buy_amount: defaults.buy_amount,
+      buy_mode: defaults.buy_mode,
+      buy_quantity: defaults.buy_quantity,
+      max_rounds: defaults.max_rounds,
+      split_rates: [...defaults.split_rates],
+      target_rates: [...defaults.target_rates],
+      stop_loss_rate: defaults.stop_loss_rate,
+    };
+  };
 
   const [formData, setFormData] = useState<StockFormData>(getInitialFormData());
 
