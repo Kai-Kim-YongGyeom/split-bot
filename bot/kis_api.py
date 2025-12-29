@@ -324,6 +324,7 @@ class KisAPI:
         acct_no, acct_suffix = self._parse_account()
 
         holdings = []
+        seen_codes = set()  # 중복 방지
         ctx_area_fk100 = ""
         ctx_area_nk100 = ""
         page = 1
@@ -351,11 +352,19 @@ class KisAPI:
                 result = response.json()
 
                 if result.get("rt_cd") == "0":
-                    for item in result.get("output1", []):
+                    output1 = result.get("output1", [])
+                    new_count = 0
+
+                    for item in output1:
+                        code = item.get("pdno", "")
                         qty = int(item.get("hldg_qty", 0))
-                        if qty > 0:
+
+                        # 중복 체크 및 수량 있는 것만
+                        if qty > 0 and code not in seen_codes:
+                            seen_codes.add(code)
+                            new_count += 1
                             holdings.append({
-                                "code": item.get("pdno", ""),
+                                "code": code,
                                 "name": item.get("prdt_name", ""),
                                 "quantity": qty,
                                 "avg_price": int(float(item.get("pchs_avg_pric", 0))),
@@ -363,17 +372,26 @@ class KisAPI:
                                 "profit_rate": float(item.get("evlu_pfls_rt", 0)),
                             })
 
+                    print(f"[KIS] 보유 종목 {page}페이지: {len(output1)}건 중 신규 {new_count}개")
+
+                    # 더 이상 새 데이터가 없으면 종료
+                    if new_count == 0:
+                        print("[KIS] 더 이상 새 종목 없음, 조회 종료")
+                        break
+
                     # 다음 페이지 확인
-                    ctx_area_fk100 = result.get("ctx_area_fk100", "").strip()
-                    ctx_area_nk100 = result.get("ctx_area_nk100", "").strip()
+                    new_fk100 = result.get("ctx_area_fk100", "").strip()
+                    new_nk100 = result.get("ctx_area_nk100", "").strip()
 
-                    # 더 이상 데이터가 없으면 종료
-                    if not ctx_area_fk100 and not ctx_area_nk100:
+                    # 연속키가 없거나 변경되지 않으면 종료
+                    if not new_fk100 and not new_nk100:
                         break
-                    if not result.get("output1"):
+                    if new_fk100 == ctx_area_fk100 and new_nk100 == ctx_area_nk100:
+                        print("[KIS] 연속키 변경 없음, 조회 종료")
                         break
 
-                    print(f"[KIS] 보유 종목 {page}페이지 조회: {len(result.get('output1', []))}개")
+                    ctx_area_fk100 = new_fk100
+                    ctx_area_nk100 = new_nk100
                     page += 1
                     time.sleep(0.2)  # Rate limit 방지
                 else:
