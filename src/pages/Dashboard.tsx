@@ -219,7 +219,27 @@ export function Dashboard() {
 
   return (
     <div className="space-y-4 md:space-y-6">
-      {/* 자산 현황 카드 - 3개 행 */}
+      {/* 총 자산 카드 (강조) */}
+      <div className="bg-gradient-to-r from-blue-900/40 to-purple-900/40 rounded-lg p-3 md:p-4 border border-blue-700">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-gray-400 text-xs md:text-sm">총 자산</p>
+            <p className="text-xl md:text-2xl font-bold text-white">
+              {(availableCash !== null ? availableCash : 0) + totalEvaluation > 0
+                ? `${((availableCash || 0) + totalEvaluation).toLocaleString()}원`
+                : '-'}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-gray-400 text-xs">현금 + 평가금액</p>
+            <p className="text-gray-300 text-sm">
+              {availableCash !== null ? availableCash.toLocaleString() : '-'} + {totalEvaluation.toLocaleString()}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* 자산 현황 카드 */}
       <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
         {/* 주문가능 */}
         <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
