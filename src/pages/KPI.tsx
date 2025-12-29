@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Calendar, TrendingUp, TrendingDown, DollarSign, BarChart3, Search, ShoppingCart, XCircle, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, TrendingUp, TrendingDown, DollarSign, BarChart3, Search } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -14,44 +14,7 @@ import {
 } from 'recharts';
 import { supabase } from '../lib/supabase';
 import { getCurrentUserId } from '../lib/api';
-import type { Purchase, BuyRequest, SellRequest } from '../types';
-
-type OrderStatusFilter = 'all' | 'pending' | 'executed' | 'failed' | 'cancelled';
-
-function OrderStatusBadge({ status }: { status: string }) {
-  const config: Record<string, { bg: string; text: string; icon: React.ElementType }> = {
-    pending: { bg: 'bg-yellow-900/50', text: 'text-yellow-400', icon: Clock },
-    executed: { bg: 'bg-green-900/50', text: 'text-green-400', icon: CheckCircle },
-    failed: { bg: 'bg-red-900/50', text: 'text-red-400', icon: AlertCircle },
-    cancelled: { bg: 'bg-gray-700', text: 'text-gray-400', icon: XCircle },
-  };
-
-  const { bg, text, icon: Icon } = config[status] || config.pending;
-  const label = {
-    pending: '대기',
-    executed: '체결',
-    failed: '실패',
-    cancelled: '취소',
-  }[status] || status;
-
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${bg} ${text}`}>
-      <Icon className="w-3 h-3" />
-      {label}
-    </span>
-  );
-}
-
-function formatOrderDate(dateStr: string | null) {
-  if (!dateStr) return '-';
-  const date = new Date(dateStr);
-  return date.toLocaleString('ko-KR', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+import type { Purchase } from '../types';
 
 interface KPIData {
   totalBuyAmount: number;
@@ -489,8 +452,6 @@ function MonthlyChart({ data }: { data: MonthlySummary[] }) {
 export function KPI() {
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [buyRequests, setBuyRequests] = useState<BuyRequest[]>([]);
-  const [sellRequests, setSellRequests] = useState<SellRequest[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('current');
   const [startDate, setStartDate] = useState(() => {
     const date = new Date();
@@ -503,8 +464,6 @@ export function KPI() {
 
   // 현재탭 필터 상태
   const [searchQuery, setSearchQuery] = useState('');
-  const [orderStatusFilter, setOrderStatusFilter] = useState<OrderStatusFilter>('all');
-  const [showOrdersSection, setShowOrdersSection] = useState(true);
 
   useEffect(() => {
     fetchData();
@@ -520,34 +479,17 @@ export function KPI() {
       return;
     }
 
-    const [purchasesResult, buyResult, sellResult] = await Promise.all([
-      supabase
-        .from('bot_purchases')
-        .select('*, bot_stocks(name, code)')
-        .eq('user_id', userId)
-        .order('date', { ascending: false }),
-      supabase
-        .from('bot_buy_requests')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(100),
-      supabase
-        .from('bot_sell_requests')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(100),
-    ]);
+    const { data, error } = await supabase
+      .from('bot_purchases')
+      .select('*, bot_stocks(name, code)')
+      .eq('user_id', userId)
+      .order('date', { ascending: false });
 
-    if (purchasesResult.error) {
-      console.error('Error fetching purchases:', purchasesResult.error);
+    if (error) {
+      console.error('Error fetching purchases:', error);
     } else {
-      setPurchases(purchasesResult.data || []);
+      setPurchases(data || []);
     }
-
-    if (buyResult.data) setBuyRequests(buyResult.data);
-    if (sellResult.data) setSellRequests(sellResult.data);
 
     setLoading(false);
   };
@@ -776,56 +718,6 @@ export function KPI() {
     return filtered.slice(0, 50);
   }, [purchases, startDate, endDate, searchQuery]);
 
-  // 기간 내 주문 내역 (수동 주문)
-  const filteredOrders = useMemo(() => {
-    const filterOrder = <T extends { stock_name: string; stock_code: string; status: string; created_at: string }>(
-      items: T[]
-    ): T[] => {
-      let filtered = items.filter(r => {
-        const date = r.created_at.split('T')[0];
-        return date >= startDate && date <= endDate;
-      });
-
-      // 검색어 필터
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase();
-        filtered = filtered.filter(
-          r => r.stock_name.toLowerCase().includes(query) || r.stock_code.toLowerCase().includes(query)
-        );
-      }
-
-      // 상태 필터
-      if (orderStatusFilter !== 'all') {
-        filtered = filtered.filter(r => r.status === orderStatusFilter);
-      }
-
-      return filtered;
-    };
-
-    return {
-      buy: filterOrder(buyRequests),
-      sell: filterOrder(sellRequests),
-    };
-  }, [buyRequests, sellRequests, startDate, endDate, searchQuery, orderStatusFilter]);
-
-  // 대기 중인 주문 건수 (기간 내)
-  const pendingOrderCounts = useMemo(() => {
-    const inPeriodBuy = buyRequests.filter(r => {
-      const date = r.created_at.split('T')[0];
-      return date >= startDate && date <= endDate;
-    });
-    const inPeriodSell = sellRequests.filter(r => {
-      const date = r.created_at.split('T')[0];
-      return date >= startDate && date <= endDate;
-    });
-
-    return {
-      buy: inPeriodBuy.filter(r => r.status === 'pending').length,
-      sell: inPeriodSell.filter(r => r.status === 'pending').length,
-      total: inPeriodBuy.filter(r => r.status === 'pending').length + inPeriodSell.filter(r => r.status === 'pending').length,
-    };
-  }, [buyRequests, sellRequests, startDate, endDate]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -847,21 +739,9 @@ export function KPI() {
 
       {/* 탭 네비게이션 */}
       <div className="flex gap-1 border-b border-gray-700">
-        <button
-          onClick={() => setActiveTab('current')}
-          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-lg transition ${
-            activeTab === 'current'
-              ? 'bg-gray-800 text-white border-t border-l border-r border-gray-700'
-              : 'bg-gray-900 text-gray-400 hover:text-white hover:bg-gray-800/50'
-          }`}
-        >
+        <TabButton active={activeTab === 'current'} onClick={() => setActiveTab('current')}>
           현재
-          {pendingOrderCounts.total > 0 && (
-            <span className="bg-yellow-500 text-black text-xs px-1.5 rounded-full">
-              {pendingOrderCounts.total}
-            </span>
-          )}
-        </button>
+        </TabButton>
         <TabButton active={activeTab === 'daily'} onClick={() => setActiveTab('daily')}>
           일자별
         </TabButton>
@@ -873,34 +753,17 @@ export function KPI() {
       {/* 탭 컨텐츠 */}
       {activeTab === 'current' && (
         <>
-          {/* 검색/필터 */}
+          {/* 검색 */}
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="종목명 또는 코드 검색..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div className="flex gap-1">
-                {(['all', 'pending', 'executed', 'failed', 'cancelled'] as OrderStatusFilter[]).map(status => (
-                  <button
-                    key={status}
-                    onClick={() => setOrderStatusFilter(status)}
-                    className={`px-2.5 py-1.5 text-xs rounded transition ${
-                      orderStatusFilter === status
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600'
-                    }`}
-                  >
-                    {{ all: '전체', pending: '대기', executed: '체결', failed: '실패', cancelled: '취소' }[status]}
-                  </button>
-                ))}
-              </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="종목명 또는 코드 검색..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+              />
             </div>
           </div>
 
@@ -960,108 +823,6 @@ export function KPI() {
               </div>
             </div>
           )}
-
-          {/* 수동 주문 내역 */}
-          <div className="bg-gray-800 rounded-lg border border-gray-700">
-            <button
-              onClick={() => setShowOrdersSection(!showOrdersSection)}
-              className="w-full flex items-center justify-between p-3 md:p-4 hover:bg-gray-700/30 transition"
-            >
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-blue-400" />
-                <h2 className="text-base md:text-lg font-bold">수동 주문 내역</h2>
-                {pendingOrderCounts.total > 0 && (
-                  <span className="bg-yellow-500 text-black text-xs px-2 py-0.5 rounded-full">
-                    대기 {pendingOrderCounts.total}
-                  </span>
-                )}
-              </div>
-              {showOrdersSection ? (
-                <ChevronUp className="w-5 h-5 text-gray-400" />
-              ) : (
-                <ChevronDown className="w-5 h-5 text-gray-400" />
-              )}
-            </button>
-
-            {showOrdersSection && (
-              <div className="border-t border-gray-700 p-3 md:p-4 space-y-4">
-                {/* 매수 요청 */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-blue-400">매수 요청</h3>
-                    {pendingOrderCounts.buy > 0 && (
-                      <span className="text-xs text-yellow-400">({pendingOrderCounts.buy}건 대기)</span>
-                    )}
-                  </div>
-                  {filteredOrders.buy.length === 0 ? (
-                    <p className="text-gray-500 text-sm py-4 text-center">
-                      {buyRequests.length === 0 ? '매수 요청 내역이 없습니다.' : '검색 결과가 없습니다.'}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredOrders.buy.slice(0, 10).map(req => (
-                        <div key={req.id} className="flex items-center justify-between p-2 bg-gray-700/50 rounded">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm truncate">{req.stock_name}</span>
-                              <OrderStatusBadge status={req.status} />
-                            </div>
-                            <div className="text-xs text-gray-400 mt-0.5">
-                              {req.buy_amount ? `${req.buy_amount.toLocaleString()}원` : `${req.quantity}주`}
-                              {' · '}
-                              {formatOrderDate(req.created_at)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {filteredOrders.buy.length > 10 && (
-                        <p className="text-xs text-gray-400 text-center py-1">
-                          외 {filteredOrders.buy.length - 10}건 더 있음
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* 매도 요청 */}
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-purple-400">매도 요청</h3>
-                    {pendingOrderCounts.sell > 0 && (
-                      <span className="text-xs text-yellow-400">({pendingOrderCounts.sell}건 대기)</span>
-                    )}
-                  </div>
-                  {filteredOrders.sell.length === 0 ? (
-                    <p className="text-gray-500 text-sm py-4 text-center">
-                      {sellRequests.length === 0 ? '매도 요청 내역이 없습니다.' : '검색 결과가 없습니다.'}
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {filteredOrders.sell.slice(0, 10).map(req => (
-                        <div key={req.id} className="flex items-center justify-between p-2 bg-gray-700/50 rounded">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm truncate">{req.stock_name}</span>
-                              <span className="text-xs text-gray-500">{req.round}차</span>
-                              <OrderStatusBadge status={req.status} />
-                            </div>
-                            <div className="text-xs text-gray-400 mt-0.5">
-                              {req.quantity}주 · {formatOrderDate(req.created_at)}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {filteredOrders.sell.length > 10 && (
-                        <p className="text-xs text-gray-400 text-center py-1">
-                          외 {filteredOrders.sell.length - 10}건 더 있음
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* 거래 내역 - 모바일은 카드, 데스크탑은 테이블 */}
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-3 md:p-4">

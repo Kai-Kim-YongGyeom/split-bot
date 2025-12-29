@@ -801,7 +801,27 @@ function StockCard({
   const [sellingPurchaseId, setSellingPurchaseId] = useState<string | null>(null);
   const [sellSuccess, setSellSuccess] = useState<string | null>(null);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
+  const [reordering, setReordering] = useState(false);
   const holdingPurchases = stock.purchases.filter(p => p.status === 'holding');
+
+  // 차수 갭 체크 (예: 2,3만 있는 경우 true)
+  const hasRoundGap = holdingPurchases.length > 0 &&
+    holdingPurchases.some((p, i) => p.round !== i + 1);
+
+  const handleReorderRounds = async () => {
+    if (!confirm(`${stock.name}의 차수를 재정렬하시겠습니까?\n(예: 2차,3차 → 1차,2차)`)) {
+      return;
+    }
+    setReordering(true);
+    const success = await api.reorderPurchaseRounds(stock.id);
+    setReordering(false);
+    if (success) {
+      showToast('차수가 재정렬되었습니다.', 'success');
+      onRefresh();
+    } else {
+      showToast('재정렬 실패. 다시 시도해주세요.', 'error');
+    }
+  };
 
   const handleEditPurchase = async (id: string, updates: { price?: number; quantity?: number; round?: number; date?: string }) => {
     const success = await api.updatePurchaseManual(id, updates);
@@ -998,14 +1018,25 @@ function StockCard({
           <div>
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-bold text-sm">매수 기록</h4>
-              {holdingPurchases.length === 0 && (
-                <button
-                  onClick={onAddPurchase}
-                  className="text-sm text-blue-400 hover:text-blue-300"
-                >
-                  + 1차 매수 추가
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {hasRoundGap && (
+                  <button
+                    onClick={handleReorderRounds}
+                    disabled={reordering}
+                    className="text-xs text-yellow-400 hover:text-yellow-300 disabled:opacity-50"
+                  >
+                    {reordering ? '정렬중...' : '차수 정렬'}
+                  </button>
+                )}
+                {holdingPurchases.length === 0 && (
+                  <button
+                    onClick={onAddPurchase}
+                    className="text-sm text-blue-400 hover:text-blue-300"
+                  >
+                    + 1차 매수 추가
+                  </button>
+                )}
+              </div>
             </div>
             {stock.purchases.length === 0 ? (
               <p className="text-gray-500 text-sm">매수 기록이 없습니다.</p>

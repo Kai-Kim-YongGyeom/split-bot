@@ -1,6 +1,6 @@
 import { useStocks } from '../hooks/useStocks';
 import { useDepositHistory } from '../hooks/useDepositHistory';
-import { Activity, Package, DollarSign, Server, TrendingUp, Briefcase, PackageX } from 'lucide-react';
+import { Activity, Package, Server, TrendingUp, Briefcase, PackageX } from 'lucide-react';
 import { useBotStatus } from '../contexts/BotStatusContext';
 
 export function Dashboard() {
@@ -117,161 +117,147 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* 자산 현황 카드 */}
-      <div className="grid grid-cols-3 md:grid-cols-6 gap-2 md:gap-3">
-        {/* 주문가능 */}
-        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
-          <p className="text-gray-400 text-xs">주문가능</p>
-          <p className="text-sm md:text-base font-bold text-yellow-400 truncate">
+      {/* Row 1: 주문가능, 현금, D+2 */}
+      <div className="grid grid-cols-3 gap-2 md:gap-3">
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs md:text-sm">주문가능</p>
+          <p className="text-base md:text-lg font-bold text-yellow-400 truncate">
             {availableAmount !== null ? `${availableAmount.toLocaleString()}` : '-'}
           </p>
         </div>
-
-        {/* 현금 */}
-        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
-          <p className="text-gray-400 text-xs">현금</p>
-          <p className="text-sm md:text-base font-bold truncate">
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs md:text-sm">현금</p>
+          <p className="text-base md:text-lg font-bold truncate">
             {availableCash !== null ? `${availableCash.toLocaleString()}` : '-'}
           </p>
         </div>
-
-        {/* D+2 예수금 */}
-        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
-          <p className="text-gray-400 text-xs">D+2</p>
-          <p className="text-sm md:text-base font-bold truncate">
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs md:text-sm">D+2</p>
+          <p className="text-base md:text-lg font-bold truncate">
             {d2Deposit !== null ? `${d2Deposit.toLocaleString()}` : '-'}
           </p>
         </div>
+      </div>
 
-        {/* 총 투자금 */}
-        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
-          <p className="text-gray-400 text-xs">투자금</p>
-          <p className="text-sm md:text-base font-bold text-purple-400 truncate">{totalHolding.toLocaleString()}</p>
+      {/* Row 2: 투자금, 평가금액 */}
+      <div className="grid grid-cols-2 gap-2 md:gap-3">
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs md:text-sm">투자금</p>
+          <p className="text-base md:text-lg font-bold text-purple-400 truncate">{totalHolding.toLocaleString()}</p>
         </div>
-
-        {/* 총 평가금액 */}
-        <div className="bg-gray-800 rounded-lg p-2.5 md:p-3 border border-gray-700">
-          <p className="text-gray-400 text-xs">평가금액</p>
-          <p className="text-sm md:text-base font-bold text-blue-400 truncate">{totalEvaluation.toLocaleString()}</p>
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs md:text-sm">평가금액</p>
+          <p className="text-base md:text-lg font-bold text-blue-400 truncate">{totalEvaluation.toLocaleString()}</p>
         </div>
+      </div>
 
-        {/* 평가손익 */}
-        <div className={`rounded-lg p-2.5 md:p-3 border ${
+      {/* Row 3: 실현손익, 평가손익 */}
+      <div className="grid grid-cols-2 gap-2 md:gap-3">
+        <div className={`rounded-lg p-3 md:p-4 border ${
+          totalRealizedProfit >= 0
+            ? 'bg-green-900/20 border-green-800'
+            : 'bg-red-900/20 border-red-800'
+        }`}>
+          <p className="text-gray-400 text-xs md:text-sm">실현손익</p>
+          <p className={`text-base md:text-lg font-bold truncate ${totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {totalRealizedProfit >= 0 ? '+' : ''}{totalRealizedProfit.toLocaleString()}
+            <span className="text-xs md:text-sm ml-1">({totalRealizedRate >= 0 ? '+' : ''}{totalRealizedRate.toFixed(1)}%)</span>
+          </p>
+        </div>
+        <div className={`rounded-lg p-3 md:p-4 border ${
           totalUnrealizedProfit >= 0
             ? 'bg-red-900/20 border-red-800'
             : 'bg-blue-900/20 border-blue-800'
         }`}>
-          <p className="text-gray-400 text-xs">평가손익</p>
-          <p className={`text-sm md:text-base font-bold truncate ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+          <p className="text-gray-400 text-xs md:text-sm">평가손익</p>
+          <p className={`text-base md:text-lg font-bold truncate ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
             {totalUnrealizedProfit >= 0 ? '+' : ''}{totalUnrealizedProfit.toLocaleString()}
-            <span className="text-xs ml-0.5">({totalUnrealizedRate >= 0 ? '+' : ''}{totalUnrealizedRate.toFixed(1)}%)</span>
+            <span className="text-xs md:text-sm ml-1">({totalUnrealizedRate >= 0 ? '+' : ''}{totalUnrealizedRate.toFixed(1)}%)</span>
           </p>
         </div>
       </div>
 
-      {/* 종목 통계 카드 (Row 1) */}
-      <div className="grid grid-cols-4 gap-2 md:gap-4">
+      {/* Row 4: 전체, 활성 */}
+      <div className="grid grid-cols-2 gap-2 md:gap-3">
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-1.5 md:p-2 bg-blue-900/50 rounded-lg">
-              <Package className="w-4 h-4 md:w-5 md:h-5 text-blue-400" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-900/50 rounded-lg">
+              <Package className="w-5 h-5 text-blue-400" />
             </div>
             <div>
               <p className="text-gray-400 text-xs md:text-sm">전체</p>
-              <p className="text-lg md:text-xl font-bold">{stocks.length}</p>
+              <p className="text-xl md:text-2xl font-bold">{stocks.length}</p>
             </div>
           </div>
         </div>
-
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-1.5 md:p-2 bg-green-900/50 rounded-lg">
-              <Activity className="w-4 h-4 md:w-5 md:h-5 text-green-400" />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-green-900/50 rounded-lg">
+              <Activity className="w-5 h-5 text-green-400" />
             </div>
             <div>
               <p className="text-gray-400 text-xs md:text-sm">활성</p>
-              <p className="text-lg md:text-xl font-bold">{activeStocks.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-1.5 md:p-2 bg-purple-900/50 rounded-lg">
-              <Briefcase className="w-4 h-4 md:w-5 md:h-5 text-purple-400" />
-            </div>
-            <div>
-              <p className="text-gray-400 text-xs md:text-sm">보유</p>
-              <p className="text-lg md:text-xl font-bold text-purple-400">{holdingStocks.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className="p-1.5 md:p-2 bg-gray-700 rounded-lg">
-              <PackageX className="w-4 h-4 md:w-5 md:h-5 text-gray-400" />
-            </div>
-            <div>
-              <p className="text-gray-400 text-xs md:text-sm">미보유</p>
-              <p className="text-lg md:text-xl font-bold text-gray-400">{noHoldingStocks.length}</p>
+              <p className="text-xl md:text-2xl font-bold">{activeStocks.length}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 시스템 상태 카드 (Row 2) */}
-      <div className="grid grid-cols-2 gap-2 md:gap-4">
+      {/* Row 5: 보유, 미보유 */}
+      <div className="grid grid-cols-2 gap-2 md:gap-3">
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className={`p-1.5 md:p-2 rounded-lg ${serverAlive ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
-              <Server className={`w-4 h-4 md:w-5 md:h-5 ${serverAlive ? 'text-green-400' : 'text-red-400'}`} />
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-900/50 rounded-lg">
+              <Briefcase className="w-5 h-5 text-purple-400" />
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs md:text-sm">보유</p>
+              <p className="text-xl md:text-2xl font-bold text-purple-400">{holdingStocks.length}</p>
+            </div>
+          </div>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-700 rounded-lg">
+              <PackageX className="w-5 h-5 text-gray-400" />
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs md:text-sm">미보유</p>
+              <p className="text-xl md:text-2xl font-bold text-gray-400">{noHoldingStocks.length}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 6: 서버, 봇 */}
+      <div className="grid grid-cols-2 gap-2 md:gap-3">
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${serverAlive ? 'bg-green-900/50' : 'bg-red-900/50'}`}>
+              <Server className={`w-5 h-5 ${serverAlive ? 'text-green-400' : 'text-red-400'}`} />
             </div>
             <div>
               <p className="text-gray-400 text-xs md:text-sm">서버</p>
-              <p className={`text-lg md:text-xl font-bold ${serverAlive ? 'text-green-400' : 'text-red-400'}`}>
+              <p className={`text-xl md:text-2xl font-bold ${serverAlive ? 'text-green-400' : 'text-red-400'}`}>
                 {serverAlive === null ? '...' : serverAlive ? 'ON' : 'OFF'}
               </p>
             </div>
           </div>
         </div>
-
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <div className="flex items-center gap-2 md:gap-3">
-            <div className={`p-1.5 md:p-2 rounded-lg ${botRunning ? 'bg-green-900/50' : 'bg-gray-700'}`}>
-              <Activity className={`w-4 h-4 md:w-5 md:h-5 ${botRunning ? 'text-green-400' : 'text-gray-400'}`} />
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${botRunning ? 'bg-green-900/50' : 'bg-gray-700'}`}>
+              <Activity className={`w-5 h-5 ${botRunning ? 'text-green-400' : 'text-gray-400'}`} />
             </div>
             <div>
               <p className="text-gray-400 text-xs md:text-sm">봇</p>
-              <p className={`text-lg md:text-xl font-bold ${botRunning ? 'text-green-400' : 'text-gray-400'}`}>
+              <p className={`text-xl md:text-2xl font-bold ${botRunning ? 'text-green-400' : 'text-gray-400'}`}>
                 {botRunning === null ? '...' : botRunning ? 'ON' : 'OFF'}
               </p>
             </div>
           </div>
         </div>
       </div>
-
-      {/* 실현 손익 카드 */}
-      {totalRealizedProfit !== 0 && (
-        <div className={`rounded-lg p-3 md:p-4 border ${
-          totalRealizedProfit >= 0
-            ? 'bg-green-900/20 border-green-800'
-            : 'bg-red-900/20 border-red-800'
-        }`}>
-          <div className="flex items-center gap-3">
-            <DollarSign className={`w-5 h-5 md:w-6 md:h-6 ${totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`} />
-            <div>
-              <p className="text-gray-400 text-xs md:text-sm">총 실현 손익</p>
-              <p className={`text-xl md:text-2xl font-bold ${totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                {totalRealizedProfit >= 0 ? '+' : ''}{totalRealizedProfit.toLocaleString()}원
-                <span className="text-base md:text-lg ml-2">
-                  ({totalRealizedRate >= 0 ? '+' : ''}{totalRealizedRate.toFixed(2)}%)
-                </span>
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

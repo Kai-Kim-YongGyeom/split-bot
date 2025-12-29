@@ -475,8 +475,8 @@ export function SplitStatus() {
                     className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors group"
                   >
                     {/* 종목 */}
-                    <td className="sticky left-0 z-10 bg-gray-800 group-hover:bg-gray-700/30 py-3 px-4 min-w-[100px] border-r border-gray-700 transition-colors">
-                      <div className="font-medium">{stock.name}</div>
+                    <td className="sticky left-0 z-10 bg-gray-800 group-hover:bg-gray-700/30 py-2 px-2 md:px-4 min-w-[80px] max-w-[100px] border-r border-gray-700 transition-colors">
+                      <div className="font-medium text-sm leading-tight break-keep">{stock.name}</div>
                       <div className="text-xs text-gray-500">{stock.code}</div>
                     </td>
 

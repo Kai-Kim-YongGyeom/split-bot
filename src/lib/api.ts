@@ -722,6 +722,54 @@ export async function updatePurchaseManual(
   return true;
 }
 
+// 차수 재정렬 (갭 제거: 2,3 → 1,2)
+export async function reorderPurchaseRounds(stockId: string): Promise<boolean> {
+  // 1. 해당 종목의 holding 매수만 차수 순으로 조회
+  const { data: purchases, error: fetchError } = await supabase
+    .from('bot_purchases')
+    .select('id, round')
+    .eq('stock_id', stockId)
+    .eq('status', 'holding')
+    .order('round', { ascending: true });
+
+  if (fetchError) {
+    console.error('Error fetching purchases for reorder:', fetchError);
+    return false;
+  }
+
+  if (!purchases || purchases.length === 0) {
+    return true; // 재정렬할 항목 없음
+  }
+
+  // 2. 갭 확인 및 업데이트 필요 항목 찾기
+  const updates: { id: string; newRound: number }[] = [];
+  purchases.forEach((purchase, index) => {
+    const expectedRound = index + 1;
+    if (purchase.round !== expectedRound) {
+      updates.push({ id: purchase.id, newRound: expectedRound });
+    }
+  });
+
+  if (updates.length === 0) {
+    return true; // 이미 정렬됨
+  }
+
+  // 3. 일괄 업데이트 (순차적으로 처리)
+  for (const update of updates) {
+    const { error } = await supabase
+      .from('bot_purchases')
+      .update({ round: update.newRound })
+      .eq('id', update.id);
+
+    if (error) {
+      console.error('Error updating purchase round:', error);
+      return false;
+    }
+  }
+
+  return true;
+}
+
 export async function createPurchaseManual(
   stockId: string,
   round: number,
