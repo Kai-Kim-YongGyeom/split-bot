@@ -332,6 +332,8 @@ class SupabaseClient:
                 name=stock_data["name"],
                 is_active=stock_data.get("is_active", True),
                 buy_amount=stock_data.get("buy_amount", Config.DEFAULT_BUY_AMOUNT),
+                buy_mode=stock_data.get("buy_mode", "amount"),
+                buy_quantity=stock_data.get("buy_quantity", 1),
                 max_rounds=stock_data.get("max_rounds", 10),
                 split_rates=split_rates,
                 target_rates=target_rates,
