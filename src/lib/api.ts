@@ -92,25 +92,20 @@ export async function createStock(stock: StockFormData): Promise<Stock | null> {
     return null;
   }
 
-  const insertData = {
-    ...stock,
-    is_active: true,
-    user_id: userId,
-  };
-  console.log('Creating stock with data:', insertData);
-
   const { data, error } = await supabase
     .from('bot_stocks')
-    .insert([insertData])
+    .insert([{
+      ...stock,
+      is_active: true,
+      user_id: userId,
+    }])
     .select()
     .single();
 
   if (error) {
     console.error('Error creating stock:', error);
-    console.error('Error details:', error.message, error.details, error.hint);
     return null;
   }
-  console.log('Stock created successfully:', data);
   return data;
 }
 
