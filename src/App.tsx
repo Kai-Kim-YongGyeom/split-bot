@@ -13,7 +13,7 @@ import { AuthModal } from './components/AuthModal';
 import { useAuth } from './hooks/useAuth';
 import { BotStatusProvider } from './contexts/BotStatusContext';
 import { ToastProvider } from './components/Toast';
-import { Loader2, RotateCcw } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 function App() {
   const { user, loading, signIn, signUp } = useAuth();
@@ -48,24 +48,11 @@ function App() {
     return <AuthModal onSignIn={signIn} onSignUp={signUp} />;
   }
 
-  // 가로모드 경고 오버레이 (CSS로 가로모드일 때만 표시)
-  const LandscapeWarning = () => (
-    <div className="fixed inset-0 bg-gray-900 z-[9999] flex-col items-center justify-center gap-4 text-center p-8 hidden landscape:flex">
-      <RotateCcw className="w-16 h-16 text-blue-400 animate-pulse" />
-      <h2 className="text-xl font-bold text-white">세로 모드로 전환해주세요</h2>
-      <p className="text-gray-400 text-sm">
-        이 앱은 세로 모드에 최적화되어 있습니다.<br />
-        기기를 세로로 돌려주세요.
-      </p>
-    </div>
-  );
-
   // 로그인 됨
   return (
     <ToastProvider>
       <BotStatusProvider>
         <BrowserRouter>
-          <LandscapeWarning />
           <Routes>
             <Route path="/" element={<Layout />}>
               <Route index element={<Dashboard />} />

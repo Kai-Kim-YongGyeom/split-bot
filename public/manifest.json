@@ -3,7 +3,7 @@
   "short_name": "Split Bot",
   "description": "자동 물타기 매매 봇",
   "start_url": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#1f2937",
   "theme_color": "#1f2937",
   "orientation": "portrait",

@@ -11,6 +11,20 @@ body {
   @apply min-h-screen;
 }
 
+/* 모바일 가로모드에서 강제 세로 고정 */
+@media screen and (max-width: 1024px) and (orientation: landscape) {
+  html {
+    transform: rotate(-90deg);
+    transform-origin: left top;
+    width: 100vh;
+    height: 100vw;
+    overflow-x: hidden;
+    position: absolute;
+    top: 100%;
+    left: 0;
+  }
+}
+
 /* Toast 애니메이션 */
 @keyframes slide-in {
   from {
