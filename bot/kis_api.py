@@ -317,7 +317,7 @@ class KisAPI:
         return result_data
 
     def get_holdings(self) -> list[dict]:
-        """보유 종목 조회 (페이지네이션 처리)"""
+        """보유 종목 조회 (페이지네이션 처리 - tr_cont 헤더 사용)"""
         url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-balance"
 
         tr_id = "TTTC8434R" if self.is_real else "VTTC8434R"
@@ -327,12 +327,17 @@ class KisAPI:
         seen_codes = set()  # 중복 방지
         ctx_area_fk100 = ""
         ctx_area_nk100 = ""
+        tr_cont = ""  # 연속거래여부
         page = 1
         max_pages = 10  # 무한루프 방지
 
         try:
             while page <= max_pages:
                 headers = self._get_headers(tr_id)
+                # 연속조회 시 tr_cont 헤더 추가
+                if tr_cont:
+                    headers["tr_cont"] = "N"
+
                 params = {
                     "CANO": acct_no,
                     "ACNT_PRDT_CD": acct_suffix,
@@ -350,6 +355,9 @@ class KisAPI:
                 response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
                 response.raise_for_status()
                 result = response.json()
+
+                # 응답 헤더에서 tr_cont 확인
+                resp_tr_cont = response.headers.get("tr_cont", "")
 
                 if result.get("rt_cd") == "0":
                     output1 = result.get("output1", [])
@@ -372,26 +380,18 @@ class KisAPI:
                                 "profit_rate": float(item.get("evlu_pfls_rt", 0)),
                             })
 
-                    print(f"[KIS] 보유 종목 {page}페이지: {len(output1)}건 중 신규 {new_count}개")
+                    print(f"[KIS] 보유 종목 {page}페이지: {len(output1)}건 중 신규 {new_count}개 (tr_cont={resp_tr_cont})")
 
-                    # 더 이상 새 데이터가 없으면 종료
-                    if new_count == 0:
-                        print("[KIS] 더 이상 새 종목 없음, 조회 종료")
+                    # 다음 페이지 확인 (tr_cont가 M 또는 F이면 더 있음)
+                    if resp_tr_cont not in ["M", "F"]:
+                        print("[KIS] 마지막 페이지 도달")
                         break
 
-                    # 다음 페이지 확인
-                    new_fk100 = result.get("ctx_area_fk100", "").strip()
-                    new_nk100 = result.get("ctx_area_nk100", "").strip()
+                    # 연속조회 키 업데이트
+                    ctx_area_fk100 = result.get("ctx_area_fk100", "").strip()
+                    ctx_area_nk100 = result.get("ctx_area_nk100", "").strip()
+                    tr_cont = resp_tr_cont
 
-                    # 연속키가 없거나 변경되지 않으면 종료
-                    if not new_fk100 and not new_nk100:
-                        break
-                    if new_fk100 == ctx_area_fk100 and new_nk100 == ctx_area_nk100:
-                        print("[KIS] 연속키 변경 없음, 조회 종료")
-                        break
-
-                    ctx_area_fk100 = new_fk100
-                    ctx_area_nk100 = new_nk100
                     page += 1
                     time.sleep(0.2)  # Rate limit 방지
                 else:
