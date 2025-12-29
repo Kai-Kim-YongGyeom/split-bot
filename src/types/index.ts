@@ -56,6 +56,13 @@ export interface UserSettings {
   balance_updated_at?: string;          // 잔고 업데이트 시간
   created_at: string;
   updated_at: string;
+  // 종목 추가 기본 설정
+  default_buy_mode?: string;            // 매수 방식 (amount/quantity)
+  default_buy_quantity?: number;        // 기본 매수 수량
+  default_max_rounds?: number;          // 기본 최대 차수
+  default_split_rates?: number[];       // 기본 물타기 비율
+  default_target_rates?: number[];      // 기본 목표 수익률
+  default_stop_loss_rate?: number;      // 기본 손절 비율
 }
 
 // 프론트엔드용 봇 설정 (복호화된 값)

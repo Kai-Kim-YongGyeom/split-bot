@@ -239,6 +239,13 @@ function userSettingsToBotConfig(settings: UserSettings): BotConfig {
     balance_updated_at: settings.balance_updated_at,
     created_at: settings.created_at,
     updated_at: settings.updated_at,
+    // 종목 추가 기본 설정
+    default_buy_mode: (settings.default_buy_mode as 'amount' | 'quantity') || 'amount',
+    default_buy_quantity: settings.default_buy_quantity,
+    default_max_rounds: settings.default_max_rounds,
+    default_split_rates: settings.default_split_rates,
+    default_target_rates: settings.default_target_rates,
+    default_stop_loss_rate: settings.default_stop_loss_rate,
   };
 }
 
@@ -278,6 +285,25 @@ function botConfigToUserSettingsUpdate(updates: Partial<BotConfig>): Record<stri
   }
   if (updates.default_buy_amount !== undefined) {
     dbUpdates.default_buy_amount = updates.default_buy_amount;
+  }
+  // 종목 추가 기본 설정
+  if (updates.default_buy_mode !== undefined) {
+    dbUpdates.default_buy_mode = updates.default_buy_mode;
+  }
+  if (updates.default_buy_quantity !== undefined) {
+    dbUpdates.default_buy_quantity = updates.default_buy_quantity;
+  }
+  if (updates.default_max_rounds !== undefined) {
+    dbUpdates.default_max_rounds = updates.default_max_rounds;
+  }
+  if (updates.default_split_rates !== undefined) {
+    dbUpdates.default_split_rates = updates.default_split_rates;
+  }
+  if (updates.default_target_rates !== undefined) {
+    dbUpdates.default_target_rates = updates.default_target_rates;
+  }
+  if (updates.default_stop_loss_rate !== undefined) {
+    dbUpdates.default_stop_loss_rate = updates.default_stop_loss_rate;
   }
 
   return dbUpdates;

@@ -1,32 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStocks } from '../hooks/useStocks';
 import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp, RefreshCw, X } from 'lucide-react';
-import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult, CompareResult, StockDefaultSettings } from '../types';
+import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult, CompareResult, BotConfig } from '../types';
 import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';
 import { getTodayKST, formatDate } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
 
-// 로컬 스토리지에서 종목 기본 설정 불러오기
-const getStockDefaults = (): StockDefaultSettings => {
-  try {
-    const saved = localStorage.getItem('stock_default_settings');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch {
-    // 무시
-  }
-  return {
-    buy_mode: 'amount',
-    buy_amount: 100000,
-    buy_quantity: 10,
-    max_rounds: 5,
-    split_rates: [-3, -3, -3, -3, -3, -3, -3, -3, -3],
-    target_rates: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
-    stop_loss_rate: 30,
-  };
-};
+// 기본값 상수
+const DEFAULT_SPLIT_RATES = [-3, -3, -3, -3, -3, -3, -3, -3, -3];
+const DEFAULT_TARGET_RATES = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3];
 
 // 숫자 입력 시 포커스되면 전체 선택
 const handleNumberFocus = (e: React.FocusEvent<HTMLInputElement>) => {
@@ -39,11 +22,13 @@ function StockModal({
   onClose,
   onSubmit,
   initialData,
+  botConfig,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (data: StockFormData) => void;
   initialData?: StockWithPurchases;
+  botConfig?: BotConfig | null;
 }) {
   const getInitialFormData = (): StockFormData => {
     // 수정 모드면 기존 데이터 사용
@@ -60,18 +45,17 @@ function StockModal({
         stop_loss_rate: initialData.stop_loss_rate,
       };
     }
-    // 새 종목 추가 모드면 설정에서 저장한 기본값 사용
-    const defaults = getStockDefaults();
+    // 새 종목 추가 모드면 DB에 저장된 기본값 사용
     return {
       code: '',
       name: '',
-      buy_amount: defaults.buy_amount,
-      buy_mode: defaults.buy_mode,
-      buy_quantity: defaults.buy_quantity,
-      max_rounds: defaults.max_rounds,
-      split_rates: [...defaults.split_rates],
-      target_rates: [...defaults.target_rates],
-      stop_loss_rate: defaults.stop_loss_rate,
+      buy_amount: botConfig?.default_buy_amount || 100000,
+      buy_mode: botConfig?.default_buy_mode || 'amount',
+      buy_quantity: botConfig?.default_buy_quantity || 10,
+      max_rounds: botConfig?.default_max_rounds || 5,
+      split_rates: botConfig?.default_split_rates ? [...botConfig.default_split_rates] : [...DEFAULT_SPLIT_RATES],
+      target_rates: botConfig?.default_target_rates ? [...botConfig.default_target_rates] : [...DEFAULT_TARGET_RATES],
+      stop_loss_rate: botConfig?.default_stop_loss_rate || 30,
     };
   };
 
@@ -1793,11 +1777,21 @@ export function Stocks() {
   const [purchaseModal, setPurchaseModal] = useState<{ stockId: string; stockName: string } | null>(null);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [showCompareModal, setShowCompareModal] = useState(false);
+  const [botConfig, setBotConfig] = useState<BotConfig | null>(null);
 
   // 검색 및 필터 상태
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>('all');
+
+  // botConfig 로드
+  useEffect(() => {
+    const loadConfig = async () => {
+      const config = await api.getOrCreateBotConfig();
+      setBotConfig(config);
+    };
+    loadConfig();
+  }, []);
 
   // 필터링된 종목 목록
   const filteredStocks = stocks.filter(stock => {
@@ -2031,6 +2025,7 @@ export function Stocks() {
         }}
         onSubmit={handleSubmit}
         initialData={editingStock}
+        botConfig={botConfig}
       />
 
       {purchaseModal && (
