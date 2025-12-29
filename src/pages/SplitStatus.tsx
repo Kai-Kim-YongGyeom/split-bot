@@ -383,7 +383,91 @@ export function SplitStatus() {
         </>
       ) : (
         /* 보유현황 탭 */
-        <div className="overflow-auto bg-gray-800 rounded-lg border border-gray-700 max-h-[calc(100vh-14rem)]">
+        <>
+          {/* 모바일 카드 뷰 */}
+          <div className="md:hidden space-y-3">
+            {holdingSortedStocks.map((stock) => {
+              const stats = getStockStats(stock);
+              const priceChange = stock.price_change || 0;
+
+              return (
+                <div
+                  key={stock.id}
+                  className="bg-gray-800 rounded-lg border border-gray-700 p-3"
+                >
+                  {/* 상단: 종목명 + 수익률 */}
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div className="font-bold text-sm">{stock.name}</div>
+                      <div className="text-xs text-gray-500">{stock.code}</div>
+                    </div>
+                    <div className="text-right">
+                      <div
+                        className={`text-lg font-bold ${
+                          stats.profitRate > 0
+                            ? 'text-red-400'
+                            : stats.profitRate < 0
+                            ? 'text-blue-400'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {stats.currentPrice > 0 ? formatRate(stats.profitRate) : '-'}
+                      </div>
+                      <div
+                        className={`text-xs ${
+                          stats.profitLoss > 0
+                            ? 'text-red-400'
+                            : stats.profitLoss < 0
+                            ? 'text-blue-400'
+                            : 'text-gray-400'
+                        }`}
+                      >
+                        {stats.profitLoss !== 0
+                          ? `${stats.profitLoss >= 0 ? '+' : ''}${formatNumber(Math.round(stats.profitLoss))}원`
+                          : '-'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 중단: 차수, 수량, 현재가 */}
+                  <div className="flex items-center gap-3 mb-2 pb-2 border-b border-gray-700">
+                    <span className="inline-flex items-center justify-center px-2 py-0.5 bg-purple-900/50 text-purple-300 rounded-full text-xs font-medium">
+                      {stats.holdingRounds}차
+                    </span>
+                    <span className="text-sm text-gray-300">{formatNumber(stats.totalQty)}주</span>
+                    <span className="text-sm ml-auto">
+                      <span className="text-gray-400">현재가 </span>
+                      <span className="font-medium">{stats.currentPrice > 0 ? formatNumber(stats.currentPrice) : '-'}</span>
+                      {priceChange !== 0 && (
+                        <span className={`ml-1 text-xs ${priceChange > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {formatRate(priceChange)}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* 하단: 평단가, 투자금, 평가금액 */}
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <div className="text-gray-500">평단가</div>
+                      <div className="font-medium">{stats.avgPrice > 0 ? formatNumber(Math.round(stats.avgPrice)) : '-'}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">투자금</div>
+                      <div className="font-medium text-purple-400">{formatNumber(Math.round(stats.totalInvested))}</div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500">평가금액</div>
+                      <div className="font-medium text-blue-400">{stats.evalAmount > 0 ? formatNumber(Math.round(stats.evalAmount)) : '-'}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 데스크탑 테이블 뷰 */}
+          <div className="hidden md:block overflow-auto bg-gray-800 rounded-lg border border-gray-700 max-h-[calc(100vh-14rem)]">
           <table className="w-full border-collapse min-w-[900px]">
             <thead className="sticky top-0 z-20 bg-gray-800">
               <tr className="text-gray-400 text-sm border-b border-gray-700">
@@ -561,7 +645,8 @@ export function SplitStatus() {
               })}
             </tbody>
           </table>
-        </div>
+          </div>
+        </>
       )}
     </div>
   );
