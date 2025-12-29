@@ -372,14 +372,47 @@ export async function getStockWithPurchases(id: string) {
 }
 
 export async function getAllStocksWithPurchases() {
-  const stocks = await getStocks();
-  const results = await Promise.all(
-    stocks.map(async (stock) => {
-      const purchases = await getPurchases(stock.id);
-      return { ...stock, purchases };
-    })
-  );
-  return results;
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    return [];
+  }
+
+  // 종목과 매수기록을 한 번에 가져오기 (N+1 문제 해결)
+  const [stocksResult, purchasesResult] = await Promise.all([
+    supabase
+      .from('bot_stocks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('bot_purchases')
+      .select('*')
+      .eq('user_id', userId)
+      .order('round', { ascending: true }),
+  ]);
+
+  if (stocksResult.error || purchasesResult.error) {
+    console.error('Error fetching stocks with purchases:', stocksResult.error || purchasesResult.error);
+    return [];
+  }
+
+  const stocks = stocksResult.data || [];
+  const allPurchases = purchasesResult.data || [];
+
+  // 메모리에서 매핑
+  const purchasesByStockId = new Map<string, typeof allPurchases>();
+  for (const purchase of allPurchases) {
+    const stockId = purchase.stock_id;
+    if (!purchasesByStockId.has(stockId)) {
+      purchasesByStockId.set(stockId, []);
+    }
+    purchasesByStockId.get(stockId)!.push(purchase);
+  }
+
+  return stocks.map(stock => ({
+    ...stock,
+    purchases: purchasesByStockId.get(stock.id) || [],
+  }));
 }
 
 // ==================== 매수 요청 (bot_buy_requests) ====================
