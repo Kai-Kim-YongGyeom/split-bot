@@ -317,51 +317,74 @@ class KisAPI:
         return result_data
 
     def get_holdings(self) -> list[dict]:
-        """보유 종목 조회"""
+        """보유 종목 조회 (페이지네이션 처리)"""
         url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-balance"
 
         tr_id = "TTTC8434R" if self.is_real else "VTTC8434R"
-        headers = self._get_headers(tr_id)
-
         acct_no, acct_suffix = self._parse_account()
-        params = {
-            "CANO": acct_no,
-            "ACNT_PRDT_CD": acct_suffix,
-            "AFHR_FLPR_YN": "N",
-            "OFL_YN": "",
-            "INQR_DVSN": "02",
-            "UNPR_DVSN": "01",
-            "FUND_STTL_ICLD_YN": "N",
-            "FNCG_AMT_AUTO_RDPT_YN": "N",
-            "PRCS_DVSN": "00",
-            "CTX_AREA_FK100": "",
-            "CTX_AREA_NK100": "",
-        }
+
+        holdings = []
+        ctx_area_fk100 = ""
+        ctx_area_nk100 = ""
+        page = 1
+        max_pages = 10  # 무한루프 방지
 
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
-            response.raise_for_status()
-            result = response.json()
+            while page <= max_pages:
+                headers = self._get_headers(tr_id)
+                params = {
+                    "CANO": acct_no,
+                    "ACNT_PRDT_CD": acct_suffix,
+                    "AFHR_FLPR_YN": "N",
+                    "OFL_YN": "",
+                    "INQR_DVSN": "02",
+                    "UNPR_DVSN": "01",
+                    "FUND_STTL_ICLD_YN": "N",
+                    "FNCG_AMT_AUTO_RDPT_YN": "N",
+                    "PRCS_DVSN": "00",
+                    "CTX_AREA_FK100": ctx_area_fk100,
+                    "CTX_AREA_NK100": ctx_area_nk100,
+                }
 
-            holdings = []
-            if result.get("rt_cd") == "0":
-                for item in result.get("output1", []):
-                    qty = int(item.get("hldg_qty", 0))
-                    if qty > 0:
-                        holdings.append({
-                            "code": item.get("pdno", ""),
-                            "name": item.get("prdt_name", ""),
-                            "quantity": qty,
-                            "avg_price": int(float(item.get("pchs_avg_pric", 0))),
-                            "current_price": int(item.get("prpr", 0)),
-                            "profit_rate": float(item.get("evlu_pfls_rt", 0)),
-                        })
-            else:
-                print(f"[KIS] 보유 종목 조회 실패: {result.get('msg1', '')}")
+                response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+                response.raise_for_status()
+                result = response.json()
+
+                if result.get("rt_cd") == "0":
+                    for item in result.get("output1", []):
+                        qty = int(item.get("hldg_qty", 0))
+                        if qty > 0:
+                            holdings.append({
+                                "code": item.get("pdno", ""),
+                                "name": item.get("prdt_name", ""),
+                                "quantity": qty,
+                                "avg_price": int(float(item.get("pchs_avg_pric", 0))),
+                                "current_price": int(item.get("prpr", 0)),
+                                "profit_rate": float(item.get("evlu_pfls_rt", 0)),
+                            })
+
+                    # 다음 페이지 확인
+                    ctx_area_fk100 = result.get("ctx_area_fk100", "").strip()
+                    ctx_area_nk100 = result.get("ctx_area_nk100", "").strip()
+
+                    # 더 이상 데이터가 없으면 종료
+                    if not ctx_area_fk100 and not ctx_area_nk100:
+                        break
+                    if not result.get("output1"):
+                        break
+
+                    print(f"[KIS] 보유 종목 {page}페이지 조회: {len(result.get('output1', []))}개")
+                    page += 1
+                    time.sleep(0.2)  # Rate limit 방지
+                else:
+                    print(f"[KIS] 보유 종목 조회 실패: {result.get('msg1', '')}")
+                    break
+
+            print(f"[KIS] 보유 종목 총 {len(holdings)}개 조회 완료")
             return holdings
         except requests.exceptions.RequestException as e:
             print(f"[KIS] 보유 종목 조회 오류: {e}")
-            return []
+            return holdings  # 부분 결과라도 반환
 
     def buy_stock(self, stock_code: str, quantity: int, price: int = 0) -> dict:
         """매수 주문
