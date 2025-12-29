@@ -592,7 +592,7 @@ export function StockRecommend() {
               </div>
               <span className="text-sm text-gray-400">{results.length}개 종목</span>
             </div>
-            <div className="grid grid-cols-4 gap-2 text-center text-sm">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-center text-sm">
               <div className="bg-green-900/20 border border-green-800 rounded p-2">
                 <p className="text-green-400 font-bold text-lg">{countByRecommendation.strong}</p>
                 <p className="text-green-400/70 text-xs">강력 추천</p>
