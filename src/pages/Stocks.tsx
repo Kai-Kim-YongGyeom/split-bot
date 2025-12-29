@@ -647,24 +647,33 @@ function BuyConfirmModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (buyAmount: number) => void;
+  onConfirm: (buyAmount: number | null, buyQuantity: number | null) => void;
   stock: StockWithPurchases;
   loading: boolean;
 }) {
+  const isQuantityMode = stock.buy_mode === 'quantity';
   const [buyAmount, setBuyAmount] = useState(stock.buy_amount);
+  const [buyQuantity, setBuyQuantity] = useState(stock.buy_quantity || 1);
   const holdingCount = stock.purchases.filter(p => p.status === 'holding').length;
   const nextRound = holdingCount + 1;
 
   useEffect(() => {
     setBuyAmount(stock.buy_amount);
-  }, [stock.buy_amount, isOpen]);
+    setBuyQuantity(stock.buy_quantity || 1);
+  }, [stock.buy_amount, stock.buy_quantity, isOpen]);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onConfirm(buyAmount);
+    if (isQuantityMode) {
+      onConfirm(null, buyQuantity);
+    } else {
+      onConfirm(buyAmount, null);
+    }
   };
+
+  const isValid = isQuantityMode ? buyQuantity > 0 : buyAmount > 0;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
@@ -693,27 +702,56 @@ function BuyConfirmModal({
               <span className="text-gray-400">다음 차수</span>
               <span className="text-blue-400 font-bold">{nextRound}차</span>
             </div>
-            {stock.current_price && buyAmount > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">매수 방식</span>
+              <span className={`text-xs px-2 py-0.5 rounded ${isQuantityMode ? 'bg-purple-900/50 text-purple-400' : 'bg-blue-900/50 text-blue-400'}`}>
+                {isQuantityMode ? '수량 기준' : '금액 기준'}
+              </span>
+            </div>
+            {!isQuantityMode && stock.current_price && buyAmount > 0 && (
               <div className="flex justify-between items-center pt-1 border-t border-gray-600">
                 <span className="text-gray-400">예상 수량</span>
                 <span className="font-bold">약 {Math.floor(buyAmount / stock.current_price)}주</span>
               </div>
             )}
+            {isQuantityMode && stock.current_price && buyQuantity > 0 && (
+              <div className="flex justify-between items-center pt-1 border-t border-gray-600">
+                <span className="text-gray-400">예상 금액</span>
+                <span className="font-bold">약 {(buyQuantity * stock.current_price).toLocaleString()}원</span>
+              </div>
+            )}
           </div>
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">매수 금액</label>
-            <input
-              type="number"
-              value={buyAmount || ''}
-              onChange={e => setBuyAmount(Number(e.target.value) || 0)}
-              onFocus={handleNumberFocus}
-              className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
-              placeholder="100000"
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">현재가 기준 수량 자동 계산</p>
-          </div>
+          {isQuantityMode ? (
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">매수 수량</label>
+              <input
+                type="number"
+                value={buyQuantity || ''}
+                onChange={e => setBuyQuantity(Number(e.target.value) || 0)}
+                onFocus={handleNumberFocus}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+                placeholder="10"
+                min="1"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">지정한 수량만큼 시장가 매수</p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">매수 금액</label>
+              <input
+                type="number"
+                value={buyAmount || ''}
+                onChange={e => setBuyAmount(Number(e.target.value) || 0)}
+                onFocus={handleNumberFocus}
+                className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-3 md:py-2 text-base"
+                placeholder="100000"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">현재가 기준 수량 자동 계산</p>
+            </div>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button
@@ -726,7 +764,7 @@ function BuyConfirmModal({
             </button>
             <button
               type="submit"
-              disabled={loading || buyAmount <= 0}
+              disabled={loading || !isValid}
               className="flex-1 px-4 py-3 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
@@ -806,13 +844,14 @@ function StockCard({
     }
   };
 
-  const handleBuyRequest = async (buyAmount: number) => {
+  const handleBuyRequest = async (buyAmount: number | null, buyQuantity: number | null) => {
     setBuying(true);
     const result = await api.createBuyRequest(
       stock.id,
       stock.code,
       stock.name,
-      buyAmount
+      buyAmount || undefined,
+      buyQuantity || undefined
     );
     setBuying(false);
     setShowBuyModal(false);
