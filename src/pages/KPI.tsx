@@ -47,6 +47,7 @@ interface MonthlySummary {
 }
 
 type TabType = 'current' | 'daily' | 'monthly';
+type TradeFilter = 'all' | 'buy' | 'sell';
 
 function DateRangePicker({
   startDate,
@@ -455,6 +456,7 @@ export function KPI() {
 
   // 현재탭 필터 상태
   const [searchQuery, setSearchQuery] = useState('');
+  const [tradeFilter, setTradeFilter] = useState<TradeFilter>('all');
 
   useEffect(() => {
     fetchData();
@@ -695,6 +697,19 @@ export function KPI() {
       return pDate >= startDate && pDate <= endDate;
     });
 
+    // 매수/매도 필터
+    if (tradeFilter === 'buy') {
+      // 보유중인 것만 (매수만 보기)
+      filtered = filtered.filter(p => p.status === 'holding');
+    } else if (tradeFilter === 'sell') {
+      // 매도된 것만 (해당 기간에 매도된 것)
+      filtered = filtered.filter(p => {
+        if (p.status !== 'sold' || !p.sold_date) return false;
+        const soldDate = p.sold_date.split('T')[0].split(' ')[0];
+        return soldDate >= startDate && soldDate <= endDate;
+      });
+    }
+
     // 검색어 필터
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -707,7 +722,7 @@ export function KPI() {
     }
 
     return filtered.slice(0, 50);
-  }, [purchases, startDate, endDate, searchQuery]);
+  }, [purchases, startDate, endDate, searchQuery, tradeFilter]);
 
   if (loading) {
     return (
@@ -744,17 +759,53 @@ export function KPI() {
       {/* 탭 컨텐츠 */}
       {activeTab === 'current' && (
         <>
-          {/* 검색 */}
+          {/* 검색 및 필터 */}
           <div className="bg-gray-800 rounded-lg border border-gray-700 p-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="종목명 또는 코드 검색..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-              />
+            <div className="flex flex-col md:flex-row gap-3">
+              {/* 검색 */}
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="종목명 또는 코드 검색..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              {/* 매수/매도 필터 */}
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setTradeFilter('all')}
+                  className={`px-3 py-2 text-sm rounded-lg transition ${
+                    tradeFilter === 'all'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  전체
+                </button>
+                <button
+                  onClick={() => setTradeFilter('buy')}
+                  className={`px-3 py-2 text-sm rounded-lg transition ${
+                    tradeFilter === 'buy'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  매수만
+                </button>
+                <button
+                  onClick={() => setTradeFilter('sell')}
+                  className={`px-3 py-2 text-sm rounded-lg transition ${
+                    tradeFilter === 'sell'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  매도만
+                </button>
+              </div>
             </div>
           </div>
 
