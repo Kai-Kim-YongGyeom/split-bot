@@ -230,3 +230,4 @@ ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_amt BIGINT DEF
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_profit BIGINT DEFAULT 0;      -- KIS 평가손익
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_profit_rate DECIMAL DEFAULT 0; -- KIS 평가손익률
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_realized_profit BIGINT DEFAULT 0;  -- KIS 실현손익(연초~현재)
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS balance_refresh_requested BOOLEAN DEFAULT false; -- 잔고 새로고침 요청 플래그

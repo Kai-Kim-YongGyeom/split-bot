@@ -382,6 +382,25 @@ export async function updateBotConfig(updates: Partial<BotConfig>): Promise<bool
   return true;
 }
 
+export async function requestBalanceRefresh(): Promise<boolean> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return false;
+  }
+
+  const { error } = await supabase
+    .from('user_settings')
+    .update({ balance_refresh_requested: true })
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error requesting balance refresh:', error);
+    return false;
+  }
+  return true;
+}
+
 // ==================== 유틸리티 ====================
 
 export async function getStockWithPurchases(id: string) {

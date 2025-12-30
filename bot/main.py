@@ -371,22 +371,39 @@ class SplitBot:
                 await notifier.send_status(status)
 
     async def send_heartbeat(self) -> None:
-        """서버 상태 heartbeat 전송 + DB 동기화 (30초마다)"""
-        balance_counter = 9  # 시작 시 바로 예수금 업데이트 (다음 루프에서 10이 됨)
+        """서버 상태 heartbeat 전송 + DB 동기화 (5초마다)"""
+        balance_counter = 59  # 시작 시 바로 예수금 업데이트 (다음 루프에서 60이 됨)
+        heartbeat_counter = 0  # heartbeat는 30초마다
+        reload_counter = 0  # purchases 리로드는 30초마다
         while self._running:
             try:
-                supabase.update_heartbeat()
-                # 30초마다 DB에서 purchases 리로드 (웹/동기화로 추가된 매수 반영)
-                await self._reload_stocks()
+                # heartbeat는 30초마다 (5초 * 6 = 30초)
+                heartbeat_counter += 1
+                if heartbeat_counter >= 6:
+                    heartbeat_counter = 0
+                    supabase.update_heartbeat()
 
-                # 5분마다 예수금 업데이트 (30초 * 10 = 5분)
-                balance_counter += 1
-                if balance_counter >= 10:
-                    balance_counter = 0
+                # purchases 리로드는 30초마다 (5초 * 6 = 30초)
+                reload_counter += 1
+                if reload_counter >= 6:
+                    reload_counter = 0
+                    await self._reload_stocks()
+
+                # 잔고 새로고침 요청 확인 (웹에서 요청 시 즉시 갱신) - 5초마다 체크
+                if supabase.check_balance_refresh_requested(Config.USER_ID):
+                    print("[Bot] 잔고 새로고침 요청 감지 - 즉시 갱신")
                     await self._update_balance()
+                    supabase.clear_balance_refresh_requested(Config.USER_ID)
+                    balance_counter = 0  # 카운터 리셋
+                else:
+                    # 5분마다 예수금 업데이트 (5초 * 60 = 5분)
+                    balance_counter += 1
+                    if balance_counter >= 60:
+                        balance_counter = 0
+                        await self._update_balance()
             except Exception as e:
                 print(f"[Bot] Heartbeat 오류: {e}")
-            await asyncio.sleep(30)
+            await asyncio.sleep(5)
 
     async def _update_balance(self) -> None:
         """KIS 계좌 전체 정보 업데이트 (예수금 + 자산현황 + 실현손익)"""

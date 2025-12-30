@@ -469,6 +469,38 @@ class SupabaseClient:
 
         return "error" not in result
 
+    def check_balance_refresh_requested(self, user_id: str) -> bool:
+        """잔고 새로고침 요청 플래그 확인"""
+        if not self.is_configured or not user_id:
+            return False
+
+        result = self._request(
+            "GET",
+            "user_settings",
+            params={
+                "user_id": f"eq.{user_id}",
+                "select": "balance_refresh_requested",
+            },
+        )
+
+        if isinstance(result, list) and len(result) > 0:
+            return result[0].get("balance_refresh_requested", False)
+        return False
+
+    def clear_balance_refresh_requested(self, user_id: str) -> bool:
+        """잔고 새로고침 요청 플래그 해제"""
+        if not self.is_configured or not user_id:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "user_settings",
+            data={"balance_refresh_requested": False},
+            params={"user_id": f"eq.{user_id}"},
+        )
+
+        return "error" not in result
+
     # ==================== 동기화 관련 ====================
 
     def get_pending_sync_requests(self) -> list[dict]:

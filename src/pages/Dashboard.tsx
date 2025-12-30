@@ -1,12 +1,30 @@
+import { useState } from 'react';
 import { useStocks } from '../hooks/useStocks';
 import { useDepositHistory } from '../hooks/useDepositHistory';
-import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare } from 'lucide-react';
+import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare, RefreshCw } from 'lucide-react';
 import { useBotStatus } from '../contexts/BotStatusContext';
+import { requestBalanceRefresh } from '../lib/api';
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
   const { summary: depositSummary } = useDepositHistory();
-  const { botRunning, serverAlive, availableCash, availableAmount, d2Deposit, kisAccountInfo } = useBotStatus();
+  const { botRunning, serverAlive, availableCash, availableAmount, d2Deposit, kisAccountInfo, refreshStatus } = useBotStatus();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    const success = await requestBalanceRefresh();
+    if (success) {
+      // 5초 후 상태 새로고침 (봇이 처리할 시간)
+      setTimeout(() => {
+        refreshStatus();
+        setRefreshing(false);
+      }, 5000);
+    } else {
+      setRefreshing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -183,6 +201,18 @@ export function Dashboard() {
           <div className="flex items-center gap-2 mb-3">
             <GitCompare className="w-5 h-5 text-cyan-400" />
             <h3 className="text-sm md:text-base font-semibold text-white">KIS vs Bot 비교</h3>
+            <button
+              onClick={handleRefresh}
+              disabled={refreshing || !serverAlive}
+              className={`p-1.5 rounded-lg transition-colors ${
+                refreshing ? 'bg-cyan-900/50 cursor-wait' :
+                !serverAlive ? 'bg-gray-700 cursor-not-allowed opacity-50' :
+                'bg-cyan-900/30 hover:bg-cyan-900/50'
+              }`}
+              title={!serverAlive ? '서버 오프라인' : refreshing ? '갱신 중...' : 'KIS 정보 새로고침'}
+            >
+              <RefreshCw className={`w-4 h-4 text-cyan-400 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
             {kisAccountInfo.updatedAt && (
               <span className="text-xs text-gray-500 ml-auto">
                 {new Date(kisAccountInfo.updatedAt).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
