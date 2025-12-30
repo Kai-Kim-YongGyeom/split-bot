@@ -243,6 +243,9 @@ function userSettingsToBotConfig(settings: UserSettings): BotConfig {
     kis_total_eval_profit: settings.kis_total_eval_profit,
     kis_total_eval_profit_rate: settings.kis_total_eval_profit_rate,
     kis_total_realized_profit: settings.kis_total_realized_profit,
+    kis_total_fee: settings.kis_total_fee,
+    kis_total_tax: settings.kis_total_tax,
+    kis_net_profit: settings.kis_net_profit,
     created_at: settings.created_at,
     updated_at: settings.updated_at,
     // 종목 추가 기본 설정
