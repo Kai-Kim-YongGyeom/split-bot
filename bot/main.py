@@ -36,6 +36,9 @@ from telegram_bot import notifier, bot_handler
 class SplitBot:
     """자동 물타기 봇"""
 
+    # 최소 주문가능금액 (원)
+    MIN_AVAILABLE_AMOUNT = 30000
+
     def __init__(self):
         self._running = False
         self._bot_enabled = False  # DB에서 제어
@@ -51,6 +54,8 @@ class SplitBot:
         self._stock_locks: dict[str, asyncio.Lock] = {}
         # 매도 직후 매수 방지 타이머 (종목코드 -> 매도 시간)
         self._recent_sells: dict[str, datetime] = {}
+        # 주문가능금액 캐시
+        self._available_amount: Optional[int] = None
 
     def is_market_open(self) -> bool:
         """장 운영 시간 체크 (09:00 ~ 15:30 KST)"""
@@ -179,6 +184,11 @@ class SplitBot:
         quantity = result["quantity"]
         round_num = result["round"]
         prev_price = result.get("prev_price", 0)
+
+        # 주문가능금액 체크
+        if self._available_amount is not None and self._available_amount < self.MIN_AVAILABLE_AMOUNT:
+            log(f"[Bot] 매수 스킵: 주문가능금액 부족 ({self._available_amount:,}원 < {self.MIN_AVAILABLE_AMOUNT:,}원)")
+            return
 
         # 주문 처리 중 플래그 설정 (중복 주문 방지)
         stock.set_order_pending("buy", round_num)
@@ -395,9 +405,11 @@ class SplitBot:
                     cash = balance.get("cash", 0)
                     total = balance.get("total", 0)
                     d2_deposit = balance.get("d2_deposit", 0)
+                    # 주문가능금액 캐시 업데이트
+                    self._available_amount = total
                     success = supabase.update_balance(Config.USER_ID, cash, total, d2_deposit)
                     if success:
-                        print(f"[Bot] 예수금 DB 저장 완료: 주문가능 {cash:,}원, D+2 {d2_deposit:,}원")
+                        print(f"[Bot] 예수금 DB 저장 완료: 주문가능 {cash:,}원, 매수가능 {total:,}원, D+2 {d2_deposit:,}원")
                     else:
                         print("[Bot] 예수금 DB 저장 실패")
                 else:
@@ -951,6 +963,14 @@ class SplitBot:
         stock = strategy.stocks.get(stock_code)
         if not stock:
             supabase.update_buy_request(request_id, "failed", f"종목 없음: {stock_code}")
+            return
+
+        # 주문가능금액 체크
+        if self._available_amount is not None and self._available_amount < self.MIN_AVAILABLE_AMOUNT:
+            supabase.update_buy_request(
+                request_id, "failed",
+                f"주문가능금액 부족 ({self._available_amount:,}원 < {self.MIN_AVAILABLE_AMOUNT:,}원)"
+            )
             return
 
         # 주문 처리 중 체크 (중복 주문 방지)
