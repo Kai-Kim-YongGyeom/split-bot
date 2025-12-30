@@ -390,31 +390,6 @@ export function Dashboard() {
                     </tr>
                   );
                 })()}
-                {/* 투자수익률 - 순입금 대비 순이익률 */}
-                {netDeposit > 0 && (() => {
-                  // KIS: 순이익(세후) / 순입금
-                  const kisInvestRate = (kisAccountInfo.netProfit / netDeposit) * 100;
-                  // BOT: 실현손익 / 순입금
-                  const botInvestRate = (totalRealizedProfit / netDeposit) * 100;
-                  const diffRate = kisInvestRate - botInvestRate;
-                  return (
-                    <tr>
-                      <td className="py-2 text-gray-300 font-medium">투자수익률</td>
-                      <td className={`py-2 text-right font-medium ${kisInvestRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
-                        {kisInvestRate >= 0 ? '+' : ''}{kisInvestRate.toFixed(2)}%
-                      </td>
-                      <td className={`py-2 text-right font-medium ${botInvestRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
-                        {botInvestRate >= 0 ? '+' : ''}{botInvestRate.toFixed(2)}%
-                      </td>
-                      <td className={`py-2 text-right ${
-                        Math.abs(diffRate) < 0.01 ? 'text-gray-500' :
-                        Math.abs(diffRate) < 1 ? 'text-yellow-400' : 'text-red-400'
-                      }`}>
-                        {Math.abs(diffRate) < 0.01 ? '-' : `${diffRate > 0 ? '+' : ''}${diffRate.toFixed(2)}%`}
-                      </td>
-                    </tr>
-                  );
-                })()}
               </tbody>
             </table>
           </div>
