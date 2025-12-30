@@ -1104,8 +1104,6 @@ class KisAPI:
 
                             print(f"[KIS] 실현손익({start_date}~{end_date}): "
                                   f"{result_data['total_realized_profit']:+,}원")
-                            # 디버그: output2 필드 확인
-                            print(f"[KIS] output2 keys: {list(output2.keys()) if isinstance(output2, dict) else 'not dict'}")
 
                     if resp_tr_cont not in ["M", "F"]:
                         break
