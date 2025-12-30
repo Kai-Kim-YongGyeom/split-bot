@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useStocks } from '../hooks/useStocks';
 import { useDepositHistory } from '../hooks/useDepositHistory';
-import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare, RefreshCw, BarChart2 } from 'lucide-react';
+import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare, RefreshCw, BarChart2, Maximize2, X } from 'lucide-react';
 import { useBotStatus } from '../contexts/BotStatusContext';
 import { requestBalanceRefresh, getDailySnapshots } from '../lib/api';
 import type { DailySnapshot, SnapshotPeriod } from '../lib/api';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
@@ -23,6 +23,7 @@ export function Dashboard() {
   const [chartEndDate, setChartEndDate] = useState<string>(() => {
     return new Date().toISOString().split('T')[0];
   });
+  const [chartExpanded, setChartExpanded] = useState(false);
 
   // 스냅샷 데이터 로드
   useEffect(() => {
@@ -453,6 +454,13 @@ export function Dashboard() {
             <div className="flex items-center gap-2">
               <BarChart2 className="w-5 h-5 text-green-400" />
               <h3 className="text-sm md:text-base font-semibold text-white">자산 추이</h3>
+              <button
+                onClick={() => setChartExpanded(true)}
+                className="p-1 rounded hover:bg-gray-700 transition-colors"
+                title="확대"
+              >
+                <Maximize2 className="w-4 h-4 text-gray-400" />
+              </button>
             </div>
             <div className="flex gap-1">
               {(['daily', 'monthly', 'yearly'] as SnapshotPeriod[]).map((period) => (
@@ -599,6 +607,192 @@ export function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* 차트 확대 모달 */}
+      {chartExpanded && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+          {/* 헤더 */}
+          <div className="flex items-center justify-between p-4 border-b border-gray-700">
+            <div className="flex items-center gap-3">
+              <BarChart2 className="w-6 h-6 text-green-400" />
+              <h2 className="text-lg font-bold text-white">자산 추이</h2>
+              <div className="flex gap-1 ml-4">
+                {(['daily', 'monthly', 'yearly'] as SnapshotPeriod[]).map((period) => (
+                  <button
+                    key={period}
+                    onClick={() => setChartPeriod(period)}
+                    className={`px-3 py-1.5 text-sm rounded ${
+                      chartPeriod === period
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    }`}
+                  >
+                    {period === 'daily' ? '일별' : period === 'monthly' ? '월별' : '연별'}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-400">기간:</span>
+                <input
+                  type="date"
+                  value={chartStartDate}
+                  onChange={(e) => setChartStartDate(e.target.value)}
+                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-300 text-sm focus:outline-none focus:border-green-500"
+                />
+                <span className="text-gray-500">~</span>
+                <input
+                  type="date"
+                  value={chartEndDate}
+                  onChange={(e) => setChartEndDate(e.target.value)}
+                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-300 text-sm focus:outline-none focus:border-green-500"
+                />
+              </div>
+              <button
+                onClick={() => setChartExpanded(false)}
+                className="p-2 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-400" />
+              </button>
+            </div>
+          </div>
+
+          {/* 차트 영역 */}
+          <div className="flex-1 p-4">
+            {chartLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
+              </div>
+            ) : snapshots.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-gray-500">
+                <BarChart2 className="w-16 h-16 mb-3 opacity-30" />
+                <p className="text-lg">아직 스냅샷 데이터가 없습니다</p>
+                <p className="text-sm">매일 15:30에 자동 저장됩니다</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={snapshots.map(s => ({
+                    date: chartPeriod === 'yearly'
+                      ? s.date.substring(0, 4)
+                      : chartPeriod === 'monthly'
+                      ? s.date.substring(5, 7) + '월'
+                      : s.date.substring(5),
+                    fullDate: s.date,
+                    총자산: s.total_asset,
+                    순입금: s.net_deposit,
+                    수익률: s.invest_return_rate,
+                  }))}
+                  margin={{ top: 30, right: 60, left: 20, bottom: 20 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                  <XAxis
+                    dataKey="date"
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickFormatter={(v) => `${(v / 10000).toFixed(0)}만`}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickFormatter={(v) => `${v.toFixed(1)}%`}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1F2937',
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                    }}
+                    labelStyle={{ color: '#9CA3AF' }}
+                    labelFormatter={(_, payload) => {
+                      if (payload && payload[0]) {
+                        return payload[0].payload.fullDate;
+                      }
+                      return '';
+                    }}
+                    formatter={(value, name) => {
+                      const numValue = typeof value === 'number' ? value : 0;
+                      if (name === '수익률') return [`${numValue.toFixed(2)}%`, name];
+                      return [`${numValue.toLocaleString()}원`, name];
+                    }}
+                  />
+                  <Legend
+                    wrapperStyle={{ fontSize: '14px' }}
+                    iconSize={12}
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="총자산"
+                    stroke="#3B82F6"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#3B82F6' }}
+                    activeDot={{ r: 6 }}
+                  >
+                    <LabelList
+                      dataKey="총자산"
+                      position="top"
+                      formatter={(v) => typeof v === 'number' ? `${(v / 10000).toFixed(0)}만` : ''}
+                      style={{ fill: '#3B82F6', fontSize: '10px' }}
+                    />
+                  </Line>
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="순입금"
+                    stroke="#6B7280"
+                    strokeWidth={2}
+                    strokeDasharray="5 5"
+                    dot={{ r: 3, fill: '#6B7280' }}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="수익률"
+                    stroke="#22C55E"
+                    strokeWidth={3}
+                    dot={{ r: 4, fill: '#22C55E' }}
+                    activeDot={{ r: 6 }}
+                  >
+                    <LabelList
+                      dataKey="수익률"
+                      position="bottom"
+                      formatter={(v) => typeof v === 'number' ? `${v.toFixed(1)}%` : ''}
+                      style={{ fill: '#22C55E', fontSize: '10px' }}
+                    />
+                  </Line>
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+
+          {/* 푸터 정보 */}
+          {snapshots.length > 0 && (
+            <div className="flex justify-between text-sm text-gray-400 p-4 border-t border-gray-700">
+              <span>
+                기간: {snapshots[0]?.date} ~ {snapshots[snapshots.length - 1]?.date}
+              </span>
+              <span>
+                총 {snapshots.length}개 데이터
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Row 4: 전체, 활성 */}
       <div className="grid grid-cols-2 gap-2 md:gap-3">
