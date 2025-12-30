@@ -291,7 +291,7 @@ export function Dashboard() {
                   </td>
                 </tr>
                 {/* 실현손익 */}
-                <tr>
+                <tr className="border-b border-gray-700/50">
                   <td className="py-2 text-gray-300">실현손익</td>
                   <td className={`py-2 text-right ${kisAccountInfo.totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {kisAccountInfo.totalRealizedProfit >= 0 ? '+' : ''}{kisAccountInfo.totalRealizedProfit.toLocaleString()}
@@ -307,6 +307,49 @@ export function Dashboard() {
                       `${kisAccountInfo.totalRealizedProfit - totalRealizedProfit > 0 ? '+' : ''}${(kisAccountInfo.totalRealizedProfit - totalRealizedProfit).toLocaleString()}`}
                   </td>
                 </tr>
+                {/* 총자산 */}
+                {(() => {
+                  const kisTotalAsset = (availableCash || 0) + kisAccountInfo.totalEvalAmt;
+                  const botTotalAsset = totalAsset;
+                  const diffAsset = kisTotalAsset - botTotalAsset;
+                  return (
+                    <tr className="border-b border-gray-700/50">
+                      <td className="py-2 text-gray-300 font-medium">총자산</td>
+                      <td className="py-2 text-right text-white font-medium">{kisTotalAsset.toLocaleString()}</td>
+                      <td className="py-2 text-right text-white font-medium">{botTotalAsset.toLocaleString()}</td>
+                      <td className={`py-2 text-right ${
+                        diffAsset === 0 ? 'text-gray-500' :
+                        Math.abs(diffAsset) < 1000 ? 'text-yellow-400' : 'text-red-400'
+                      }`}>
+                        {diffAsset === 0 ? '-' : `${diffAsset > 0 ? '+' : ''}${diffAsset.toLocaleString()}`}
+                      </td>
+                    </tr>
+                  );
+                })()}
+                {/* 투자수익률 */}
+                {netDeposit > 0 && (() => {
+                  const kisTotalAsset = (availableCash || 0) + kisAccountInfo.totalEvalAmt;
+                  const kisInvestRate = ((kisTotalAsset - netDeposit) / netDeposit) * 100;
+                  const botInvestRate = investmentReturnRate;
+                  const diffRate = kisInvestRate - botInvestRate;
+                  return (
+                    <tr>
+                      <td className="py-2 text-gray-300 font-medium">투자수익률</td>
+                      <td className={`py-2 text-right font-medium ${kisInvestRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                        {kisInvestRate >= 0 ? '+' : ''}{kisInvestRate.toFixed(2)}%
+                      </td>
+                      <td className={`py-2 text-right font-medium ${botInvestRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                        {botInvestRate >= 0 ? '+' : ''}{botInvestRate.toFixed(2)}%
+                      </td>
+                      <td className={`py-2 text-right ${
+                        Math.abs(diffRate) < 0.01 ? 'text-gray-500' :
+                        Math.abs(diffRate) < 1 ? 'text-yellow-400' : 'text-red-400'
+                      }`}>
+                        {Math.abs(diffRate) < 0.01 ? '-' : `${diffRate > 0 ? '+' : ''}${diffRate.toFixed(2)}%`}
+                      </td>
+                    </tr>
+                  );
+                })()}
               </tbody>
             </table>
           </div>
