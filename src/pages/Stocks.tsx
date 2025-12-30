@@ -6,6 +6,10 @@ import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';
 import { getTodayKST, formatDate } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
+import { useBotStatus } from '../contexts/BotStatusContext';
+
+// 최소 주문가능금액
+const MIN_AVAILABLE_AMOUNT = 30000;
 
 // 기본값 상수
 const DEFAULT_SPLIT_RATES = [-3, -3, -3, -3, -3, -3, -3, -3, -3];
@@ -818,6 +822,7 @@ function StockCard({
   onRefresh: () => void;
 }) {
   const { showToast } = useToast();
+  const { availableAmount } = useBotStatus();
   const [expanded, setExpanded] = useState(false);
   const [buying, setBuying] = useState(false);
   const [buySuccess, setBuySuccess] = useState(false);
@@ -976,7 +981,13 @@ function StockCard({
               </span>
             )}
             <button
-              onClick={() => setShowBuyModal(true)}
+              onClick={() => {
+                if (availableAmount !== null && availableAmount < MIN_AVAILABLE_AMOUNT) {
+                  showToast(`주문가능금액이 ${MIN_AVAILABLE_AMOUNT.toLocaleString()}원 미만입니다.`, 'error');
+                  return;
+                }
+                setShowBuyModal(true);
+              }}
               disabled={buying || !stock.is_active}
               className={`p-2 rounded transition flex items-center gap-1 text-sm ${
                 stock.is_active
