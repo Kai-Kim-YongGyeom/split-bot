@@ -237,6 +237,12 @@ function userSettingsToBotConfig(settings: UserSettings): BotConfig {
     available_amount: settings.available_amount,
     d2_deposit: settings.d2_deposit,
     balance_updated_at: settings.balance_updated_at,
+    // KIS 계좌 정보 (대시보드 비교용)
+    kis_total_buy_amt: settings.kis_total_buy_amt,
+    kis_total_eval_amt: settings.kis_total_eval_amt,
+    kis_total_eval_profit: settings.kis_total_eval_profit,
+    kis_total_eval_profit_rate: settings.kis_total_eval_profit_rate,
+    kis_total_realized_profit: settings.kis_total_realized_profit,
     created_at: settings.created_at,
     updated_at: settings.updated_at,
     // 종목 추가 기본 설정
