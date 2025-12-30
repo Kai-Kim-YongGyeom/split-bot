@@ -3,7 +3,7 @@ import { useStocks } from '../hooks/useStocks';
 import { useDepositHistory } from '../hooks/useDepositHistory';
 import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare, RefreshCw, BarChart2 } from 'lucide-react';
 import { useBotStatus } from '../contexts/BotStatusContext';
-import { requestBalanceRefresh, getDailySnapshots, getMonthlySnapshots, getYearlySnapshots } from '../lib/api';
+import { requestBalanceRefresh, getDailySnapshots } from '../lib/api';
 import type { DailySnapshot, SnapshotPeriod } from '../lib/api';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
@@ -15,25 +15,40 @@ export function Dashboard() {
   const [chartPeriod, setChartPeriod] = useState<SnapshotPeriod>('daily');
   const [snapshots, setSnapshots] = useState<DailySnapshot[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [chartStartDate, setChartStartDate] = useState<string>(() => {
+    const date = new Date();
+    date.setDate(date.getDate() - 30);
+    return date.toISOString().split('T')[0];
+  });
+  const [chartEndDate, setChartEndDate] = useState<string>(() => {
+    return new Date().toISOString().split('T')[0];
+  });
 
   // 스냅샷 데이터 로드
   useEffect(() => {
     const loadSnapshots = async () => {
       setChartLoading(true);
       try {
-        let data: DailySnapshot[] = [];
-        switch (chartPeriod) {
-          case 'monthly':
-            data = await getMonthlySnapshots();
-            break;
-          case 'yearly':
-            data = await getYearlySnapshots();
-            break;
-          default:
-            data = await getDailySnapshots('daily');
-            break;
+        const data = await getDailySnapshots(chartPeriod, chartStartDate, chartEndDate);
+
+        // 월별/연별은 집계 처리
+        if (chartPeriod === 'monthly') {
+          const monthlyMap = new Map<string, DailySnapshot>();
+          for (const s of data) {
+            const month = s.date.substring(0, 7);
+            monthlyMap.set(month, s);
+          }
+          setSnapshots(Array.from(monthlyMap.values()));
+        } else if (chartPeriod === 'yearly') {
+          const yearlyMap = new Map<string, DailySnapshot>();
+          for (const s of data) {
+            const year = s.date.substring(0, 4);
+            yearlyMap.set(year, s);
+          }
+          setSnapshots(Array.from(yearlyMap.values()));
+        } else {
+          setSnapshots(data);
         }
-        setSnapshots(data);
       } catch (e) {
         console.error('Error loading snapshots:', e);
       } finally {
@@ -41,7 +56,7 @@ export function Dashboard() {
       }
     };
     loadSnapshots();
-  }, [chartPeriod]);
+  }, [chartPeriod, chartStartDate, chartEndDate]);
 
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -433,25 +448,43 @@ export function Dashboard() {
 
       {/* 자산 추이 그래프 */}
       <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <BarChart2 className="w-5 h-5 text-green-400" />
-            <h3 className="text-sm md:text-base font-semibold text-white">자산 추이</h3>
+        <div className="flex flex-col gap-2 mb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <BarChart2 className="w-5 h-5 text-green-400" />
+              <h3 className="text-sm md:text-base font-semibold text-white">자산 추이</h3>
+            </div>
+            <div className="flex gap-1">
+              {(['daily', 'monthly', 'yearly'] as SnapshotPeriod[]).map((period) => (
+                <button
+                  key={period}
+                  onClick={() => setChartPeriod(period)}
+                  className={`px-2 py-1 text-xs rounded ${
+                    chartPeriod === period
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                  }`}
+                >
+                  {period === 'daily' ? '일별' : period === 'monthly' ? '월별' : '연별'}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-1">
-            {(['daily', 'monthly', 'yearly'] as SnapshotPeriod[]).map((period) => (
-              <button
-                key={period}
-                onClick={() => setChartPeriod(period)}
-                className={`px-2 py-1 text-xs rounded ${
-                  chartPeriod === period
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
-                }`}
-              >
-                {period === 'daily' ? '일별' : period === 'monthly' ? '월별' : '연별'}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-400">기간:</span>
+            <input
+              type="date"
+              value={chartStartDate}
+              onChange={(e) => setChartStartDate(e.target.value)}
+              className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-300 text-xs focus:outline-none focus:border-green-500"
+            />
+            <span className="text-gray-500">~</span>
+            <input
+              type="date"
+              value={chartEndDate}
+              onChange={(e) => setChartEndDate(e.target.value)}
+              className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-300 text-xs focus:outline-none focus:border-green-500"
+            />
           </div>
         </div>
 
