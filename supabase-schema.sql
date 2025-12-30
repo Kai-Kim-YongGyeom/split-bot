@@ -221,3 +221,12 @@ CREATE POLICY "Allow all for stock_analysis_requests" ON stock_analysis_requests
 
 CREATE POLICY "Allow all for stock_analysis_results" ON stock_analysis_results
     FOR ALL USING (true) WITH CHECK (true);
+
+-- ==================== KIS 계좌 정보 컬럼 추가 (user_settings) ====================
+-- 대시보드에서 KIS 계좌 vs Bot DB 비교를 위한 컬럼들
+
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_buy_amt BIGINT DEFAULT 0;          -- KIS 투자금(매입금액)
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_amt BIGINT DEFAULT 0;         -- KIS 평가금액
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_profit BIGINT DEFAULT 0;      -- KIS 평가손익
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_profit_rate DECIMAL DEFAULT 0; -- KIS 평가손익률
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_realized_profit BIGINT DEFAULT 0;  -- KIS 실현손익(연초~현재)

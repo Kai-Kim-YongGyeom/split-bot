@@ -54,6 +54,12 @@ export interface UserSettings {
   available_amount?: number;            // 매수가능금액
   d2_deposit?: number;                  // D+2 예수금
   balance_updated_at?: string;          // 잔고 업데이트 시간
+  // KIS 계좌 정보 (대시보드 비교용)
+  kis_total_buy_amt?: number;           // KIS 투자금(매입금액)
+  kis_total_eval_amt?: number;          // KIS 평가금액
+  kis_total_eval_profit?: number;       // KIS 평가손익
+  kis_total_eval_profit_rate?: number;  // KIS 평가손익률 (%)
+  kis_total_realized_profit?: number;   // KIS 실현손익 (연초~현재)
   created_at: string;
   updated_at: string;
   // 종목 추가 기본 설정
@@ -84,6 +90,12 @@ export interface BotConfig {
   available_amount?: number;            // 매수가능금액
   d2_deposit?: number;                  // D+2 예수금
   balance_updated_at?: string;          // 잔고 업데이트 시간
+  // KIS 계좌 정보 (대시보드 비교용)
+  kis_total_buy_amt?: number;           // KIS 투자금(매입금액)
+  kis_total_eval_amt?: number;          // KIS 평가금액
+  kis_total_eval_profit?: number;       // KIS 평가손익
+  kis_total_eval_profit_rate?: number;  // KIS 평가손익률 (%)
+  kis_total_realized_profit?: number;   // KIS 실현손익 (연초~현재)
   created_at: string;
   updated_at: string;
   // 종목 추가 기본 설정
@@ -93,6 +105,19 @@ export interface BotConfig {
   default_split_rates?: number[];       // 기본 물타기 비율
   default_target_rates?: number[];      // 기본 목표 수익률
   default_stop_loss_rate?: number;      // 기본 손절 비율
+}
+
+// KIS 계좌 정보 (대시보드 비교용)
+export interface KisAccountInfo {
+  availableCash: number;         // 주문가능현금
+  availableAmount: number;       // 매수가능금액
+  d2Deposit: number;             // D+2 예수금
+  totalBuyAmt: number;           // 투자금(매입금액)
+  totalEvalAmt: number;          // 평가금액
+  totalEvalProfit: number;       // 평가손익
+  totalEvalProfitRate: number;   // 평가손익률 (%)
+  totalRealizedProfit: number;   // 실현손익 (연초~현재)
+  updatedAt?: string;            // 업데이트 시간
 }
 
 // 종목 추가 기본 설정 (로컬 스토리지용)

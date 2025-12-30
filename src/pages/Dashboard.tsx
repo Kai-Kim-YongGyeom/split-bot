@@ -1,12 +1,12 @@
 import { useStocks } from '../hooks/useStocks';
 import { useDepositHistory } from '../hooks/useDepositHistory';
-import { Activity, Package, Server, TrendingUp, Briefcase, PackageX } from 'lucide-react';
+import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare } from 'lucide-react';
 import { useBotStatus } from '../contexts/BotStatusContext';
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
   const { summary: depositSummary } = useDepositHistory();
-  const { botRunning, serverAlive, availableCash, availableAmount, d2Deposit } = useBotStatus();
+  const { botRunning, serverAlive, availableCash, availableAmount, d2Deposit, kisAccountInfo } = useBotStatus();
 
   if (loading) {
     return (
@@ -176,6 +176,115 @@ export function Dashboard() {
           </p>
         </div>
       </div>
+
+      {/* KIS vs Bot 비교 테이블 */}
+      {kisAccountInfo && (
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <div className="flex items-center gap-2 mb-3">
+            <GitCompare className="w-5 h-5 text-cyan-400" />
+            <h3 className="text-sm md:text-base font-semibold text-white">KIS vs Bot 비교</h3>
+            {kisAccountInfo.updatedAt && (
+              <span className="text-xs text-gray-500 ml-auto">
+                {new Date(kisAccountInfo.updatedAt).toLocaleString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs md:text-sm">
+              <thead>
+                <tr className="text-gray-400 border-b border-gray-700">
+                  <th className="text-left py-2 font-medium">항목</th>
+                  <th className="text-right py-2 font-medium">KIS</th>
+                  <th className="text-right py-2 font-medium">Bot</th>
+                  <th className="text-right py-2 font-medium">차이</th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* 투자금 (매입금액) */}
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 text-gray-300">투자금</td>
+                  <td className="py-2 text-right text-purple-400">{kisAccountInfo.totalBuyAmt.toLocaleString()}</td>
+                  <td className="py-2 text-right text-purple-400">{totalHolding.toLocaleString()}</td>
+                  <td className={`py-2 text-right ${
+                    kisAccountInfo.totalBuyAmt - totalHolding === 0 ? 'text-gray-500' :
+                    Math.abs(kisAccountInfo.totalBuyAmt - totalHolding) < 1000 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {kisAccountInfo.totalBuyAmt - totalHolding === 0 ? '-' :
+                      `${kisAccountInfo.totalBuyAmt - totalHolding > 0 ? '+' : ''}${(kisAccountInfo.totalBuyAmt - totalHolding).toLocaleString()}`}
+                  </td>
+                </tr>
+                {/* 평가금액 */}
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 text-gray-300">평가금액</td>
+                  <td className="py-2 text-right text-blue-400">{kisAccountInfo.totalEvalAmt.toLocaleString()}</td>
+                  <td className="py-2 text-right text-blue-400">{totalEvaluation.toLocaleString()}</td>
+                  <td className={`py-2 text-right ${
+                    kisAccountInfo.totalEvalAmt - totalEvaluation === 0 ? 'text-gray-500' :
+                    Math.abs(kisAccountInfo.totalEvalAmt - totalEvaluation) < 1000 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {kisAccountInfo.totalEvalAmt - totalEvaluation === 0 ? '-' :
+                      `${kisAccountInfo.totalEvalAmt - totalEvaluation > 0 ? '+' : ''}${(kisAccountInfo.totalEvalAmt - totalEvaluation).toLocaleString()}`}
+                  </td>
+                </tr>
+                {/* 평가손익 */}
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 text-gray-300">평가손익</td>
+                  <td className={`py-2 text-right ${kisAccountInfo.totalEvalProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {kisAccountInfo.totalEvalProfit >= 0 ? '+' : ''}{kisAccountInfo.totalEvalProfit.toLocaleString()}
+                  </td>
+                  <td className={`py-2 text-right ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {totalUnrealizedProfit >= 0 ? '+' : ''}{totalUnrealizedProfit.toLocaleString()}
+                  </td>
+                  <td className={`py-2 text-right ${
+                    kisAccountInfo.totalEvalProfit - totalUnrealizedProfit === 0 ? 'text-gray-500' :
+                    Math.abs(kisAccountInfo.totalEvalProfit - totalUnrealizedProfit) < 1000 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {kisAccountInfo.totalEvalProfit - totalUnrealizedProfit === 0 ? '-' :
+                      `${kisAccountInfo.totalEvalProfit - totalUnrealizedProfit > 0 ? '+' : ''}${(kisAccountInfo.totalEvalProfit - totalUnrealizedProfit).toLocaleString()}`}
+                  </td>
+                </tr>
+                {/* 수익률 */}
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 text-gray-300">수익률</td>
+                  <td className={`py-2 text-right ${kisAccountInfo.totalEvalProfitRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {kisAccountInfo.totalEvalProfitRate >= 0 ? '+' : ''}{kisAccountInfo.totalEvalProfitRate.toFixed(2)}%
+                  </td>
+                  <td className={`py-2 text-right ${totalUnrealizedRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
+                    {totalUnrealizedRate >= 0 ? '+' : ''}{totalUnrealizedRate.toFixed(2)}%
+                  </td>
+                  <td className={`py-2 text-right ${
+                    Math.abs(kisAccountInfo.totalEvalProfitRate - totalUnrealizedRate) < 0.01 ? 'text-gray-500' :
+                    Math.abs(kisAccountInfo.totalEvalProfitRate - totalUnrealizedRate) < 1 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {Math.abs(kisAccountInfo.totalEvalProfitRate - totalUnrealizedRate) < 0.01 ? '-' :
+                      `${kisAccountInfo.totalEvalProfitRate - totalUnrealizedRate > 0 ? '+' : ''}${(kisAccountInfo.totalEvalProfitRate - totalUnrealizedRate).toFixed(2)}%`}
+                  </td>
+                </tr>
+                {/* 실현손익 */}
+                <tr>
+                  <td className="py-2 text-gray-300">실현손익</td>
+                  <td className={`py-2 text-right ${kisAccountInfo.totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {kisAccountInfo.totalRealizedProfit >= 0 ? '+' : ''}{kisAccountInfo.totalRealizedProfit.toLocaleString()}
+                  </td>
+                  <td className={`py-2 text-right ${totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {totalRealizedProfit >= 0 ? '+' : ''}{totalRealizedProfit.toLocaleString()}
+                  </td>
+                  <td className={`py-2 text-right ${
+                    kisAccountInfo.totalRealizedProfit - totalRealizedProfit === 0 ? 'text-gray-500' :
+                    Math.abs(kisAccountInfo.totalRealizedProfit - totalRealizedProfit) < 1000 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {kisAccountInfo.totalRealizedProfit - totalRealizedProfit === 0 ? '-' :
+                      `${kisAccountInfo.totalRealizedProfit - totalRealizedProfit > 0 ? '+' : ''}${(kisAccountInfo.totalRealizedProfit - totalRealizedProfit).toLocaleString()}`}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            * 차이가 있으면 KIS 잔고동기화를 실행하세요
+          </p>
+        </div>
+      )}
 
       {/* Row 4: 전체, 활성 */}
       <div className="grid grid-cols-2 gap-2 md:gap-3">

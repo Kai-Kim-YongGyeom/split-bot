@@ -389,35 +389,40 @@ class SplitBot:
             await asyncio.sleep(30)
 
     async def _update_balance(self) -> None:
-        """예수금/매수가능금액 업데이트 (D+2 포함)"""
+        """KIS 계좌 전체 정보 업데이트 (예수금 + 자산현황 + 실현손익)"""
         try:
             if not kis_api.is_configured:
-                print("[Bot] 예수금 조회 스킵 - KIS 미설정")
+                print("[Bot] 계좌정보 조회 스킵 - KIS 미설정")
                 return
 
-            print("[Bot] 예수금 조회 중...")
-            balance = kis_api.get_balance()
-            print(f"[Bot] KIS 응답: {balance}")
+            print("[Bot] KIS 계좌 전체 정보 조회 중...")
+            account_info = kis_api.get_full_account_info()
 
-            if balance:
+            if account_info:
                 from config import Config
                 if Config.USER_ID:
-                    cash = balance.get("cash", 0)
-                    total = balance.get("total", 0)
-                    d2_deposit = balance.get("d2_deposit", 0)
                     # 주문가능금액 캐시 업데이트
-                    self._available_amount = total
-                    success = supabase.update_balance(Config.USER_ID, cash, total, d2_deposit)
+                    self._available_amount = account_info.get("available_amount", 0)
+
+                    # DB에 전체 정보 저장
+                    success = supabase.update_kis_account_info(Config.USER_ID, account_info)
                     if success:
-                        print(f"[Bot] 예수금 DB 저장 완료: 주문가능 {cash:,}원, 매수가능 {total:,}원, D+2 {d2_deposit:,}원")
+                        print(f"[Bot] KIS 계좌정보 DB 저장 완료:")
+                        print(f"      - 주문가능현금: {account_info.get('available_cash', 0):,}원")
+                        print(f"      - 매수가능금액: {account_info.get('available_amount', 0):,}원")
+                        print(f"      - D+2 예수금: {account_info.get('d2_deposit', 0):,}원")
+                        print(f"      - 투자금: {account_info.get('total_buy_amt', 0):,}원")
+                        print(f"      - 평가금액: {account_info.get('total_eval_amt', 0):,}원")
+                        print(f"      - 평가손익: {account_info.get('total_eval_profit', 0):+,}원 ({account_info.get('total_eval_profit_rate', 0):+.2f}%)")
+                        print(f"      - 실현손익: {account_info.get('total_realized_profit', 0):+,}원")
                     else:
-                        print("[Bot] 예수금 DB 저장 실패")
+                        print("[Bot] KIS 계좌정보 DB 저장 실패")
                 else:
-                    print("[Bot] 예수금 저장 스킵 - USER_ID 없음")
+                    print("[Bot] 계좌정보 저장 스킵 - USER_ID 없음")
             else:
-                print("[Bot] 예수금 조회 실패 - 응답 없음")
+                print("[Bot] KIS 계좌정보 조회 실패 - 응답 없음")
         except Exception as e:
-            print(f"[Bot] 예수금 업데이트 오류: {e}")
+            print(f"[Bot] KIS 계좌정보 업데이트 오류: {e}")
 
     def _calculate_polling_interval(self) -> int:
         """종목 수에 따른 동적 폴링 간격 계산 (배치 처리 기준)"""

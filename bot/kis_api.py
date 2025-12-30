@@ -950,6 +950,218 @@ class KisAPI:
 
         return unique_data
 
+    def get_account_balance_summary(self) -> dict:
+        """투자계좌 자산현황 조회 (KIS 계좌 전체 요약)
+
+        Returns:
+            dict: {
+                "total_eval_amt": 평가금액 합계,
+                "total_buy_amt": 매입금액 합계 (투자금),
+                "total_eval_profit": 평가손익 합계,
+                "total_eval_profit_rate": 평가손익률
+            }
+        """
+        if not self.is_configured:
+            print("[KIS] API 미설정 - 계좌자산현황 조회 불가")
+            return {}
+
+        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-balance"
+        tr_id = "TTTC8434R" if self.is_real else "VTTC8434R"
+        headers = self._get_headers(tr_id)
+
+        acct_no, acct_suffix = self._parse_account()
+        params = {
+            "CANO": acct_no,
+            "ACNT_PRDT_CD": acct_suffix,
+            "AFHR_FLPR_YN": "N",
+            "OFL_YN": "",
+            "INQR_DVSN": "02",
+            "UNPR_DVSN": "01",
+            "FUND_STTL_ICLD_YN": "N",
+            "FNCG_AMT_AUTO_RDPT_YN": "N",
+            "PRCS_DVSN": "00",
+            "CTX_AREA_FK100": "",
+            "CTX_AREA_NK100": "",
+        }
+
+        result_data = {
+            "total_eval_amt": 0,       # 평가금액 합계
+            "total_buy_amt": 0,        # 매입금액 합계
+            "total_eval_profit": 0,    # 평가손익 합계
+            "total_eval_profit_rate": 0.0,  # 평가손익률
+        }
+
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("rt_cd") == "0":
+                output2 = result.get("output2", [])
+                if output2 and len(output2) > 0:
+                    summary = output2[0]
+                    # 평가금액 합계
+                    result_data["total_eval_amt"] = int(summary.get("tot_evlu_amt", 0) or 0)
+                    # 매입금액 합계 (투자금)
+                    result_data["total_buy_amt"] = int(summary.get("pchs_amt_smtl_amt", 0) or 0)
+                    # 평가손익 합계
+                    result_data["total_eval_profit"] = int(summary.get("evlu_pfls_smtl_amt", 0) or 0)
+                    # 평가손익률 계산
+                    if result_data["total_buy_amt"] > 0:
+                        result_data["total_eval_profit_rate"] = round(
+                            (result_data["total_eval_profit"] / result_data["total_buy_amt"]) * 100, 2
+                        )
+
+                    print(f"[KIS] 계좌자산현황: 투자금={result_data['total_buy_amt']:,}, "
+                          f"평가금액={result_data['total_eval_amt']:,}, "
+                          f"평가손익={result_data['total_eval_profit']:,} "
+                          f"({result_data['total_eval_profit_rate']:+.2f}%)")
+            else:
+                print(f"[KIS] 계좌자산현황 조회 실패: {result.get('msg1', '')}")
+
+        except requests.exceptions.RequestException as e:
+            print(f"[KIS] 계좌자산현황 조회 오류: {e}")
+
+        return result_data
+
+    def get_realized_profit(self, start_date: str = None, end_date: str = None) -> dict:
+        """기간별 실현손익 조회
+
+        Args:
+            start_date: 조회 시작일 (YYYYMMDD), 기본값 연초
+            end_date: 조회 종료일 (YYYYMMDD), 기본값 오늘
+
+        Returns:
+            dict: {
+                "total_realized_profit": 실현손익 합계,
+                "total_sell_amt": 매도금액 합계,
+                "total_buy_amt": 매수금액 합계
+            }
+        """
+        if not self.is_configured:
+            print("[KIS] API 미설정 - 실현손익 조회 불가")
+            return {}
+
+        # 기본값 설정 (연초부터 오늘까지)
+        if not end_date:
+            end_date = datetime.now().strftime("%Y%m%d")
+        if not start_date:
+            start_date = datetime.now().strftime("%Y0101")  # 연초
+
+        url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-period-trade-profit"
+        tr_id = "TTTC8715R" if self.is_real else "VTTC8715R"
+        headers = self._get_headers(tr_id)
+
+        acct_no, acct_suffix = self._parse_account()
+
+        result_data = {
+            "total_realized_profit": 0,  # 실현손익 합계
+            "total_sell_amt": 0,         # 매도금액 합계
+            "total_buy_amt": 0,          # 매수금액 합계
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+
+        ctx_area_fk100 = ""
+        ctx_area_nk100 = ""
+        page = 1
+        max_pages = 10
+
+        try:
+            while page <= max_pages:
+                params = {
+                    "CANO": acct_no,
+                    "ACNT_PRDT_CD": acct_suffix,
+                    "SORT_DVSN": "00",  # 최근순
+                    "INQR_STRT_DT": start_date,
+                    "INQR_END_DT": end_date,
+                    "CBLC_DVSN": "00",  # 전체
+                    "PDNO": "",
+                    "CTX_AREA_FK100": ctx_area_fk100,
+                    "CTX_AREA_NK100": ctx_area_nk100,
+                }
+
+                if page > 1:
+                    headers["tr_cont"] = "N"
+
+                response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+                response.raise_for_status()
+                result = response.json()
+
+                resp_tr_cont = response.headers.get("tr_cont", "")
+
+                if result.get("rt_cd") == "0":
+                    # output2에 합계 정보가 있음
+                    output2 = result.get("output2", {})
+                    if output2:
+                        # 첫 페이지에서만 합계 가져옴
+                        if page == 1:
+                            result_data["total_realized_profit"] = int(output2.get("rlzt_pfls", 0) or 0)
+                            result_data["total_sell_amt"] = int(output2.get("sll_amt", 0) or 0)
+                            result_data["total_buy_amt"] = int(output2.get("buy_amt", 0) or 0)
+
+                            print(f"[KIS] 실현손익({start_date}~{end_date}): "
+                                  f"{result_data['total_realized_profit']:+,}원")
+
+                    if resp_tr_cont not in ["M", "F"]:
+                        break
+
+                    ctx_area_fk100 = result.get("ctx_area_fk100", "").strip()
+                    ctx_area_nk100 = result.get("ctx_area_nk100", "").strip()
+                    page += 1
+                    time.sleep(0.2)
+                else:
+                    print(f"[KIS] 실현손익 조회 실패: {result.get('msg1', '')}")
+                    break
+
+        except requests.exceptions.RequestException as e:
+            print(f"[KIS] 실현손익 조회 오류: {e}")
+
+        return result_data
+
+    def get_full_account_info(self) -> dict:
+        """KIS 계좌 전체 정보 조회 (대시보드용)
+
+        Returns:
+            dict: 예수금, 자산현황, 실현손익 통합 정보
+        """
+        result = {
+            # 예수금 정보
+            "available_cash": 0,      # 주문가능현금
+            "available_amount": 0,    # 매수가능금액
+            "d2_deposit": 0,          # D+2 예수금
+            # 자산현황
+            "total_buy_amt": 0,       # 투자금(매입금액)
+            "total_eval_amt": 0,      # 평가금액
+            "total_eval_profit": 0,   # 평가손익
+            "total_eval_profit_rate": 0.0,  # 평가손익률
+            # 실현손익
+            "total_realized_profit": 0,  # 실현손익(연초~현재)
+        }
+
+        # 1. 예수금 조회
+        balance_info = self.get_balance()
+        result["available_cash"] = balance_info.get("cash", 0)
+        result["available_amount"] = balance_info.get("total", 0)
+        result["d2_deposit"] = balance_info.get("d2_deposit", 0)
+
+        time.sleep(0.2)
+
+        # 2. 자산현황 조회
+        account_summary = self.get_account_balance_summary()
+        result["total_buy_amt"] = account_summary.get("total_buy_amt", 0)
+        result["total_eval_amt"] = account_summary.get("total_eval_amt", 0)
+        result["total_eval_profit"] = account_summary.get("total_eval_profit", 0)
+        result["total_eval_profit_rate"] = account_summary.get("total_eval_profit_rate", 0.0)
+
+        time.sleep(0.2)
+
+        # 3. 실현손익 조회 (연초~현재)
+        realized_info = self.get_realized_profit()
+        result["total_realized_profit"] = realized_info.get("total_realized_profit", 0)
+
+        return result
+
 
 # 싱글톤 인스턴스
 kis_api = KisAPI()

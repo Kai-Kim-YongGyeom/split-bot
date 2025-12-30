@@ -429,6 +429,46 @@ class SupabaseClient:
 
         return "error" not in result
 
+    def update_kis_account_info(self, user_id: str, account_info: dict) -> bool:
+        """KIS 계좌 전체 정보 업데이트 (대시보드 비교용)
+
+        Args:
+            user_id: 사용자 ID
+            account_info: {
+                "available_cash": 주문가능현금,
+                "available_amount": 매수가능금액,
+                "d2_deposit": D+2 예수금,
+                "kis_total_buy_amt": 투자금(매입금액),
+                "kis_total_eval_amt": 평가금액,
+                "kis_total_eval_profit": 평가손익,
+                "kis_total_eval_profit_rate": 평가손익률,
+                "kis_total_realized_profit": 실현손익(연초~현재)
+            }
+        """
+        if not self.is_configured or not user_id:
+            return False
+
+        data = {
+            "available_cash": account_info.get("available_cash", 0),
+            "available_amount": account_info.get("available_amount", 0),
+            "d2_deposit": account_info.get("d2_deposit", 0),
+            "kis_total_buy_amt": account_info.get("total_buy_amt", 0),
+            "kis_total_eval_amt": account_info.get("total_eval_amt", 0),
+            "kis_total_eval_profit": account_info.get("total_eval_profit", 0),
+            "kis_total_eval_profit_rate": account_info.get("total_eval_profit_rate", 0.0),
+            "kis_total_realized_profit": account_info.get("total_realized_profit", 0),
+            "balance_updated_at": datetime.now().isoformat(),
+        }
+
+        result = self._request(
+            "PATCH",
+            "user_settings",
+            data=data,
+            params={"user_id": f"eq.{user_id}"},
+        )
+
+        return "error" not in result
+
     # ==================== 동기화 관련 ====================
 
     def get_pending_sync_requests(self) -> list[dict]:
