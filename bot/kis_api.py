@@ -1045,11 +1045,11 @@ class KisAPI:
             print("[KIS] API 미설정 - 실현손익 조회 불가")
             return {}
 
-        # 기본값 설정 (12월 1일부터 오늘까지)
+        # 기본값 설정 (12월 27일부터 오늘까지)
         if not end_date:
             end_date = datetime.now().strftime("%Y%m%d")
         if not start_date:
-            start_date = "20251201"  # 2025-12-01 고정
+            start_date = "20251227"  # 2025-12-27 고정
 
         url = f"{self.base_url}/uapi/domestic-stock/v1/trading/inquire-period-trade-profit"
         tr_id = "TTTC8715R" if self.is_real else "VTTC8715R"

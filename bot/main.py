@@ -432,6 +432,9 @@ class SplitBot:
                         print(f"      - 유가평가금액: {account_info.get('total_eval_amt', 0):,}원")
                         print(f"      - 평가손익: {account_info.get('total_eval_profit', 0):+,}원 ({account_info.get('total_eval_profit_rate', 0):+.2f}%)")
                         print(f"      - 실현손익: {account_info.get('total_realized_profit', 0):+,}원")
+                        print(f"      - 수수료: {account_info.get('total_fee', 0):,}원")
+                        print(f"      - 제세금: {account_info.get('total_tax', 0):,}원")
+                        print(f"      - 순이익: {account_info.get('net_profit', 0):+,}원")
                     else:
                         print("[Bot] KIS 계좌정보 DB 저장 실패")
                 else:
