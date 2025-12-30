@@ -229,5 +229,8 @@ ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_buy_amt BIGINT DEFA
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_amt BIGINT DEFAULT 0;         -- KIS 평가금액
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_profit BIGINT DEFAULT 0;      -- KIS 평가손익
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_eval_profit_rate DECIMAL DEFAULT 0; -- KIS 평가손익률
-ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_realized_profit BIGINT DEFAULT 0;  -- KIS 실현손익(연초~현재)
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_realized_profit BIGINT DEFAULT 0;  -- KIS 실현손익(세전)
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_fee BIGINT DEFAULT 0;             -- KIS 총수수료
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_tax BIGINT DEFAULT 0;             -- KIS 총제세금
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_net_profit BIGINT DEFAULT 0;            -- KIS 순이익(세후)
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS balance_refresh_requested BOOLEAN DEFAULT false; -- 잔고 새로고침 요청 플래그

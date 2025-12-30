@@ -59,7 +59,10 @@ export interface UserSettings {
   kis_total_eval_amt?: number;          // KIS 평가금액
   kis_total_eval_profit?: number;       // KIS 평가손익
   kis_total_eval_profit_rate?: number;  // KIS 평가손익률 (%)
-  kis_total_realized_profit?: number;   // KIS 실현손익 (연초~현재)
+  kis_total_realized_profit?: number;   // KIS 실현손익 (세전)
+  kis_total_fee?: number;               // KIS 총수수료
+  kis_total_tax?: number;               // KIS 총제세금
+  kis_net_profit?: number;              // KIS 순이익 (세후)
   created_at: string;
   updated_at: string;
   // 종목 추가 기본 설정
@@ -95,7 +98,10 @@ export interface BotConfig {
   kis_total_eval_amt?: number;          // KIS 평가금액
   kis_total_eval_profit?: number;       // KIS 평가손익
   kis_total_eval_profit_rate?: number;  // KIS 평가손익률 (%)
-  kis_total_realized_profit?: number;   // KIS 실현손익 (연초~현재)
+  kis_total_realized_profit?: number;   // KIS 실현손익 (세전)
+  kis_total_fee?: number;               // KIS 총수수료
+  kis_total_tax?: number;               // KIS 총제세금
+  kis_net_profit?: number;              // KIS 순이익 (세후)
   created_at: string;
   updated_at: string;
   // 종목 추가 기본 설정
@@ -116,7 +122,10 @@ export interface KisAccountInfo {
   totalEvalAmt: number;          // 평가금액
   totalEvalProfit: number;       // 평가손익
   totalEvalProfitRate: number;   // 평가손익률 (%)
-  totalRealizedProfit: number;   // 실현손익 (연초~현재)
+  totalRealizedProfit: number;   // 실현손익 (세전)
+  totalFee: number;              // 총수수료
+  totalTax: number;              // 총제세금
+  netProfit: number;             // 순이익 (세후)
   updatedAt?: string;            // 업데이트 시간
 }
 

@@ -47,6 +47,9 @@ export function BotStatusProvider({ children }: { children: ReactNode }) {
         totalEvalProfit: config.kis_total_eval_profit ?? 0,
         totalEvalProfitRate: config.kis_total_eval_profit_rate ?? 0,
         totalRealizedProfit: config.kis_total_realized_profit ?? 0,
+        totalFee: config.kis_total_fee ?? 0,
+        totalTax: config.kis_total_tax ?? 0,
+        netProfit: config.kis_net_profit ?? 0,
         updatedAt: config.balance_updated_at,
       });
 

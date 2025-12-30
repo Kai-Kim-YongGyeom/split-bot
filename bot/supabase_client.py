@@ -442,7 +442,10 @@ class SupabaseClient:
                 "kis_total_eval_amt": 유가평가금액(주식만),
                 "kis_total_eval_profit": 평가손익,
                 "kis_total_eval_profit_rate": 평가손익률,
-                "kis_total_realized_profit": 실현손익
+                "kis_total_realized_profit": 실현손익 (세전),
+                "kis_total_fee": 총수수료,
+                "kis_total_tax": 총제세금,
+                "kis_net_profit": 순이익 (세후)
             }
         """
         if not self.is_configured or not user_id:
@@ -457,6 +460,9 @@ class SupabaseClient:
             "kis_total_eval_profit": account_info.get("total_eval_profit", 0),
             "kis_total_eval_profit_rate": account_info.get("total_eval_profit_rate", 0.0),
             "kis_total_realized_profit": account_info.get("total_realized_profit", 0),
+            "kis_total_fee": account_info.get("total_fee", 0),
+            "kis_total_tax": account_info.get("total_tax", 0),
+            "kis_net_profit": account_info.get("net_profit", 0),
             "balance_updated_at": datetime.now().isoformat(),
         }
 

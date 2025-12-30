@@ -290,9 +290,9 @@ export function Dashboard() {
                       `${kisAccountInfo.totalEvalProfitRate - totalUnrealizedRate > 0 ? '+' : ''}${(kisAccountInfo.totalEvalProfitRate - totalUnrealizedRate).toFixed(2)}%`}
                   </td>
                 </tr>
-                {/* 실현손익 */}
+                {/* 실현손익 (세전) */}
                 <tr className="border-b border-gray-700/50">
-                  <td className="py-2 text-gray-300">실현손익</td>
+                  <td className="py-2 text-gray-300">실현손익(세전)</td>
                   <td className={`py-2 text-right ${kisAccountInfo.totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {kisAccountInfo.totalRealizedProfit >= 0 ? '+' : ''}{kisAccountInfo.totalRealizedProfit.toLocaleString()}
                   </td>
@@ -306,6 +306,33 @@ export function Dashboard() {
                     {kisAccountInfo.totalRealizedProfit - totalRealizedProfit === 0 ? '-' :
                       `${kisAccountInfo.totalRealizedProfit - totalRealizedProfit > 0 ? '+' : ''}${(kisAccountInfo.totalRealizedProfit - totalRealizedProfit).toLocaleString()}`}
                   </td>
+                </tr>
+                {/* 수수료 */}
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 text-gray-400 text-sm pl-2">└ 수수료</td>
+                  <td className="py-2 text-right text-orange-400">
+                    -{kisAccountInfo.totalFee.toLocaleString()}
+                  </td>
+                  <td className="py-2 text-right text-gray-500">-</td>
+                  <td className="py-2 text-right text-gray-500">-</td>
+                </tr>
+                {/* 제세금 */}
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 text-gray-400 text-sm pl-2">└ 제세금</td>
+                  <td className="py-2 text-right text-orange-400">
+                    -{kisAccountInfo.totalTax.toLocaleString()}
+                  </td>
+                  <td className="py-2 text-right text-gray-500">-</td>
+                  <td className="py-2 text-right text-gray-500">-</td>
+                </tr>
+                {/* 순이익 (세후) */}
+                <tr className="border-b border-gray-700/50">
+                  <td className="py-2 text-gray-300 font-medium">순이익(세후)</td>
+                  <td className={`py-2 text-right font-medium ${kisAccountInfo.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {kisAccountInfo.netProfit >= 0 ? '+' : ''}{kisAccountInfo.netProfit.toLocaleString()}
+                  </td>
+                  <td className="py-2 text-right text-gray-500">-</td>
+                  <td className="py-2 text-right text-gray-500">-</td>
                 </tr>
                 {/* 총자산 */}
                 {(() => {

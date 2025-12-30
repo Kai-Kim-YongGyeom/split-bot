@@ -1033,7 +1033,10 @@ class KisAPI:
 
         Returns:
             dict: {
-                "total_realized_profit": 실현손익 합계,
+                "total_realized_profit": 실현손익 합계 (세전),
+                "total_fee": 총수수료,
+                "total_tax": 총제세금,
+                "net_profit": 순이익 (실현손익 - 수수료 - 제세금),
                 "total_sell_amt": 매도금액 합계,
                 "total_buy_amt": 매수금액 합계
             }
@@ -1055,7 +1058,10 @@ class KisAPI:
         acct_no, acct_suffix = self._parse_account()
 
         result_data = {
-            "total_realized_profit": 0,  # 실현손익 합계
+            "total_realized_profit": 0,  # 실현손익 합계 (세전)
+            "total_fee": 0,              # 총수수료
+            "total_tax": 0,              # 총제세금
+            "net_profit": 0,             # 순이익 (세후)
             "total_sell_amt": 0,         # 매도금액 합계
             "total_buy_amt": 0,          # 매수금액 합계
             "start_date": start_date,
@@ -1102,8 +1108,19 @@ class KisAPI:
                             result_data["total_sell_amt"] = int(output2.get("sll_amt", 0) or 0)
                             result_data["total_buy_amt"] = int(output2.get("buy_amt", 0) or 0)
 
+                            # 수수료 및 제세금
+                            total_fee = int(output2.get("tot_fee", 0) or 0)
+                            total_tax = int(output2.get("tot_tltx", 0) or 0)
+                            result_data["total_fee"] = total_fee
+                            result_data["total_tax"] = total_tax
+
+                            # 순이익 = 실현손익 - 수수료 - 제세금
+                            result_data["net_profit"] = result_data["total_realized_profit"] - total_fee - total_tax
+
                             print(f"[KIS] 실현손익({start_date}~{end_date}): "
-                                  f"{result_data['total_realized_profit']:+,}원")
+                                  f"{result_data['total_realized_profit']:+,}원 "
+                                  f"(수수료: {total_fee:,}원, 제세금: {total_tax:,}원, "
+                                  f"순이익: {result_data['net_profit']:+,}원)")
 
                     if resp_tr_cont not in ["M", "F"]:
                         break
@@ -1139,6 +1156,9 @@ class KisAPI:
             "total_eval_profit_rate": 0.0,  # 평가손익률
             # 실현손익
             "total_realized_profit": 0,  # 실현손익 (세전)
+            "total_fee": 0,              # 총수수료
+            "total_tax": 0,              # 총제세금
+            "net_profit": 0,             # 순이익 (세후)
         }
 
         # 1. 예수금 조회
@@ -1161,6 +1181,9 @@ class KisAPI:
         # 3. 실현손익 조회 (12월 1일~현재)
         realized_info = self.get_realized_profit()
         result["total_realized_profit"] = realized_info.get("total_realized_profit", 0)
+        result["total_fee"] = realized_info.get("total_fee", 0)
+        result["total_tax"] = realized_info.get("total_tax", 0)
+        result["net_profit"] = realized_info.get("net_profit", 0)
 
         return result
 
