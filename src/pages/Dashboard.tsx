@@ -353,15 +353,17 @@ export function Dashboard() {
                     </tr>
                   );
                 })()}
-                {/* 투자수익률 */}
+                {/* 투자수익률 (세후) */}
                 {netDeposit > 0 && (() => {
                   const kisTotalAsset = (availableCash || 0) + kisAccountInfo.totalEvalAmt;
-                  const kisInvestRate = ((kisTotalAsset - netDeposit) / netDeposit) * 100;
+                  // 세금(수수료+제세금) 차감 후 수익률 계산
+                  const totalTaxFee = kisAccountInfo.totalFee + kisAccountInfo.totalTax;
+                  const kisInvestRate = ((kisTotalAsset - totalTaxFee - netDeposit) / netDeposit) * 100;
                   const botInvestRate = investmentReturnRate;
                   const diffRate = kisInvestRate - botInvestRate;
                   return (
                     <tr>
-                      <td className="py-2 text-gray-300 font-medium">투자수익률</td>
+                      <td className="py-2 text-gray-300 font-medium">투자수익률(세후)</td>
                       <td className={`py-2 text-right font-medium ${kisInvestRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
                         {kisInvestRate >= 0 ? '+' : ''}{kisInvestRate.toFixed(2)}%
                       </td>
