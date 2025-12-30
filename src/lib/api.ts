@@ -1189,3 +1189,157 @@ export async function getCompareResults(compareRequestId: string): Promise<Compa
   }
   return data || [];
 }
+
+// ==================== 일별 스냅샷 (daily_snapshots) ====================
+
+export interface DailySnapshot {
+  id: string;
+  user_id: string;
+  date: string;
+  total_asset: number;
+  total_eval_amt: number;
+  total_buy_amt: number;
+  available_cash: number;
+  realized_profit: number;
+  net_profit: number;
+  bot_total_holding: number;
+  bot_realized_profit: number;
+  net_deposit: number;
+  invest_return_rate: number;
+  created_at: string;
+}
+
+export type SnapshotPeriod = 'daily' | 'monthly' | 'yearly';
+
+/**
+ * 일별 스냅샷 조회
+ * @param period 기간 (daily: 30일, monthly: 12개월, yearly: 5년)
+ * @param startDate 시작일 (YYYY-MM-DD)
+ * @param endDate 종료일 (YYYY-MM-DD)
+ */
+export async function getDailySnapshots(
+  period: SnapshotPeriod = 'daily',
+  startDate?: string,
+  endDate?: string
+): Promise<DailySnapshot[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return [];
+  }
+
+  // 기간에 따라 기본 날짜 범위 설정
+  const today = new Date();
+  let defaultStartDate: Date;
+
+  switch (period) {
+    case 'monthly':
+      defaultStartDate = new Date(today);
+      defaultStartDate.setFullYear(today.getFullYear() - 1);
+      break;
+    case 'yearly':
+      defaultStartDate = new Date(today);
+      defaultStartDate.setFullYear(today.getFullYear() - 5);
+      break;
+    default: // daily
+      defaultStartDate = new Date(today);
+      defaultStartDate.setDate(today.getDate() - 30);
+      break;
+  }
+
+  const start = startDate || defaultStartDate.toISOString().split('T')[0];
+  const end = endDate || today.toISOString().split('T')[0];
+
+  const { data, error } = await supabase
+    .from('daily_snapshots')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('date', start)
+    .lte('date', end)
+    .order('date', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching daily snapshots:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * 월별 집계 데이터 (마지막 날 기준)
+ */
+export async function getMonthlySnapshots(): Promise<DailySnapshot[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return [];
+  }
+
+  // 12개월 데이터 조회
+  const today = new Date();
+  const startDate = new Date(today);
+  startDate.setFullYear(today.getFullYear() - 1);
+
+  const { data, error } = await supabase
+    .from('daily_snapshots')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('date', startDate.toISOString().split('T')[0])
+    .order('date', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching monthly snapshots:', error);
+    return [];
+  }
+
+  if (!data || data.length === 0) return [];
+
+  // 월별 마지막 날 데이터만 필터링
+  const monthlyMap = new Map<string, DailySnapshot>();
+  for (const snapshot of data) {
+    const month = snapshot.date.substring(0, 7); // YYYY-MM
+    monthlyMap.set(month, snapshot); // 같은 달이면 덮어쓰기 (마지막 날짜)
+  }
+
+  return Array.from(monthlyMap.values());
+}
+
+/**
+ * 연별 집계 데이터 (마지막 날 기준)
+ */
+export async function getYearlySnapshots(): Promise<DailySnapshot[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return [];
+  }
+
+  // 5년 데이터 조회
+  const today = new Date();
+  const startDate = new Date(today);
+  startDate.setFullYear(today.getFullYear() - 5);
+
+  const { data, error } = await supabase
+    .from('daily_snapshots')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('date', startDate.toISOString().split('T')[0])
+    .order('date', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching yearly snapshots:', error);
+    return [];
+  }
+
+  if (!data || data.length === 0) return [];
+
+  // 연별 마지막 날 데이터만 필터링
+  const yearlyMap = new Map<string, DailySnapshot>();
+  for (const snapshot of data) {
+    const year = snapshot.date.substring(0, 4); // YYYY
+    yearlyMap.set(year, snapshot);
+  }
+
+  return Array.from(yearlyMap.values());
+}

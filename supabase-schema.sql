@@ -234,3 +234,37 @@ ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_fee BIGINT DEFAULT 
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_total_tax BIGINT DEFAULT 0;             -- KIS 총제세금
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS kis_net_profit BIGINT DEFAULT 0;            -- KIS 순이익(세후)
 ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS balance_refresh_requested BOOLEAN DEFAULT false; -- 잔고 새로고침 요청 플래그
+
+-- ==================== 일별 스냅샷 테이블 ====================
+-- 매일 15:30 기준 계좌 정보 저장 (추이 그래프용)
+
+CREATE TABLE IF NOT EXISTS daily_snapshots (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL,
+    date DATE NOT NULL,                          -- 날짜 (YYYY-MM-DD)
+    -- KIS 기준 데이터
+    total_asset BIGINT DEFAULT 0,                -- 총자산 (현금 + 평가금액)
+    total_eval_amt BIGINT DEFAULT 0,             -- 평가금액
+    total_buy_amt BIGINT DEFAULT 0,              -- 투자금 (매입금액)
+    available_cash BIGINT DEFAULT 0,             -- 현금
+    realized_profit BIGINT DEFAULT 0,            -- 실현손익 (세전)
+    net_profit BIGINT DEFAULT 0,                 -- 순이익 (세후)
+    -- BOT 기준 데이터
+    bot_total_holding BIGINT DEFAULT 0,          -- BOT 투자금 (차수별)
+    bot_realized_profit BIGINT DEFAULT 0,        -- BOT 실현손익
+    -- 입출금 기준
+    net_deposit BIGINT DEFAULT 0,                -- 순입금
+    -- 수익률 (미리 계산해서 저장)
+    invest_return_rate DECIMAL DEFAULT 0,        -- 투자수익률 ((총자산-순입금)/순입금*100)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, date)
+);
+
+-- 인덱스
+CREATE INDEX IF NOT EXISTS idx_daily_snapshots_user_date ON daily_snapshots(user_id, date DESC);
+
+-- RLS
+ALTER TABLE daily_snapshots ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all for daily_snapshots" ON daily_snapshots
+    FOR ALL USING (true) WITH CHECK (true);

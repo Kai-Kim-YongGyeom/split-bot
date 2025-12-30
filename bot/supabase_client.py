@@ -1140,5 +1140,128 @@ class SupabaseClient:
         return holdings
 
 
+    # ==================== 일별 스냅샷 (daily_snapshots) ====================
+
+    def check_snapshot_exists(self, user_id: str, date: str) -> bool:
+        """해당 날짜의 스냅샷 존재 여부 확인"""
+        if not self.is_configured:
+            return False
+
+        result = self._request(
+            "GET",
+            "daily_snapshots",
+            params={
+                "user_id": f"eq.{user_id}",
+                "date": f"eq.{date}",
+                "select": "id",
+                "limit": "1",
+            },
+        )
+
+        return isinstance(result, list) and len(result) > 0
+
+    def save_daily_snapshot(self, user_id: str, snapshot_data: dict) -> bool:
+        """일별 스냅샷 저장 (upsert)
+
+        Args:
+            user_id: 사용자 ID
+            snapshot_data: {
+                "date": "2025-01-01",
+                "total_asset": 총자산,
+                "total_eval_amt": 평가금액,
+                "total_buy_amt": 투자금,
+                "available_cash": 현금,
+                "realized_profit": 실현손익(세전),
+                "net_profit": 순이익(세후),
+                "bot_total_holding": BOT 투자금,
+                "bot_realized_profit": BOT 실현손익,
+                "net_deposit": 순입금,
+                "invest_return_rate": 투자수익률,
+            }
+        """
+        if not self.is_configured or not user_id:
+            return False
+
+        date = snapshot_data.get("date")
+        if not date:
+            date = datetime.now().strftime("%Y-%m-%d")
+
+        # 기존 스냅샷 확인
+        exists = self.check_snapshot_exists(user_id, date)
+
+        data = {
+            "user_id": user_id,
+            "date": date,
+            "total_asset": snapshot_data.get("total_asset", 0),
+            "total_eval_amt": snapshot_data.get("total_eval_amt", 0),
+            "total_buy_amt": snapshot_data.get("total_buy_amt", 0),
+            "available_cash": snapshot_data.get("available_cash", 0),
+            "realized_profit": snapshot_data.get("realized_profit", 0),
+            "net_profit": snapshot_data.get("net_profit", 0),
+            "bot_total_holding": snapshot_data.get("bot_total_holding", 0),
+            "bot_realized_profit": snapshot_data.get("bot_realized_profit", 0),
+            "net_deposit": snapshot_data.get("net_deposit", 0),
+            "invest_return_rate": snapshot_data.get("invest_return_rate", 0.0),
+        }
+
+        if exists:
+            # UPDATE
+            result = self._request(
+                "PATCH",
+                "daily_snapshots",
+                data=data,
+                params={
+                    "user_id": f"eq.{user_id}",
+                    "date": f"eq.{date}",
+                },
+            )
+        else:
+            # INSERT
+            result = self._request("POST", "daily_snapshots", data=data)
+
+        success = "error" not in result
+        if success:
+            print(f"[Supabase] 일별 스냅샷 저장: {date}")
+        return success
+
+    def get_daily_snapshots(self, user_id: str, start_date: str = None, end_date: str = None, limit: int = 365) -> list[dict]:
+        """일별 스냅샷 조회
+
+        Args:
+            user_id: 사용자 ID
+            start_date: 시작일 (YYYY-MM-DD)
+            end_date: 종료일 (YYYY-MM-DD)
+            limit: 최대 조회 수
+
+        Returns:
+            스냅샷 목록 (날짜 오름차순)
+        """
+        if not self.is_configured:
+            return []
+
+        params = {
+            "user_id": f"eq.{user_id}",
+            "select": "*",
+            "order": "date.asc",
+            "limit": str(limit),
+        }
+
+        if start_date:
+            params["date"] = f"gte.{start_date}"
+        if end_date:
+            # 범위 필터를 위해 and 조건 추가
+            if start_date:
+                params["date"] = f"gte.{start_date}"
+                params["and"] = f"(date.lte.{end_date})"
+            else:
+                params["date"] = f"lte.{end_date}"
+
+        result = self._request("GET", "daily_snapshots", params=params)
+
+        if isinstance(result, list):
+            return result
+        return []
+
+
 # 싱글톤 인스턴스
 supabase = SupabaseClient()

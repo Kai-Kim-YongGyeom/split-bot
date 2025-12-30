@@ -56,6 +56,8 @@ class SplitBot:
         self._recent_sells: dict[str, datetime] = {}
         # 주문가능금액 캐시
         self._available_amount: Optional[int] = None
+        # 일별 스냅샷 저장 여부 (오늘 날짜)
+        self._snapshot_saved_date: Optional[str] = None
 
     def is_market_open(self) -> bool:
         """장 운영 시간 체크 (09:00 ~ 15:30 KST)"""
@@ -375,6 +377,7 @@ class SplitBot:
         balance_counter = 59  # 시작 시 바로 예수금 업데이트 (다음 루프에서 60이 됨)
         heartbeat_counter = 0  # heartbeat는 30초마다
         reload_counter = 0  # purchases 리로드는 30초마다
+        snapshot_counter = 0  # 스냅샷 체크는 30초마다
         while self._running:
             try:
                 # heartbeat는 30초마다 (5초 * 6 = 30초)
@@ -388,6 +391,12 @@ class SplitBot:
                 if reload_counter >= 6:
                     reload_counter = 0
                     await self._reload_stocks()
+
+                # 일별 스냅샷 체크 (30초마다, 15:30~15:35에 저장)
+                snapshot_counter += 1
+                if snapshot_counter >= 6:
+                    snapshot_counter = 0
+                    await self._save_daily_snapshot()
 
                 # 잔고 새로고침 요청 확인 (웹에서 요청 시 즉시 갱신) - 5초마다 체크
                 if supabase.check_balance_refresh_requested(Config.USER_ID):
@@ -443,6 +452,103 @@ class SplitBot:
                 print("[Bot] KIS 계좌정보 조회 실패 - 응답 없음")
         except Exception as e:
             print(f"[Bot] KIS 계좌정보 업데이트 오류: {e}")
+
+    async def _save_daily_snapshot(self) -> None:
+        """일별 스냅샷 저장 (15:30 기준)"""
+        try:
+            now = datetime.now(KST)
+            today = now.strftime("%Y-%m-%d")
+
+            # 이미 오늘 저장했으면 스킵
+            if self._snapshot_saved_date == today:
+                return
+
+            # 15:30~15:35 사이에만 저장 (5분 여유)
+            current_time = now.time()
+            snapshot_start = dtime(15, 30)
+            snapshot_end = dtime(15, 35)
+
+            if not (snapshot_start <= current_time <= snapshot_end):
+                return
+
+            # 주말이면 스킵
+            if now.weekday() >= 5:
+                return
+
+            print(f"[Bot] 일별 스냅샷 저장 시작: {today}")
+
+            # KIS 계좌 정보 조회 (최신 정보)
+            if not kis_api.is_configured:
+                print("[Bot] 스냅샷 스킵 - KIS 미설정")
+                return
+
+            account_info = kis_api.get_full_account_info()
+            if not account_info:
+                print("[Bot] 스냅샷 스킵 - KIS 계좌정보 조회 실패")
+                return
+
+            # user_settings에서 순입금 조회
+            settings = supabase.get_user_settings(Config.USER_ID)
+            net_deposit = settings.get("net_deposit", 0) if settings else 0
+
+            # BOT 보유 정보 계산 (차수별 투자금)
+            bot_total_holding = 0
+            bot_realized_profit = 0
+            for stock in strategy.stocks.values():
+                for p in stock.purchases:
+                    if p.status == "holding":
+                        bot_total_holding += p.price * p.quantity
+                    elif p.status == "sold" and p.sold_price:
+                        bot_realized_profit += (p.sold_price - p.price) * p.quantity
+
+            # 총자산 계산 (현금 + 평가금액)
+            available_cash = account_info.get("available_cash", 0)
+            total_eval_amt = account_info.get("total_eval_amt", 0)
+            total_asset = available_cash + total_eval_amt
+
+            # 투자수익률 계산 ((총자산 - 순입금) / 순입금 * 100)
+            invest_return_rate = 0
+            if net_deposit > 0:
+                invest_return_rate = ((total_asset - net_deposit) / net_deposit) * 100
+
+            # 스냅샷 데이터 생성
+            snapshot_data = {
+                "date": today,
+                "total_asset": total_asset,
+                "total_eval_amt": total_eval_amt,
+                "total_buy_amt": account_info.get("total_buy_amt", 0),
+                "available_cash": available_cash,
+                "realized_profit": account_info.get("total_realized_profit", 0),
+                "net_profit": account_info.get("net_profit", 0),
+                "bot_total_holding": bot_total_holding,
+                "bot_realized_profit": bot_realized_profit,
+                "net_deposit": net_deposit,
+                "invest_return_rate": round(invest_return_rate, 2),
+            }
+
+            # DB에 저장
+            success = supabase.save_daily_snapshot(Config.USER_ID, snapshot_data)
+            if success:
+                self._snapshot_saved_date = today
+                print(f"[Bot] 일별 스냅샷 저장 완료:")
+                print(f"      - 총자산: {total_asset:,}원")
+                print(f"      - 평가금액: {total_eval_amt:,}원")
+                print(f"      - 현금: {available_cash:,}원")
+                print(f"      - 순입금: {net_deposit:,}원")
+                print(f"      - 투자수익률: {invest_return_rate:+.2f}%")
+
+                # 텔레그램 알림
+                await notifier.send_message(
+                    f"📊 일별 스냅샷 저장 완료\n"
+                    f"날짜: {today}\n"
+                    f"총자산: {total_asset:,}원\n"
+                    f"투자수익률: {invest_return_rate:+.2f}%"
+                )
+            else:
+                print(f"[Bot] 스냅샷 저장 실패")
+
+        except Exception as e:
+            print(f"[Bot] 스냅샷 저장 오류: {e}")
 
     def _calculate_polling_interval(self) -> int:
         """종목 수에 따른 동적 폴링 간격 계산 (배치 처리 기준)"""

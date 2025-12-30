@@ -1,15 +1,47 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStocks } from '../hooks/useStocks';
 import { useDepositHistory } from '../hooks/useDepositHistory';
-import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare, RefreshCw } from 'lucide-react';
+import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare, RefreshCw, BarChart2 } from 'lucide-react';
 import { useBotStatus } from '../contexts/BotStatusContext';
-import { requestBalanceRefresh } from '../lib/api';
+import { requestBalanceRefresh, getDailySnapshots, getMonthlySnapshots, getYearlySnapshots } from '../lib/api';
+import type { DailySnapshot, SnapshotPeriod } from '../lib/api';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
   const { summary: depositSummary } = useDepositHistory();
   const { botRunning, serverAlive, availableCash, availableAmount, d2Deposit, kisAccountInfo, refreshStatus } = useBotStatus();
   const [refreshing, setRefreshing] = useState(false);
+  const [chartPeriod, setChartPeriod] = useState<SnapshotPeriod>('daily');
+  const [snapshots, setSnapshots] = useState<DailySnapshot[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+
+  // 스냅샷 데이터 로드
+  useEffect(() => {
+    const loadSnapshots = async () => {
+      setChartLoading(true);
+      try {
+        let data: DailySnapshot[] = [];
+        switch (chartPeriod) {
+          case 'monthly':
+            data = await getMonthlySnapshots();
+            break;
+          case 'yearly':
+            data = await getYearlySnapshots();
+            break;
+          default:
+            data = await getDailySnapshots('daily');
+            break;
+        }
+        setSnapshots(data);
+      } catch (e) {
+        console.error('Error loading snapshots:', e);
+      } finally {
+        setChartLoading(false);
+      }
+    };
+    loadSnapshots();
+  }, [chartPeriod]);
 
   const handleRefresh = async () => {
     if (refreshing) return;
@@ -398,6 +430,142 @@ export function Dashboard() {
           </p>
         </div>
       )}
+
+      {/* 자산 추이 그래프 */}
+      <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-green-400" />
+            <h3 className="text-sm md:text-base font-semibold text-white">자산 추이</h3>
+          </div>
+          <div className="flex gap-1">
+            {(['daily', 'monthly', 'yearly'] as SnapshotPeriod[]).map((period) => (
+              <button
+                key={period}
+                onClick={() => setChartPeriod(period)}
+                className={`px-2 py-1 text-xs rounded ${
+                  chartPeriod === period
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                }`}
+              >
+                {period === 'daily' ? '일별' : period === 'monthly' ? '월별' : '연별'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {chartLoading ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-green-500"></div>
+          </div>
+        ) : snapshots.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-48 text-gray-500">
+            <BarChart2 className="w-12 h-12 mb-2 opacity-30" />
+            <p className="text-sm">아직 스냅샷 데이터가 없습니다</p>
+            <p className="text-xs">매일 15:30에 자동 저장됩니다</p>
+          </div>
+        ) : (
+          <div className="h-64 md:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={snapshots.map(s => ({
+                  date: chartPeriod === 'yearly'
+                    ? s.date.substring(0, 4)
+                    : chartPeriod === 'monthly'
+                    ? s.date.substring(5, 7) + '월'
+                    : s.date.substring(5),
+                  총자산: s.total_asset,
+                  순입금: s.net_deposit,
+                  수익률: s.invest_return_rate,
+                }))}
+                margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+                <XAxis
+                  dataKey="date"
+                  stroke="#9CA3AF"
+                  fontSize={10}
+                  tickLine={false}
+                />
+                <YAxis
+                  yAxisId="left"
+                  stroke="#9CA3AF"
+                  fontSize={10}
+                  tickFormatter={(v) => `${(v / 10000).toFixed(0)}만`}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  stroke="#9CA3AF"
+                  fontSize={10}
+                  tickFormatter={(v) => `${v.toFixed(1)}%`}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1F2937',
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                  }}
+                  labelStyle={{ color: '#9CA3AF' }}
+                  formatter={(value, name) => {
+                    const numValue = typeof value === 'number' ? value : 0;
+                    if (name === '수익률') return [`${numValue.toFixed(2)}%`, name];
+                    return [`${numValue.toLocaleString()}원`, name];
+                  }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: '11px' }}
+                  iconSize={8}
+                />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="총자산"
+                  stroke="#3B82F6"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="순입금"
+                  stroke="#6B7280"
+                  strokeWidth={1}
+                  strokeDasharray="5 5"
+                  dot={false}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="수익률"
+                  stroke="#22C55E"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {snapshots.length > 0 && (
+          <div className="flex justify-between text-xs text-gray-500 mt-2 px-2">
+            <span>
+              기간: {snapshots[0]?.date} ~ {snapshots[snapshots.length - 1]?.date}
+            </span>
+            <span>
+              총 {snapshots.length}개 데이터
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Row 4: 전체, 활성 */}
       <div className="grid grid-cols-2 gap-2 md:gap-3">
