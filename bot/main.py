@@ -374,7 +374,7 @@ class SplitBot:
 
     async def send_heartbeat(self) -> None:
         """서버 상태 heartbeat 전송 + DB 동기화 (5초마다)"""
-        balance_counter = 59  # 시작 시 바로 예수금 업데이트 (다음 루프에서 60이 됨)
+        balance_counter = 11  # 시작 시 바로 예수금 업데이트 (다음 루프에서 12가 됨)
         heartbeat_counter = 0  # heartbeat는 30초마다
         reload_counter = 0  # purchases 리로드는 30초마다
         snapshot_counter = 0  # 스냅샷 체크는 30초마다
@@ -405,9 +405,9 @@ class SplitBot:
                     supabase.clear_balance_refresh_requested(Config.USER_ID)
                     balance_counter = 0  # 카운터 리셋
                 else:
-                    # 5분마다 예수금 업데이트 (5초 * 60 = 5분)
+                    # 1분마다 예수금 업데이트 (5초 * 12 = 1분)
                     balance_counter += 1
-                    if balance_counter >= 60:
+                    if balance_counter >= 12:
                         balance_counter = 0
                         await self._update_balance()
             except Exception as e:
