@@ -439,7 +439,7 @@ class SupabaseClient:
                 "available_amount": 매수가능금액,
                 "d2_deposit": D+2 예수금,
                 "kis_total_buy_amt": 투자금(매입금액),
-                "kis_total_eval_amt": 평가금액,
+                "kis_total_eval_amt": 유가평가금액(주식만),
                 "kis_total_eval_profit": 평가손익,
                 "kis_total_eval_profit_rate": 평가손익률,
                 "kis_total_realized_profit": 실현손익(연초~현재)

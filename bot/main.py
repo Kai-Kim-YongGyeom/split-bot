@@ -429,7 +429,7 @@ class SplitBot:
                         print(f"      - 매수가능금액: {account_info.get('available_amount', 0):,}원")
                         print(f"      - D+2 예수금: {account_info.get('d2_deposit', 0):,}원")
                         print(f"      - 투자금: {account_info.get('total_buy_amt', 0):,}원")
-                        print(f"      - 평가금액: {account_info.get('total_eval_amt', 0):,}원")
+                        print(f"      - 유가평가금액: {account_info.get('total_eval_amt', 0):,}원")
                         print(f"      - 평가손익: {account_info.get('total_eval_profit', 0):+,}원 ({account_info.get('total_eval_profit_rate', 0):+.2f}%)")
                         print(f"      - 실현손익: {account_info.get('total_realized_profit', 0):+,}원")
                     else:

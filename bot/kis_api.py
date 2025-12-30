@@ -1000,8 +1000,8 @@ class KisAPI:
                 output2 = result.get("output2", [])
                 if output2 and len(output2) > 0:
                     summary = output2[0]
-                    # 평가금액 합계
-                    result_data["total_eval_amt"] = int(summary.get("tot_evlu_amt", 0) or 0)
+                    # 유가평가금액 (주식만, 현금 제외)
+                    result_data["total_eval_amt"] = int(summary.get("scts_evlu_amt", 0) or 0)
                     # 매입금액 합계 (투자금)
                     result_data["total_buy_amt"] = int(summary.get("pchs_amt_smtl_amt", 0) or 0)
                     # 평가손익 합계
@@ -1013,7 +1013,7 @@ class KisAPI:
                         )
 
                     print(f"[KIS] 계좌자산현황: 투자금={result_data['total_buy_amt']:,}, "
-                          f"평가금액={result_data['total_eval_amt']:,}, "
+                          f"유가평가금액={result_data['total_eval_amt']:,}, "
                           f"평가손익={result_data['total_eval_profit']:,} "
                           f"({result_data['total_eval_profit_rate']:+.2f}%)")
             else:
