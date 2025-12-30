@@ -1096,12 +1096,16 @@ class KisAPI:
                     if output2:
                         # 첫 페이지에서만 합계 가져옴
                         if page == 1:
-                            result_data["total_realized_profit"] = int(output2.get("rlzt_pfls", 0) or 0)
+                            # tot_rlzt_pfls(총실현손익) 우선, 없으면 rlzt_pfls 사용
+                            realized = output2.get("tot_rlzt_pfls") or output2.get("rlzt_pfls") or 0
+                            result_data["total_realized_profit"] = int(realized) if realized else 0
                             result_data["total_sell_amt"] = int(output2.get("sll_amt", 0) or 0)
                             result_data["total_buy_amt"] = int(output2.get("buy_amt", 0) or 0)
 
                             print(f"[KIS] 실현손익({start_date}~{end_date}): "
                                   f"{result_data['total_realized_profit']:+,}원")
+                            # 디버그: output2 필드 확인
+                            print(f"[KIS] output2 keys: {list(output2.keys()) if isinstance(output2, dict) else 'not dict'}")
 
                     if resp_tr_cont not in ["M", "F"]:
                         break
