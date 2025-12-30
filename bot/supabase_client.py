@@ -442,7 +442,7 @@ class SupabaseClient:
                 "kis_total_eval_amt": 유가평가금액(주식만),
                 "kis_total_eval_profit": 평가손익,
                 "kis_total_eval_profit_rate": 평가손익률,
-                "kis_total_realized_profit": 실현손익(연초~현재)
+                "kis_total_realized_profit": 실현손익
             }
         """
         if not self.is_configured or not user_id:

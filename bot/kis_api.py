@@ -1138,7 +1138,7 @@ class KisAPI:
             "total_eval_profit": 0,   # 평가손익
             "total_eval_profit_rate": 0.0,  # 평가손익률
             # 실현손익
-            "total_realized_profit": 0,  # 실현손익(연초~현재)
+            "total_realized_profit": 0,  # 실현손익 (세전)
         }
 
         # 1. 예수금 조회
@@ -1158,7 +1158,7 @@ class KisAPI:
 
         time.sleep(0.2)
 
-        # 3. 실현손익 조회 (연초~현재)
+        # 3. 실현손익 조회 (12월 1일~현재)
         realized_info = self.get_realized_profit()
         result["total_realized_profit"] = realized_info.get("total_realized_profit", 0)
 
