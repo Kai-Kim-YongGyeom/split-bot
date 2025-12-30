@@ -78,12 +78,17 @@ export function Dashboard() {
     ? (totalRealizedProfit / totalSoldCost) * 100
     : 0;
 
-  // 총 자산 계산
-  const totalAsset = (availableCash || 0) + totalEvaluation;
+  // 총 자산 계산 (KIS 기준: 현금 + KIS평가금액)
+  const kisTotalAsset = kisAccountInfo
+    ? (availableCash || 0) + kisAccountInfo.totalEvalAmt
+    : (availableCash || 0) + totalEvaluation;
 
-  // 투자 수익률 계산 (순입금액 대비)
+  // BOT 총자산 (참고용)
+  const botTotalAsset = (availableCash || 0) + totalEvaluation;
+
+  // 투자 수익률 계산 (KIS총자산 기준, 순입금액 대비)
   const netDeposit = depositSummary.netDeposit;
-  const investmentProfit = netDeposit > 0 ? totalAsset - netDeposit : 0;
+  const investmentProfit = netDeposit > 0 ? kisTotalAsset - netDeposit : 0;
   const investmentReturnRate = netDeposit > 0 ? (investmentProfit / netDeposit) * 100 : 0;
 
   return (
@@ -93,15 +98,18 @@ export function Dashboard() {
         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-3">
           <div className="flex justify-between md:block">
             <div>
-              <p className="text-gray-400 text-xs md:text-sm">총 자산</p>
+              <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+                총 자산
+                <span className="px-1.5 py-0.5 bg-cyan-900/50 text-cyan-400 text-[10px] rounded">KIS</span>
+              </p>
               <p className="text-xl md:text-2xl font-bold text-white">
-                {totalAsset > 0 ? `${totalAsset.toLocaleString()}원` : '-'}
+                {kisTotalAsset > 0 ? `${kisTotalAsset.toLocaleString()}원` : '-'}
               </p>
             </div>
             <div className="text-right md:hidden">
               <p className="text-gray-400 text-xs">현금 + 평가금액</p>
               <p className="text-gray-300 text-sm">
-                {availableCash !== null ? availableCash.toLocaleString() : '-'} + {totalEvaluation.toLocaleString()}
+                {availableCash !== null ? availableCash.toLocaleString() : '-'} + {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
               </p>
             </div>
           </div>
@@ -129,7 +137,7 @@ export function Dashboard() {
           <div className="hidden md:block text-right">
             <p className="text-gray-400 text-xs">현금 + 평가금액</p>
             <p className="text-gray-300 text-sm">
-              {availableCash !== null ? availableCash.toLocaleString() : '-'} + {totalEvaluation.toLocaleString()}
+              {availableCash !== null ? availableCash.toLocaleString() : '-'} + {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
             </p>
           </div>
         </div>
@@ -138,19 +146,28 @@ export function Dashboard() {
       {/* Row 1: 주문가능, 현금, D+2 */}
       <div className="grid grid-cols-3 gap-2 md:gap-3">
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs md:text-sm">주문가능</p>
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            주문가능
+            <span className="px-1 py-0.5 bg-cyan-900/50 text-cyan-400 text-[10px] rounded">KIS</span>
+          </p>
           <p className="text-base md:text-lg font-bold text-yellow-400 truncate">
             {availableAmount !== null ? `${availableAmount.toLocaleString()}` : '-'}
           </p>
         </div>
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs md:text-sm">현금</p>
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            현금
+            <span className="px-1 py-0.5 bg-cyan-900/50 text-cyan-400 text-[10px] rounded">KIS</span>
+          </p>
           <p className="text-base md:text-lg font-bold truncate">
             {availableCash !== null ? `${availableCash.toLocaleString()}` : '-'}
           </p>
         </div>
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs md:text-sm">D+2</p>
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            D+2
+            <span className="px-1 py-0.5 bg-cyan-900/50 text-cyan-400 text-[10px] rounded">KIS</span>
+          </p>
           <p className="text-base md:text-lg font-bold truncate">
             {d2Deposit !== null ? `${d2Deposit.toLocaleString()}` : '-'}
           </p>
@@ -160,12 +177,20 @@ export function Dashboard() {
       {/* Row 2: 투자금, 평가금액 */}
       <div className="grid grid-cols-2 gap-2 md:gap-3">
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs md:text-sm">투자금</p>
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            투자금
+            <span className="px-1 py-0.5 bg-purple-900/50 text-purple-400 text-[10px] rounded">BOT</span>
+          </p>
           <p className="text-base md:text-lg font-bold text-purple-400 truncate">{totalHolding.toLocaleString()}</p>
         </div>
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs md:text-sm">평가금액</p>
-          <p className="text-base md:text-lg font-bold text-blue-400 truncate">{totalEvaluation.toLocaleString()}</p>
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            평가금액
+            <span className="px-1 py-0.5 bg-cyan-900/50 text-cyan-400 text-[10px] rounded">KIS</span>
+          </p>
+          <p className="text-base md:text-lg font-bold text-blue-400 truncate">
+            {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
+          </p>
         </div>
       </div>
 
@@ -176,7 +201,10 @@ export function Dashboard() {
             ? 'bg-green-900/20 border-green-800'
             : 'bg-red-900/20 border-red-800'
         }`}>
-          <p className="text-gray-400 text-xs md:text-sm">실현손익</p>
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            실현손익
+            <span className="px-1 py-0.5 bg-purple-900/50 text-purple-400 text-[10px] rounded">BOT</span>
+          </p>
           <p className={`text-base md:text-lg font-bold truncate ${totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {totalRealizedProfit >= 0 ? '+' : ''}{totalRealizedProfit.toLocaleString()}
             <span className="text-xs md:text-sm ml-1">({totalRealizedRate >= 0 ? '+' : ''}{totalRealizedRate.toFixed(1)}%)</span>
@@ -187,7 +215,10 @@ export function Dashboard() {
             ? 'bg-red-900/20 border-red-800'
             : 'bg-blue-900/20 border-blue-800'
         }`}>
-          <p className="text-gray-400 text-xs md:text-sm">평가손익</p>
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            평가손익
+            <span className="px-1 py-0.5 bg-purple-900/50 text-purple-400 text-[10px] rounded">BOT</span>
+          </p>
           <p className={`text-base md:text-lg font-bold truncate ${totalUnrealizedProfit >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
             {totalUnrealizedProfit >= 0 ? '+' : ''}{totalUnrealizedProfit.toLocaleString()}
             <span className="text-xs md:text-sm ml-1">({totalUnrealizedRate >= 0 ? '+' : ''}{totalUnrealizedRate.toFixed(1)}%)</span>
@@ -325,19 +356,25 @@ export function Dashboard() {
                   <td className="py-2 text-right text-gray-500">-</td>
                   <td className="py-2 text-right text-gray-500">-</td>
                 </tr>
-                {/* 순이익 (세후) */}
+                {/* 순이익 (세후) - KIS는 세금 차감, BOT은 실현손익 */}
                 <tr className="border-b border-gray-700/50">
                   <td className="py-2 text-gray-300 font-medium">순이익(세후)</td>
                   <td className={`py-2 text-right font-medium ${kisAccountInfo.netProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {kisAccountInfo.netProfit >= 0 ? '+' : ''}{kisAccountInfo.netProfit.toLocaleString()}
                   </td>
-                  <td className="py-2 text-right text-gray-500">-</td>
-                  <td className="py-2 text-right text-gray-500">-</td>
+                  <td className={`py-2 text-right font-medium ${totalRealizedProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {totalRealizedProfit >= 0 ? '+' : ''}{totalRealizedProfit.toLocaleString()}
+                  </td>
+                  <td className={`py-2 text-right ${
+                    kisAccountInfo.netProfit - totalRealizedProfit === 0 ? 'text-gray-500' :
+                    Math.abs(kisAccountInfo.netProfit - totalRealizedProfit) < 1000 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {kisAccountInfo.netProfit - totalRealizedProfit === 0 ? '-' :
+                      `${kisAccountInfo.netProfit - totalRealizedProfit > 0 ? '+' : ''}${(kisAccountInfo.netProfit - totalRealizedProfit).toLocaleString()}`}
+                  </td>
                 </tr>
                 {/* 총자산 */}
                 {(() => {
-                  const kisTotalAsset = (availableCash || 0) + kisAccountInfo.totalEvalAmt;
-                  const botTotalAsset = totalAsset;
                   const diffAsset = kisTotalAsset - botTotalAsset;
                   return (
                     <tr className="border-b border-gray-700/50">
@@ -353,17 +390,16 @@ export function Dashboard() {
                     </tr>
                   );
                 })()}
-                {/* 투자수익률 (세후) */}
+                {/* 투자수익률 - 순입금 대비 순이익률 */}
                 {netDeposit > 0 && (() => {
-                  const kisTotalAsset = (availableCash || 0) + kisAccountInfo.totalEvalAmt;
-                  // 세금(수수료+제세금) 차감 후 수익률 계산
-                  const totalTaxFee = kisAccountInfo.totalFee + kisAccountInfo.totalTax;
-                  const kisInvestRate = ((kisTotalAsset - totalTaxFee - netDeposit) / netDeposit) * 100;
-                  const botInvestRate = investmentReturnRate;
+                  // KIS: 순이익(세후) / 순입금
+                  const kisInvestRate = (kisAccountInfo.netProfit / netDeposit) * 100;
+                  // BOT: 실현손익 / 순입금
+                  const botInvestRate = (totalRealizedProfit / netDeposit) * 100;
                   const diffRate = kisInvestRate - botInvestRate;
                   return (
                     <tr>
-                      <td className="py-2 text-gray-300 font-medium">투자수익률(세후)</td>
+                      <td className="py-2 text-gray-300 font-medium">투자수익률</td>
                       <td className={`py-2 text-right font-medium ${kisInvestRate >= 0 ? 'text-red-400' : 'text-blue-400'}`}>
                         {kisInvestRate >= 0 ? '+' : ''}{kisInvestRate.toFixed(2)}%
                       </td>
