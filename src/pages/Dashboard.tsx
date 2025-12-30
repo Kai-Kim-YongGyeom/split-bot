@@ -610,18 +610,30 @@ export function Dashboard() {
 
       {/* 차트 확대 모달 */}
       {chartExpanded && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
           {/* 헤더 */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-700">
-            <div className="flex items-center gap-3">
-              <BarChart2 className="w-6 h-6 text-green-400" />
-              <h2 className="text-lg font-bold text-white">자산 추이</h2>
-              <div className="flex gap-1 ml-4">
+          <div className="flex-shrink-0 p-3 border-b border-gray-700">
+            {/* 상단: 제목 + 닫기 버튼 */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-green-400" />
+                <h2 className="text-base font-bold text-white">자산 추이</h2>
+              </div>
+              <button
+                onClick={() => setChartExpanded(false)}
+                className="p-2 rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-400" />
+              </button>
+            </div>
+            {/* 하단: 기간 버튼 + 날짜 선택 */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex gap-1">
                 {(['daily', 'monthly', 'yearly'] as SnapshotPeriod[]).map((period) => (
                   <button
                     key={period}
                     onClick={() => setChartPeriod(period)}
-                    className={`px-3 py-1.5 text-sm rounded ${
+                    className={`px-2 py-1 text-xs rounded ${
                       chartPeriod === period
                         ? 'bg-green-600 text-white'
                         : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
@@ -631,35 +643,26 @@ export function Dashboard() {
                   </button>
                 ))}
               </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-400">기간:</span>
+              <div className="flex items-center gap-1 text-xs">
                 <input
                   type="date"
                   value={chartStartDate}
                   onChange={(e) => setChartStartDate(e.target.value)}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-300 text-sm focus:outline-none focus:border-green-500"
+                  className="bg-gray-700 border border-gray-600 rounded px-1.5 py-1 text-gray-300 text-xs focus:outline-none focus:border-green-500 w-28"
                 />
                 <span className="text-gray-500">~</span>
                 <input
                   type="date"
                   value={chartEndDate}
                   onChange={(e) => setChartEndDate(e.target.value)}
-                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-gray-300 text-sm focus:outline-none focus:border-green-500"
+                  className="bg-gray-700 border border-gray-600 rounded px-1.5 py-1 text-gray-300 text-xs focus:outline-none focus:border-green-500 w-28"
                 />
               </div>
-              <button
-                onClick={() => setChartExpanded(false)}
-                className="p-2 rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                <X className="w-6 h-6 text-gray-400" />
-              </button>
             </div>
           </div>
 
           {/* 차트 영역 */}
-          <div className="flex-1 p-4">
+          <div className="flex-1 min-h-0 p-2 md:p-4">
             {chartLoading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500"></div>
@@ -782,12 +785,12 @@ export function Dashboard() {
 
           {/* 푸터 정보 */}
           {snapshots.length > 0 && (
-            <div className="flex justify-between text-sm text-gray-400 p-4 border-t border-gray-700">
+            <div className="flex-shrink-0 flex justify-between text-xs text-gray-400 px-3 py-2 border-t border-gray-700">
               <span>
-                기간: {snapshots[0]?.date} ~ {snapshots[snapshots.length - 1]?.date}
+                {snapshots[0]?.date} ~ {snapshots[snapshots.length - 1]?.date}
               </span>
               <span>
-                총 {snapshots.length}개 데이터
+                {snapshots.length}개
               </span>
             </div>
           )}
