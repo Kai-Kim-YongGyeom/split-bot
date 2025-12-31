@@ -1,9 +1,12 @@
 """한국투자증권 REST API 모듈"""
 import time
 import requests
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from config import Config
+
+# 한국 시간대 (UTC+9)
+KST = timezone(timedelta(hours=9))
 
 # API 타임아웃 설정 (초)
 KIS_API_TIMEOUT = 10
@@ -1186,6 +1189,75 @@ class KisAPI:
         result["net_profit"] = realized_info.get("net_profit", 0)
 
         return result
+
+
+    def is_market_open_day(self, date: str = None) -> bool:
+        """오늘이 개장일(거래 가능일)인지 확인
+
+        Args:
+            date: 확인할 날짜 (YYYYMMDD), 기본값 오늘 (KST 기준)
+
+        Returns:
+            bool: True면 개장일, False면 휴장일
+
+        Note:
+            - 1일 1회 호출 권장 (KIS 서버 부하 방지)
+            - 결과를 캐시하여 같은 날짜는 재호출하지 않음
+            - 날짜 기준은 KST (한국 시간)
+            - 장 시작/종료 시간은 API에서 미제공 (09:00~15:30 고정)
+        """
+        if not self.is_configured:
+            print("[KIS] API 미설정 - 개장일 체크 불가, True 반환")
+            return True
+
+        # 기본값: 오늘 날짜 (KST 기준)
+        if not date:
+            date = datetime.now(KST).strftime("%Y%m%d")
+
+        # 캐시 확인 (같은 날짜면 재호출하지 않음)
+        if hasattr(self, '_market_open_cache'):
+            cached_date, cached_result = self._market_open_cache
+            if cached_date == date:
+                return cached_result
+        else:
+            self._market_open_cache = (None, None)
+
+        url = f"{self.base_url}/uapi/domestic-stock/v1/quotations/chk-holiday"
+        headers = self._get_headers("CTCA0903R")
+        params = {
+            "BASS_DT": date,
+            "CTX_AREA_FK": "",
+            "CTX_AREA_NK": "",
+        }
+
+        try:
+            response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
+            response.raise_for_status()
+            result = response.json()
+
+            if result.get("rt_cd") == "0":
+                output = result.get("output", [])
+                if output:
+                    # 오늘 날짜 데이터 찾기
+                    for item in output:
+                        if item.get("bass_dt") == date:
+                            is_open = item.get("opnd_yn", "N") == "Y"
+                            # 캐시에 저장
+                            self._market_open_cache = (date, is_open)
+                            status = "개장일" if is_open else "휴장일"
+                            print(f"[KIS] {date} 장 상태: {status}")
+                            return is_open
+
+                # 데이터 없으면 True 반환 (안전하게 거래 시도)
+                print(f"[KIS] {date} 장 상태 데이터 없음, 개장일로 간주")
+                self._market_open_cache = (date, True)
+                return True
+            else:
+                print(f"[KIS] 휴장일 조회 실패: {result.get('msg1', '')}")
+                return True  # 실패 시 안전하게 True
+        except requests.exceptions.RequestException as e:
+            print(f"[KIS] 휴장일 조회 오류: {e}")
+            return True  # 오류 시 안전하게 True
 
 
 # 싱글톤 인스턴스

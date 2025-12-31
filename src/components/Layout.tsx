@@ -19,7 +19,7 @@ export function Layout() {
   const location = useLocation();
   const { user, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { botRunning, serverAlive, toggling, toggleBot } = useBotStatus();
+  const { botRunning, serverAlive, toggling, toggleBot, isMarketOpen, marketStatusDate } = useBotStatus();
 
   const handleNavClick = () => {
     setMobileMenuOpen(false);
@@ -58,6 +58,19 @@ export function Layout() {
                 })}
               </nav>
               <div className="flex items-center gap-3 pl-4 border-l border-gray-700">
+                {/* Market Status Badge */}
+                {isMarketOpen !== null && (
+                  <span
+                    className={`px-2 py-0.5 rounded text-xs font-bold ${
+                      isMarketOpen
+                        ? 'bg-green-900/50 text-green-400 border border-green-600'
+                        : 'bg-red-900/50 text-red-400 border border-red-600'
+                    }`}
+                    title={`${marketStatusDate || ''} ${isMarketOpen ? '개장일' : '휴장일'}`}
+                  >
+                    {isMarketOpen ? '개장' : '휴장'}
+                  </span>
+                )}
                 {/* Server Status Dot */}
                 <div
                   className={`w-3 h-3 rounded-full ${
@@ -91,6 +104,19 @@ export function Layout() {
 
             {/* Mobile: Status + Toggle + Menu Button */}
             <div className="flex md:hidden items-center gap-2">
+              {/* Market Status Badge (Mobile) */}
+              {isMarketOpen !== null && (
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                    isMarketOpen
+                      ? 'bg-green-900/50 text-green-400 border border-green-600'
+                      : 'bg-red-900/50 text-red-400 border border-red-600'
+                  }`}
+                  title={`${marketStatusDate || ''} ${isMarketOpen ? '개장일' : '휴장일'}`}
+                >
+                  {isMarketOpen ? '개장' : '휴장'}
+                </span>
+              )}
               {/* Server Status Dot */}
               <div
                 className={`w-3 h-3 rounded-full ${

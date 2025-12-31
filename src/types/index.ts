@@ -72,6 +72,10 @@ export interface UserSettings {
   default_split_rates?: number[];       // 기본 물타기 비율
   default_target_rates?: number[];      // 기본 목표 수익률
   default_stop_loss_rate?: number;      // 기본 손절 비율
+  // 장 운영 상태 (휴장일 여부)
+  is_market_open?: boolean;             // true=개장일, false=휴장일
+  market_status_date?: string;          // 체크한 날짜 (YYYY-MM-DD)
+  market_status_updated_at?: string;    // 마지막 체크 시간
 }
 
 // 프론트엔드용 봇 설정 (복호화된 값)
@@ -111,6 +115,10 @@ export interface BotConfig {
   default_split_rates?: number[];       // 기본 물타기 비율
   default_target_rates?: number[];      // 기본 목표 수익률
   default_stop_loss_rate?: number;      // 기본 손절 비율
+  // 장 운영 상태 (휴장일 여부)
+  is_market_open?: boolean;             // true=개장일, false=휴장일
+  market_status_date?: string;          // 체크한 날짜 (YYYY-MM-DD)
+  market_status_updated_at?: string;    // 마지막 체크 시간
 }
 
 // KIS 계좌 정보 (대시보드 비교용)

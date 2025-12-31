@@ -39,6 +39,10 @@ class SplitBot:
     # 최소 주문가능금액 (원)
     MIN_AVAILABLE_AMOUNT = 30000
 
+    # 장 시작 시간 재시도 옵션 (신년 첫 거래일 등 10시 개장 대응)
+    MARKET_OPEN_TIMES = [dtime(9, 0), dtime(9, 30), dtime(10, 0)]
+    MARKET_CLOSE_TIME = dtime(15, 30)
+
     def __init__(self):
         self._running = False
         self._bot_enabled = False  # DB에서 제어
@@ -58,20 +62,63 @@ class SplitBot:
         self._available_amount: Optional[int] = None
         # 일별 스냅샷 저장 여부 (오늘 날짜)
         self._snapshot_saved_date: Optional[str] = None
+        # 장 시작 시간 동적 조정 (9시 실패 → 9시30분 → 10시)
+        self._market_open_index = 0  # MARKET_OPEN_TIMES 인덱스
+        self._market_open_adjusted_date: Optional[str] = None  # 조정된 날짜
+
+    def _get_market_open_time(self) -> dtime:
+        """현재 적용 중인 장 시작 시간 반환 (동적 조정)"""
+        today = datetime.now(KST).strftime("%Y-%m-%d")
+
+        # 날짜가 바뀌면 9시로 리셋
+        if self._market_open_adjusted_date != today:
+            self._market_open_adjusted_date = today
+            self._market_open_index = 0
+
+        return self.MARKET_OPEN_TIMES[self._market_open_index]
+
+    def _advance_market_open_time(self) -> bool:
+        """장 시작 시간을 다음 단계로 이동 (9시→9시30분→10시)
+
+        Returns:
+            True: 다음 시간으로 이동됨 (재시도 가능)
+            False: 마지막 시간까지 시도함 (더 이상 재시도 불가)
+        """
+        if self._market_open_index < len(self.MARKET_OPEN_TIMES) - 1:
+            self._market_open_index += 1
+            next_time = self.MARKET_OPEN_TIMES[self._market_open_index]
+            log(f"[Bot] 장 시작 시간 조정: {next_time.strftime('%H:%M')}로 재시도 예정")
+            return True
+        return False
+
+    def _is_market_time_error(self, error_message: str) -> bool:
+        """장 운영 시간 관련 오류인지 확인
+
+        Examples:
+            - "장운영일자가 주문일과 상이합니다"
+            - "장운영시간이 아닙니다"
+        """
+        if not error_message:
+            return False
+        keywords = ["장운영일자", "장운영시간", "시장운영", "거래시간"]
+        return any(kw in error_message for kw in keywords)
 
     def is_market_open(self) -> bool:
-        """장 운영 시간 체크 (09:00 ~ 15:30 KST)"""
+        """장 운영 시간 체크 (동적 시작시간 ~ 15:30 KST, 휴장일 제외)"""
         now = datetime.now(KST)  # 한국 시간 기준
 
         # 주말 제외
         if now.weekday() >= 5:
             return False
 
-        current_time = now.time()
-        market_open = dtime(9, 0)
-        market_close = dtime(15, 30)
+        # 휴장일 체크 (KIS API - 1일 1회, 캐시됨)
+        if not kis_api.is_market_open_day():
+            return False
 
-        return market_open <= current_time <= market_close
+        current_time = now.time()
+        market_open = self._get_market_open_time()  # 동적 장 시작 시간
+
+        return market_open <= current_time <= self.MARKET_CLOSE_TIME
 
     def check_bot_enabled(self) -> bool:
         """DB에서 봇 활성화 상태 확인 (10초마다)"""
@@ -257,6 +304,12 @@ class SplitBot:
             else:
                 log(f"[Bot] 매수 실패: {order['message']}")
 
+                # 장 시간 오류면 다음 시간으로 조정 (9시→9시30분→10시)
+                if self._is_market_time_error(order.get("message", "")):
+                    if self._advance_market_open_time():
+                        next_time = self._get_market_open_time()
+                        log(f"[Bot] 장 시작 시간 오류 감지 → {next_time.strftime('%H:%M')} 이후 재시도")
+
             # 텔레그램 알림 (체결가 사용)
             alert_price = executed_price if order["success"] else trigger_price
             await notifier.send_buy_alert(
@@ -305,6 +358,12 @@ class SplitBot:
                 log(f"[Bot] 매도 성공: 손익 {profit:+,}원 ({profit_rate:+.2f}%)")
             else:
                 log(f"[Bot] 매도 실패: {order['message']}")
+
+                # 장 시간 오류면 다음 시간으로 조정 (9시→9시30분→10시)
+                if self._is_market_time_error(order.get("message", "")):
+                    if self._advance_market_open_time():
+                        next_time = self._get_market_open_time()
+                        log(f"[Bot] 장 시작 시간 오류 감지 → {next_time.strftime('%H:%M')} 이후 재시도")
 
             # 텔레그램 알림
             await notifier.send_sell_alert(
@@ -473,6 +532,10 @@ class SplitBot:
 
             # 주말이면 스킵
             if now.weekday() >= 5:
+                return
+
+            # 휴장일이면 스킵
+            if not kis_api.is_market_open_day():
                 return
 
             print(f"[Bot] 일별 스냅샷 저장 시작: {today}")
@@ -1168,6 +1231,12 @@ class SplitBot:
                 supabase.update_buy_request(request_id, "failed", order["message"])
                 print(f"[Bot] 웹 매수 실패: {order['message']}")
 
+                # 장 시간 오류면 다음 시간으로 조정 (9시→9시30분→10시)
+                if self._is_market_time_error(order.get("message", "")):
+                    if self._advance_market_open_time():
+                        next_time = self._get_market_open_time()
+                        log(f"[Bot] 장 시작 시간 오류 감지 → {next_time.strftime('%H:%M')} 이후 재시도")
+
                 # 텔레그램 실패 알림
                 await notifier.send_buy_alert(
                     stock_name=stock.name,
@@ -1268,6 +1337,12 @@ class SplitBot:
             else:
                 supabase.update_sell_request(request_id, "failed", order["message"])
                 print(f"[Bot] 웹 매도 실패: {order['message']}")
+
+                # 장 시간 오류면 다음 시간으로 조정 (9시→9시30분→10시)
+                if self._is_market_time_error(order.get("message", "")):
+                    if self._advance_market_open_time():
+                        next_time = self._get_market_open_time()
+                        log(f"[Bot] 장 시작 시간 오류 감지 → {next_time.strftime('%H:%M')} 이후 재시도")
         finally:
             stock.clear_order_pending()
 
@@ -1323,6 +1398,20 @@ class SplitBot:
         status_text = "활성화" if self._bot_enabled else "비활성화"
         print(f"[Bot] 초기 상태: {status_text}")
         print("[Bot] 웹에서 '봇 시작' 버튼으로 활성화하세요.")
+
+        # 휴장일 체크 (시작 시 1회)
+        if kis_api.is_configured:
+            is_open_day = kis_api.is_market_open_day()
+            today = datetime.now(KST).strftime("%Y-%m-%d")
+
+            # DB에 휴장일 정보 저장 (프론트엔드 표시용)
+            supabase.update_market_status(Config.USER_ID, is_open_day, today)
+
+            if not is_open_day:
+                print(f"[Bot] ⚠️ 오늘({today})은 휴장일입니다. 자동매매가 작동하지 않습니다.")
+            else:
+                print("[Bot] 오늘은 개장일입니다. (장 운영: 09:00~15:30)")
+                print("[Bot] 💡 장 시간 오류 시 자동 조정 (9시→9시30분→10시)")
         print()
 
         self._running = True

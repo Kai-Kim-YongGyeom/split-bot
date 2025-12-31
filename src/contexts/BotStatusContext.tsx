@@ -12,6 +12,9 @@ interface BotStatusContextType {
   d2Deposit: number | null;           // D+2 예수금
   // KIS 계좌 정보 (대시보드 비교용)
   kisAccountInfo: KisAccountInfo | null;
+  // 장 운영 상태 (휴장일 여부)
+  isMarketOpen: boolean | null;       // true=개장일, false=휴장일
+  marketStatusDate: string | null;    // 체크한 날짜 (YYYY-MM-DD)
   toggleBot: () => Promise<void>;
   refreshStatus: () => Promise<void>;
 }
@@ -26,6 +29,8 @@ export function BotStatusProvider({ children }: { children: ReactNode }) {
   const [availableAmount, setAvailableAmount] = useState<number | null>(null);
   const [d2Deposit, setD2Deposit] = useState<number | null>(null);
   const [kisAccountInfo, setKisAccountInfo] = useState<KisAccountInfo | null>(null);
+  const [isMarketOpen, setIsMarketOpen] = useState<boolean | null>(null);
+  const [marketStatusDate, setMarketStatusDate] = useState<string | null>(null);
 
   const checkStatus = useCallback(async () => {
     const config = await getBotConfig();
@@ -52,6 +57,10 @@ export function BotStatusProvider({ children }: { children: ReactNode }) {
         netProfit: config.kis_net_profit ?? 0,
         updatedAt: config.balance_updated_at,
       });
+
+      // 장 운영 상태 업데이트 (휴장일 여부)
+      setIsMarketOpen(config.is_market_open ?? null);
+      setMarketStatusDate(config.market_status_date ?? null);
 
       // 하트비트 체크 (45초 이내면 서버 살아있음 - 봇은 30초마다 전송)
       const heartbeat = config.last_heartbeat;
@@ -101,6 +110,8 @@ export function BotStatusProvider({ children }: { children: ReactNode }) {
       availableAmount,
       d2Deposit,
       kisAccountInfo,
+      isMarketOpen,
+      marketStatusDate,
       toggleBot,
       refreshStatus
     }}>

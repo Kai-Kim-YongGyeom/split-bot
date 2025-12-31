@@ -475,6 +475,30 @@ class SupabaseClient:
 
         return "error" not in result
 
+    def update_market_status(self, user_id: str, is_open: bool, check_date: str) -> bool:
+        """장 운영 상태 업데이트 (휴장일 여부)
+
+        Args:
+            user_id: 사용자 ID
+            is_open: True면 개장일, False면 휴장일
+            check_date: 체크한 날짜 (YYYY-MM-DD 형식)
+        """
+        if not self.is_configured or not user_id:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "user_settings",
+            data={
+                "is_market_open": is_open,
+                "market_status_date": check_date,
+                "market_status_updated_at": datetime.now().isoformat(),
+            },
+            params={"user_id": f"eq.{user_id}"},
+        )
+
+        return "error" not in result
+
     def check_balance_refresh_requested(self, user_id: str) -> bool:
         """잔고 새로고침 요청 플래그 확인"""
         if not self.is_configured or not user_id:
