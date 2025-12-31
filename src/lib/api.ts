@@ -255,6 +255,10 @@ function userSettingsToBotConfig(settings: UserSettings): BotConfig {
     default_split_rates: settings.default_split_rates,
     default_target_rates: settings.default_target_rates,
     default_stop_loss_rate: settings.default_stop_loss_rate,
+    // 장 운영 상태 (휴장일 여부)
+    is_market_open: settings.is_market_open,
+    market_status_date: settings.market_status_date,
+    market_status_updated_at: settings.market_status_updated_at,
   };
 }
 
