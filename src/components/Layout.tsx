@@ -37,31 +37,32 @@ export function Layout() {
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-4">
-              <nav className="flex gap-2">
+            <div className="hidden md:flex items-center gap-2 lg:gap-3">
+              <nav className="flex gap-1 lg:gap-1.5">
                 {navItems.map(({ path, label, emoji }) => {
                   const isActive = location.pathname === path;
                   return (
                     <Link
                       key={path}
                       to={path}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex items-center gap-1.5 px-2 lg:px-3 py-1.5 rounded-lg transition-colors text-sm ${
                         isActive
                           ? 'bg-blue-600 text-white'
                           : 'text-gray-400 hover:bg-gray-700 hover:text-white'
                       }`}
+                      title={label}
                     >
                       <span>{emoji}</span>
-                      <span>{label}</span>
+                      <span className="hidden xl:inline">{label}</span>
                     </Link>
                   );
                 })}
               </nav>
-              <div className="flex items-center gap-3 pl-4 border-l border-gray-700">
+              <div className="flex items-center gap-2 pl-2 lg:pl-3 border-l border-gray-700">
                 {/* Market Status Badge */}
                 {isMarketOpen !== null && (
                   <span
-                    className={`px-2 py-0.5 rounded text-xs font-bold ${
+                    className={`px-1.5 py-0.5 rounded text-xs font-bold ${
                       isMarketOpen
                         ? 'bg-green-900/50 text-green-400 border border-green-600'
                         : 'bg-red-900/50 text-red-400 border border-red-600'
@@ -73,7 +74,7 @@ export function Layout() {
                 )}
                 {/* Server Status Dot */}
                 <div
-                  className={`w-3 h-3 rounded-full ${
+                  className={`w-2.5 h-2.5 rounded-full ${
                     serverAlive === null ? 'bg-gray-500' : serverAlive ? 'bg-green-500' : 'bg-red-500'
                   }`}
                   title={serverAlive ? '서버 정상' : '서버 오프라인'}
@@ -82,7 +83,7 @@ export function Layout() {
                 <button
                   onClick={toggleBot}
                   disabled={toggling}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-bold transition ${
+                  className={`px-2.5 py-1 rounded-lg text-sm font-bold transition ${
                     botRunning
                       ? 'bg-green-600 hover:bg-green-500'
                       : 'bg-gray-600 hover:bg-gray-500'
@@ -91,10 +92,10 @@ export function Layout() {
                 >
                   {botRunning ? 'ON' : 'OFF'}
                 </button>
-                <span className="text-gray-400 text-sm">{user?.email}</span>
+                <span className="hidden xl:inline text-gray-400 text-sm truncate max-w-[120px]">{user?.email}</span>
                 <button
                   onClick={signOut}
-                  className="flex items-center gap-1 px-3 py-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  className="flex items-center gap-1 px-2 py-1.5 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                   title="로그아웃"
                 >
                   <span>🚪</span>
