@@ -813,6 +813,9 @@ function StockCard({
   onToggle,
   onAddPurchase,
   onRefresh,
+  selectionMode,
+  isSelected,
+  onSelect,
 }: {
   stock: StockWithPurchases;
   onEdit: () => void;
@@ -820,6 +823,9 @@ function StockCard({
   onToggle: () => void;
   onAddPurchase: () => void;
   onRefresh: () => void;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (id: string) => void;
 }) {
   const { showToast } = useToast();
   const { availableAmount } = useBotStatus();
@@ -923,12 +929,25 @@ function StockCard({
     : null;
 
   return (
-    <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+    <div className={`bg-gray-800 rounded-lg border overflow-hidden ${isSelected ? 'border-blue-500' : 'border-gray-700'}`}>
       <div className="p-3 md:p-4">
         {/* 헤더 - 종목명, 현재가, 상태 */}
         <div className="flex items-start justify-between mb-2">
+          {/* 선택 모드: 체크박스 */}
+          {selectionMode && (
+            <button
+              onClick={() => onSelect?.(stock.id)}
+              className="mr-2 mt-1 flex-shrink-0"
+            >
+              {isSelected ? (
+                <CheckSquare className="w-5 h-5 text-blue-500" />
+              ) : (
+                <Square className="w-5 h-5 text-gray-500" />
+              )}
+            </button>
+          )}
           <button
-            onClick={() => setExpanded(!expanded)}
+            onClick={() => selectionMode ? onSelect?.(stock.id) : setExpanded(!expanded)}
             className="flex items-center gap-2 text-left flex-1"
           >
             {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -1479,6 +1498,404 @@ function SyncModal({
   );
 }
 
+// 일괄 수정 모달
+function BulkEditModal({
+  isOpen,
+  onClose,
+  selectedIds,
+  onSuccess,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedIds: string[];
+  onSuccess: () => void;
+}) {
+  const { showToast } = useToast();
+  const [saving, setSaving] = useState(false);
+
+  // 어떤 필드를 수정할지 체크박스로 선택
+  const [editBuyMode, setEditBuyMode] = useState(false);
+  const [editMaxRounds, setEditMaxRounds] = useState(false);
+  const [editSplitRates, setEditSplitRates] = useState(false);
+  const [editTargetRates, setEditTargetRates] = useState(false);
+  const [editStopLoss, setEditStopLoss] = useState(false);
+
+  // 값 상태
+  const [buyMode, setBuyMode] = useState<'amount' | 'quantity'>('amount');
+  const [buyAmount, setBuyAmount] = useState(100000);
+  const [buyQuantity, setBuyQuantity] = useState(10);
+  const [maxRounds, setMaxRounds] = useState(5);
+  const [splitRates, setSplitRates] = useState([...DEFAULT_SPLIT_RATES]);
+  const [targetRates, setTargetRates] = useState([...DEFAULT_TARGET_RATES]);
+  const [stopLossRate, setStopLossRate] = useState(30);
+
+  // 일괄 적용용
+  const [bulkSplitRate, setBulkSplitRate] = useState(3);
+  const [bulkTargetRate, setBulkTargetRate] = useState(3);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // 수정할 필드가 없으면 경고
+    if (!editBuyMode && !editMaxRounds && !editSplitRates && !editTargetRates && !editStopLoss) {
+      showToast('수정할 항목을 선택해주세요.', 'error');
+      return;
+    }
+
+    setSaving(true);
+
+    // 업데이트 객체 구성
+    const updates: Record<string, unknown> = {};
+    if (editBuyMode) {
+      updates.buy_mode = buyMode;
+      if (buyMode === 'amount') {
+        updates.buy_amount = buyAmount;
+      } else {
+        updates.buy_quantity = buyQuantity;
+      }
+    }
+    if (editMaxRounds) {
+      updates.max_rounds = maxRounds;
+    }
+    if (editSplitRates) {
+      updates.split_rates = splitRates;
+    }
+    if (editTargetRates) {
+      updates.target_rates = targetRates;
+    }
+    if (editStopLoss) {
+      updates.stop_loss_rate = stopLossRate;
+    }
+
+    const success = await api.bulkUpdateStocks(selectedIds, updates);
+    setSaving(false);
+
+    if (success) {
+      showToast(`${selectedIds.length}개 종목이 수정되었습니다.`, 'success');
+      onSuccess();
+      onClose();
+    } else {
+      showToast('일괄 수정 실패. 다시 시도해주세요.', 'error');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-end md:items-center justify-center z-50 p-0 md:p-4">
+      <div className="bg-gray-800 rounded-t-2xl md:rounded-lg p-4 md:p-6 w-full md:max-w-lg border-t md:border border-gray-700 max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg md:text-xl font-bold">
+            일괄 수정 ({selectedIds.length}개 종목)
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-700 rounded">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* 매수 방식 */}
+          <div className={`p-3 rounded-lg border ${editBuyMode ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'}`}>
+            <label className="flex items-center gap-2 cursor-pointer mb-3">
+              <input
+                type="checkbox"
+                checked={editBuyMode}
+                onChange={e => setEditBuyMode(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+              <span className="font-medium">매수 방식</span>
+            </label>
+            {editBuyMode && (
+              <div className="space-y-3 pl-6">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setBuyMode('amount')}
+                    className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${
+                      buyMode === 'amount'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    }`}
+                  >
+                    금액 기준
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBuyMode('quantity')}
+                    className={`flex-1 py-2 rounded-lg font-medium text-sm transition ${
+                      buyMode === 'quantity'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-gray-700 text-gray-400 hover:bg-gray-600'
+                    }`}
+                  >
+                    수량 기준
+                  </button>
+                </div>
+                {buyMode === 'amount' ? (
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">회당 매수 금액</label>
+                    <input
+                      type="number"
+                      value={buyAmount || ''}
+                      onChange={e => setBuyAmount(Number(e.target.value) || 0)}
+                      onFocus={handleNumberFocus}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-base"
+                      placeholder="100000"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">회당 매수 수량</label>
+                    <input
+                      type="number"
+                      value={buyQuantity || ''}
+                      onChange={e => setBuyQuantity(Number(e.target.value) || 0)}
+                      onFocus={handleNumberFocus}
+                      className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-base"
+                      placeholder="10"
+                      min="1"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* 최대 차수 */}
+          <div className={`p-3 rounded-lg border ${editMaxRounds ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'}`}>
+            <label className="flex items-center gap-2 cursor-pointer mb-3">
+              <input
+                type="checkbox"
+                checked={editMaxRounds}
+                onChange={e => setEditMaxRounds(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+              <span className="font-medium">최대 차수</span>
+            </label>
+            {editMaxRounds && (
+              <div className="pl-6">
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from({ length: 10 }, (_, i) => i + 1).map(round => (
+                    <button
+                      key={round}
+                      type="button"
+                      onClick={() => setMaxRounds(round)}
+                      className={`w-9 h-9 rounded-lg font-bold text-sm transition ${
+                        maxRounds >= round
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-700 text-gray-500 hover:bg-gray-600'
+                      }`}
+                    >
+                      {round}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 물타기 비율 */}
+          <div className={`p-3 rounded-lg border ${editSplitRates ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'}`}>
+            <label className="flex items-center gap-2 cursor-pointer mb-3">
+              <input
+                type="checkbox"
+                checked={editSplitRates}
+                onChange={e => setEditSplitRates(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+              <span className="font-medium">물타기 비율 (%)</span>
+            </label>
+            {editSplitRates && (
+              <div className="pl-6 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={bulkSplitRate || ''}
+                    onChange={e => setBulkSplitRate(Number(e.target.value) || 0)}
+                    onFocus={handleNumberFocus}
+                    className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
+                    min="1"
+                    max="50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setSplitRates(splitRates.map(() => bulkSplitRate))}
+                    className="px-3 py-1 bg-blue-600 text-sm rounded hover:bg-blue-500 transition"
+                  >
+                    일괄 적용
+                  </button>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {splitRates.slice(0, 5).map((rate, i) => (
+                    <div key={i} className="flex flex-col items-center">
+                      <span className="text-xs text-gray-500 mb-1">{i + 2}차</span>
+                      <input
+                        type="number"
+                        value={rate || ''}
+                        onChange={e => {
+                          const newRates = [...splitRates];
+                          newRates[i] = Number(e.target.value) || 0;
+                          setSplitRates(newRates);
+                        }}
+                        onFocus={handleNumberFocus}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-1 text-center text-sm"
+                        min="1"
+                        max="50"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {splitRates.slice(5, 9).map((rate, i) => (
+                    <div key={i + 5} className="flex flex-col items-center">
+                      <span className="text-xs text-gray-500 mb-1">{i + 7}차</span>
+                      <input
+                        type="number"
+                        value={rate || ''}
+                        onChange={e => {
+                          const newRates = [...splitRates];
+                          newRates[i + 5] = Number(e.target.value) || 0;
+                          setSplitRates(newRates);
+                        }}
+                        onFocus={handleNumberFocus}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-1 text-center text-sm"
+                        min="1"
+                        max="50"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 목표 수익률 */}
+          <div className={`p-3 rounded-lg border ${editTargetRates ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'}`}>
+            <label className="flex items-center gap-2 cursor-pointer mb-3">
+              <input
+                type="checkbox"
+                checked={editTargetRates}
+                onChange={e => setEditTargetRates(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+              <span className="font-medium">목표 수익률 (%)</span>
+            </label>
+            {editTargetRates && (
+              <div className="pl-6 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={bulkTargetRate || ''}
+                    onChange={e => setBulkTargetRate(Number(e.target.value) || 0)}
+                    onFocus={handleNumberFocus}
+                    className="w-16 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-center text-sm"
+                    min="1"
+                    max="50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setTargetRates(targetRates.map(() => bulkTargetRate))}
+                    className="px-3 py-1 bg-green-600 text-sm rounded hover:bg-green-500 transition"
+                  >
+                    일괄 적용
+                  </button>
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {targetRates.slice(0, 5).map((rate, i) => (
+                    <div key={i} className="flex flex-col items-center">
+                      <span className="text-xs text-gray-500 mb-1">{i + 1}차</span>
+                      <input
+                        type="number"
+                        value={rate || ''}
+                        onChange={e => {
+                          const newRates = [...targetRates];
+                          newRates[i] = Number(e.target.value) || 0;
+                          setTargetRates(newRates);
+                        }}
+                        onFocus={handleNumberFocus}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-1 text-center text-sm"
+                        min="1"
+                        max="50"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {targetRates.slice(5, 10).map((rate, i) => (
+                    <div key={i + 5} className="flex flex-col items-center">
+                      <span className="text-xs text-gray-500 mb-1">{i + 6}차</span>
+                      <input
+                        type="number"
+                        value={rate || ''}
+                        onChange={e => {
+                          const newRates = [...targetRates];
+                          newRates[i + 5] = Number(e.target.value) || 0;
+                          setTargetRates(newRates);
+                        }}
+                        onFocus={handleNumberFocus}
+                        className="w-full bg-gray-700 border border-gray-600 rounded px-1.5 py-1 text-center text-sm"
+                        min="1"
+                        max="50"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 손절 비율 */}
+          <div className={`p-3 rounded-lg border ${editStopLoss ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'}`}>
+            <label className="flex items-center gap-2 cursor-pointer mb-3">
+              <input
+                type="checkbox"
+                checked={editStopLoss}
+                onChange={e => setEditStopLoss(e.target.checked)}
+                className="w-4 h-4 rounded"
+              />
+              <span className="font-medium">손절 비율</span>
+            </label>
+            {editStopLoss && (
+              <div className="pl-6">
+                <input
+                  type="number"
+                  value={stopLossRate || ''}
+                  onChange={e => setStopLossRate(Number(e.target.value) || 0)}
+                  onFocus={handleNumberFocus}
+                  className="w-full bg-gray-700 border border-gray-600 rounded px-3 py-2 text-base"
+                  placeholder="0 (비활성화)"
+                  min="0"
+                  max="100"
+                />
+                <p className="text-xs text-gray-500 mt-1">0이면 비활성화</p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 px-4 py-3 md:py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition text-base disabled:opacity-50"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-3 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-base disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+              일괄 수정
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // 비교 모달 상수
 const COMPARE_POLL_INTERVAL_MS = 2000;
 const COMPARE_TIMEOUT_MS = 60000;
@@ -1795,6 +2212,11 @@ export function Stocks() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>('all');
 
+  // 일괄 선택 상태
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedStocks, setSelectedStocks] = useState<Set<string>>(new Set());
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+
   // botConfig 로드
   useEffect(() => {
     const loadConfig = async () => {
@@ -1864,39 +2286,120 @@ export function Stocks() {
     );
   }
 
+  // 선택 관련 핸들러
+  const handleToggleSelect = (id: string) => {
+    setSelectedStocks(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    setSelectedStocks(new Set(filteredStocks.map(s => s.id)));
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedStocks(new Set());
+  };
+
+  const handleExitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedStocks(new Set());
+  };
+
+  const handleBulkEditSuccess = () => {
+    handleExitSelectionMode();
+    refetch();
+  };
+
   return (
     <div className="space-y-4 md:space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-xl md:text-2xl font-bold">종목 관리</h1>
         <div className="flex items-center gap-2">
+          {/* 선택 모드 버튼 */}
           <button
-            onClick={() => setShowCompareModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-purple-700 rounded-lg hover:bg-purple-600 transition text-sm"
-            title="KIS 잔고 비교"
+            onClick={() => selectionMode ? handleExitSelectionMode() : setSelectionMode(true)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition text-sm ${
+              selectionMode
+                ? 'bg-orange-600 hover:bg-orange-500'
+                : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+            title={selectionMode ? '선택 취소' : '선택 모드'}
           >
-            <TrendingUp className="w-4 h-4" />
-            <span className="hidden md:inline">비교</span>
+            {selectionMode ? <X className="w-4 h-4" /> : <Check className="w-4 h-4" />}
+            <span className="hidden md:inline">{selectionMode ? '취소' : '선택'}</span>
           </button>
-          <button
-            onClick={() => setShowSyncModal(true)}
-            className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition text-sm"
-            title="계좌 동기화"
-          >
-            <RefreshCw className="w-4 h-4" />
-            <span className="hidden md:inline">동기화</span>
-          </button>
-          <button
-            onClick={() => {
-              setEditingStock(undefined);
-              setShowModal(true);
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-sm md:text-base"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden md:inline">종목 </span>추가
-          </button>
+          {!selectionMode && (
+            <>
+              <button
+                onClick={() => setShowCompareModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-purple-700 rounded-lg hover:bg-purple-600 transition text-sm"
+                title="KIS 잔고 비교"
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span className="hidden md:inline">비교</span>
+              </button>
+              <button
+                onClick={() => setShowSyncModal(true)}
+                className="flex items-center gap-1.5 px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition text-sm"
+                title="계좌 동기화"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span className="hidden md:inline">동기화</span>
+              </button>
+              <button
+                onClick={() => {
+                  setEditingStock(undefined);
+                  setShowModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 md:px-4 md:py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition text-sm md:text-base"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden md:inline">종목 </span>추가
+              </button>
+            </>
+          )}
         </div>
       </div>
+
+      {/* 선택 모드 도구 모음 */}
+      {selectionMode && (
+        <div className="flex items-center justify-between bg-gray-800 border border-gray-700 rounded-lg p-3">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-400">
+              {selectedStocks.size}개 선택됨
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSelectAll}
+              className="px-3 py-1.5 text-xs bg-gray-700 rounded hover:bg-gray-600 transition"
+            >
+              전체선택
+            </button>
+            <button
+              onClick={handleDeselectAll}
+              className="px-3 py-1.5 text-xs bg-gray-700 rounded hover:bg-gray-600 transition"
+            >
+              선택해제
+            </button>
+            <button
+              onClick={() => setShowBulkEditModal(true)}
+              disabled={selectedStocks.size === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-600 rounded hover:bg-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              일괄수정
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 검색 및 필터 */}
       <div className="space-y-3">
@@ -2023,6 +2526,9 @@ export function Stocks() {
               onToggle={() => toggleActive(stock.id, !stock.is_active)}
               onAddPurchase={() => setPurchaseModal({ stockId: stock.id, stockName: stock.name })}
               onRefresh={refetch}
+              selectionMode={selectionMode}
+              isSelected={selectedStocks.has(stock.id)}
+              onSelect={handleToggleSelect}
             />
           ))}
         </div>
@@ -2059,6 +2565,13 @@ export function Stocks() {
         isOpen={showCompareModal}
         onClose={() => setShowCompareModal(false)}
         stocks={stocks}
+      />
+
+      <BulkEditModal
+        isOpen={showBulkEditModal}
+        onClose={() => setShowBulkEditModal(false)}
+        selectedIds={Array.from(selectedStocks)}
+        onSuccess={handleBulkEditSuccess}
       />
     </div>
   );
