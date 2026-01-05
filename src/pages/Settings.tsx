@@ -102,10 +102,10 @@ export function Settings() {
     setStockSyncStatus('pending');
     setStockSyncMessage('요청 생성 중...');
 
-    const request = await createStockSyncRequest();
-    if (!request) {
+    const { data: request, error } = await createStockSyncRequest();
+    if (!request || error) {
       setStockSyncStatus('failed');
-      setStockSyncMessage('동기화 요청 생성 실패');
+      setStockSyncMessage(`동기화 요청 생성 실패: ${error || '알 수 없는 오류'}`);
       return;
     }
 

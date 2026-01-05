@@ -9,13 +9,82 @@ import requests
 from datetime import datetime
 from config import Config
 
+try:
+    from pykrx import stock as pykrx_stock
+    PYKRX_AVAILABLE = True
+except ImportError:
+    PYKRX_AVAILABLE = False
+    print("[Warning] pykrx not installed. Using fallback method.")
+
+
+def get_krx_stocks_pykrx(market: str = "KOSPI") -> list:
+    """pykrx를 사용하여 종목 리스트 가져오기
+
+    Args:
+        market: KOSPI, KOSDAQ
+    """
+    if not PYKRX_AVAILABLE:
+        return []
+
+    try:
+        today = datetime.now().strftime("%Y%m%d")
+        tickers = pykrx_stock.get_market_ticker_list(today, market=market)
+
+        stocks = []
+        for code in tickers:
+            name = pykrx_stock.get_market_ticker_name(code)
+            if code and name and len(code) == 6 and code.isdigit():
+                stocks.append({
+                    "code": code,
+                    "name": name,
+                    "market": market,
+                })
+
+        return stocks
+
+    except Exception as e:
+        print(f"[pykrx] Error fetching {market}: {e}")
+        return []
+
+
+def get_krx_etf_pykrx() -> list:
+    """pykrx를 사용하여 ETF 리스트 가져오기"""
+    if not PYKRX_AVAILABLE:
+        return []
+
+    try:
+        today = datetime.now().strftime("%Y%m%d")
+        tickers = pykrx_stock.get_etf_ticker_list(today)
+
+        etfs = []
+        for code in tickers:
+            name = pykrx_stock.get_etf_ticker_name(code)
+            if code and name and len(code) == 6 and code.isdigit():
+                etfs.append({
+                    "code": code,
+                    "name": name,
+                    "market": "ETF",
+                })
+
+        return etfs
+
+    except Exception as e:
+        print(f"[pykrx] Error fetching ETF: {e}")
+        return []
+
 
 def get_krx_stocks(market: str = "STK") -> list:
-    """KRX에서 종목 리스트 가져오기
+    """KRX에서 종목 리스트 가져오기 (pykrx 우선, fallback으로 직접 API 호출)
 
     Args:
         market: STK(KOSPI), KSQ(KOSDAQ)
     """
+    # pykrx 사용 가능하면 pykrx 사용
+    if PYKRX_AVAILABLE:
+        pykrx_market = "KOSPI" if market == "STK" else "KOSDAQ"
+        return get_krx_stocks_pykrx(pykrx_market)
+
+    # fallback: 직접 API 호출
     url = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
 
     params = {
@@ -26,12 +95,25 @@ def get_krx_stocks(market: str = "STK") -> list:
     }
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "http://data.krx.co.kr/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020101",
+        "Origin": "http://data.krx.co.kr",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
     }
 
     try:
-        response = requests.post(url, data=params, headers=headers, timeout=60)
+        session = requests.Session()
+        # 먼저 메인 페이지 방문하여 쿠키 획득
+        session.get("http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020101", headers=headers, timeout=30)
+
+        response = session.post(url, data=params, headers=headers, timeout=60)
+
+        if not response.text.strip():
+            print(f"[KRX] Empty response for {market}")
+            return []
+
         data = response.json()
 
         stocks = []
@@ -56,6 +138,11 @@ def get_krx_stocks(market: str = "STK") -> list:
 
 def get_krx_etf() -> list:
     """KRX에서 ETF 리스트 가져오기"""
+    # pykrx 사용 가능하면 pykrx 사용
+    if PYKRX_AVAILABLE:
+        return get_krx_etf_pykrx()
+
+    # fallback: 직접 API 호출
     url = "http://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd"
 
     params = {
@@ -65,12 +152,24 @@ def get_krx_etf() -> list:
     }
 
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "http://data.krx.co.kr/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020101",
+        "Origin": "http://data.krx.co.kr",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
     }
 
     try:
-        response = requests.post(url, data=params, headers=headers, timeout=60)
+        session = requests.Session()
+        session.get("http://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020101", headers=headers, timeout=30)
+
+        response = session.post(url, data=params, headers=headers, timeout=60)
+
+        if not response.text.strip():
+            print(f"[KRX] Empty response for ETF")
+            return []
+
         data = response.json()
 
         etfs = []
@@ -135,6 +234,7 @@ def upsert_to_supabase(stocks: list) -> int:
 def main():
     print("=" * 50)
     print("KRX -> Supabase stock_names 동기화")
+    print(f"Using pykrx: {PYKRX_AVAILABLE}")
     print("=" * 50)
 
     # KOSPI 종목

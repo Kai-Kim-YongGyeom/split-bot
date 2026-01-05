@@ -734,11 +734,11 @@ export interface StockSyncRequest {
   completed_at?: string;
 }
 
-export async function createStockSyncRequest(): Promise<StockSyncRequest | null> {
+export async function createStockSyncRequest(): Promise<{ data: StockSyncRequest | null; error: string | null }> {
   const userId = await getCurrentUserId();
   if (!userId) {
     console.error('No user logged in');
-    return null;
+    return { data: null, error: '로그인이 필요합니다' };
   }
 
   const { data, error } = await supabase
@@ -752,9 +752,9 @@ export async function createStockSyncRequest(): Promise<StockSyncRequest | null>
 
   if (error) {
     console.error('Error creating stock sync request:', error);
-    return null;
+    return { data: null, error: error.message };
   }
-  return data;
+  return { data, error: null };
 }
 
 export async function getLatestStockSyncRequest(): Promise<StockSyncRequest | null> {
