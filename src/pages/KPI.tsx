@@ -488,14 +488,13 @@ export function KPI() {
   };
 
   const kpiData = useMemo<KPIData>(() => {
-    const filtered = purchases.filter(p => {
-      // 날짜만 추출해서 비교 (TIMESTAMPTZ 형식 대응)
+    // 매수 집계: date(매수일) 기준
+    const buyInPeriod = purchases.filter(p => {
       const date = formatDate(p.date);
       return date >= startDate && date <= endDate;
     });
 
-    // 매수 집계
-    const buyData = filtered.reduce(
+    const buyData = buyInPeriod.reduce(
       (acc, p) => ({
         amount: acc.amount + p.price * p.quantity,
         count: acc.count + 1,
@@ -503,8 +502,8 @@ export function KPI() {
       { amount: 0, count: 0 }
     );
 
-    // 매도 집계 (해당 기간에 매도된 것만)
-    const soldInPeriod = filtered.filter(p => {
+    // 매도 집계: sold_date(매도일) 기준 (purchases 전체에서 필터링)
+    const soldInPeriod = purchases.filter(p => {
       if (p.status !== 'sold' || !p.sold_date) return false;
       const soldDate = p.sold_date.split('T')[0].split(' ')[0];
       return soldDate >= startDate && soldDate <= endDate;
