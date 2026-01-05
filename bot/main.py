@@ -65,6 +65,8 @@ class SplitBot:
         # 장 시작 시간 동적 조정 (9시 실패 → 9시30분 → 10시)
         self._market_open_index = 0  # MARKET_OPEN_TIMES 인덱스
         self._market_open_adjusted_date: Optional[str] = None  # 조정된 날짜
+        # 휴장일 체크 날짜 (날짜 변경 시 재체크)
+        self._market_status_checked_date: Optional[str] = None
 
     def _get_market_open_time(self) -> dtime:
         """현재 적용 중인 장 시작 시간 반환 (동적 조정)"""
@@ -437,6 +439,7 @@ class SplitBot:
         heartbeat_counter = 0  # heartbeat는 30초마다
         reload_counter = 0  # purchases 리로드는 30초마다
         snapshot_counter = 0  # 스냅샷 체크는 30초마다
+        market_status_counter = 0  # 휴장일 체크는 5분마다
         while self._running:
             try:
                 # heartbeat는 30초마다 (5초 * 6 = 30초)
@@ -457,6 +460,12 @@ class SplitBot:
                     snapshot_counter = 0
                     await self._save_daily_snapshot()
 
+                # 휴장일 체크 (5분마다, 날짜 변경 시 재체크)
+                market_status_counter += 1
+                if market_status_counter >= 60:  # 5초 * 60 = 5분
+                    market_status_counter = 0
+                    await self._check_market_status()
+
                 # 잔고 새로고침 요청 확인 (웹에서 요청 시 즉시 갱신) - 5초마다 체크
                 if supabase.check_balance_refresh_requested(Config.USER_ID):
                     print("[Bot] 잔고 새로고침 요청 감지 - 즉시 갱신")
@@ -472,6 +481,31 @@ class SplitBot:
             except Exception as e:
                 print(f"[Bot] Heartbeat 오류: {e}")
             await asyncio.sleep(5)
+
+    async def _check_market_status(self) -> None:
+        """휴장일 상태 체크 (날짜 변경 시 재체크)"""
+        try:
+            today = datetime.now(KST).strftime("%Y-%m-%d")
+
+            # 이미 오늘 체크했으면 스킵
+            if self._market_status_checked_date == today:
+                return
+
+            if not kis_api.is_configured:
+                return
+
+            # 휴장일 체크
+            is_open_day = kis_api.is_market_open_day()
+
+            # DB 업데이트
+            supabase.update_market_status(Config.USER_ID, is_open_day, today)
+            self._market_status_checked_date = today
+
+            status = "개장일" if is_open_day else "휴장일"
+            print(f"[Bot] 장 상태 업데이트: {today} - {status}")
+
+        except Exception as e:
+            print(f"[Bot] 휴장일 체크 오류: {e}")
 
     async def _update_balance(self) -> None:
         """KIS 계좌 전체 정보 업데이트 (예수금 + 자산현황 + 실현손익)"""
@@ -1406,6 +1440,7 @@ class SplitBot:
 
             # DB에 휴장일 정보 저장 (프론트엔드 표시용)
             supabase.update_market_status(Config.USER_ID, is_open_day, today)
+            self._market_status_checked_date = today  # 시작 시 체크한 날짜 기록
 
             if not is_open_day:
                 print(f"[Bot] ⚠️ 오늘({today})은 휴장일입니다. 자동매매가 작동하지 않습니다.")
