@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStocks } from '../hooks/useStocks';
-import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp, RefreshCw, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, ChevronDown, ChevronUp, Power, ShoppingCart, Loader2, Search, TrendingUp, RefreshCw, X, Check, Square, CheckSquare, Settings } from 'lucide-react';
 import type { StockWithPurchases, StockFormData, PurchaseFormData, Purchase, SyncResult, CompareResult, BotConfig } from '../types';
 import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';

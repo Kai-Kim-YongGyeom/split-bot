@@ -122,6 +122,20 @@ export async function updateStock(id: string, updates: Partial<Stock>): Promise<
   return true;
 }
 
+// 여러 종목 일괄 업데이트
+export async function bulkUpdateStocks(ids: string[], updates: Partial<Stock>): Promise<boolean> {
+  const { error } = await supabase
+    .from('bot_stocks')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .in('id', ids);
+
+  if (error) {
+    console.error('Error bulk updating stocks:', error);
+    return false;
+  }
+  return true;
+}
+
 export async function deleteStock(id: string): Promise<boolean> {
   // 먼저 매수기록 삭제
   await supabase.from('bot_purchases').delete().eq('stock_id', id);
