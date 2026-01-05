@@ -27,23 +27,29 @@ def get_krx_stocks_pykrx(market: str = "KOSPI") -> list:
         return []
 
     try:
-        today = datetime.now().strftime("%Y%m%d")
-        tickers = pykrx_stock.get_market_ticker_list(today, market=market)
+        # 날짜 없이 호출하면 최근 영업일 자동 계산
+        tickers = pykrx_stock.get_market_ticker_list(market=market)
+        print(f"[pykrx] {market} tickers: {len(tickers)}개")
 
         stocks = []
         for code in tickers:
-            name = pykrx_stock.get_market_ticker_name(code)
-            if code and name and len(code) == 6 and code.isdigit():
-                stocks.append({
-                    "code": code,
-                    "name": name,
-                    "market": market,
-                })
+            try:
+                name = pykrx_stock.get_market_ticker_name(code)
+                if code and name and len(code) == 6 and code.isdigit():
+                    stocks.append({
+                        "code": code,
+                        "name": name,
+                        "market": market,
+                    })
+            except Exception:
+                continue
 
         return stocks
 
     except Exception as e:
         print(f"[pykrx] Error fetching {market}: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -53,23 +59,29 @@ def get_krx_etf_pykrx() -> list:
         return []
 
     try:
-        today = datetime.now().strftime("%Y%m%d")
-        tickers = pykrx_stock.get_etf_ticker_list(today)
+        # ETF는 날짜 파라미터 없이 호출
+        tickers = pykrx_stock.get_etf_ticker_list()
+        print(f"[pykrx] ETF tickers: {len(tickers)}개")
 
         etfs = []
         for code in tickers:
-            name = pykrx_stock.get_etf_ticker_name(code)
-            if code and name and len(code) == 6 and code.isdigit():
-                etfs.append({
-                    "code": code,
-                    "name": name,
-                    "market": "ETF",
-                })
+            try:
+                name = pykrx_stock.get_etf_ticker_name(code)
+                if code and name and len(code) == 6 and code.isdigit():
+                    etfs.append({
+                        "code": code,
+                        "name": name,
+                        "market": "ETF",
+                    })
+            except Exception:
+                continue
 
         return etfs
 
     except Exception as e:
         print(f"[pykrx] Error fetching ETF: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
