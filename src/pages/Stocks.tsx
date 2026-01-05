@@ -2197,6 +2197,7 @@ function CompareModal({
 // 필터 타입
 type StatusFilter = 'all' | 'active' | 'inactive';
 type HoldingFilter = 'all' | 'holding' | 'empty';
+type SortOption = 'created_desc' | 'created_asc' | 'name_asc' | 'name_desc' | 'profit_desc' | 'profit_asc' | 'rounds_desc' | 'rounds_asc';
 
 export function Stocks() {
   const { stocks, loading, error, addStock, updateStock, removeStock, toggleActive, refetch } = useStocks();
@@ -2211,6 +2212,7 @@ export function Stocks() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [holdingFilter, setHoldingFilter] = useState<HoldingFilter>('all');
+  const [sortOption, setSortOption] = useState<SortOption>('created_desc');
 
   // 일괄 선택 상태
   const [selectionMode, setSelectionMode] = useState(false);
@@ -2226,25 +2228,68 @@ export function Stocks() {
     loadConfig();
   }, []);
 
-  // 필터링된 종목 목록
-  const filteredStocks = stocks.filter(stock => {
-    // 검색어 필터
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      if (!stock.name.toLowerCase().includes(query) && !stock.code.toLowerCase().includes(query)) {
-        return false;
-      }
-    }
-    // 활성 상태 필터
-    if (statusFilter === 'active' && !stock.is_active) return false;
-    if (statusFilter === 'inactive' && stock.is_active) return false;
-    // 보유 상태 필터
-    const hasHolding = stock.purchases.some(p => p.status === 'holding');
-    if (holdingFilter === 'holding' && !hasHolding) return false;
-    if (holdingFilter === 'empty' && hasHolding) return false;
+  // 수익률 계산 헬퍼
+  const calcProfitRate = (stock: StockWithPurchases) => {
+    const holdingPurchases = stock.purchases.filter(p => p.status === 'holding');
+    if (holdingPurchases.length === 0 || !stock.current_price) return null;
+    const avgPrice = holdingPurchases.reduce((sum, p) => sum + p.price * p.quantity, 0) / holdingPurchases.reduce((sum, p) => sum + p.quantity, 0);
+    if (avgPrice === 0) return null;
+    return ((stock.current_price - avgPrice) / avgPrice * 100);
+  };
 
-    return true;
-  });
+  // 필터링 및 정렬된 종목 목록
+  const filteredStocks = stocks
+    .filter(stock => {
+      // 검색어 필터
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        if (!stock.name.toLowerCase().includes(query) && !stock.code.toLowerCase().includes(query)) {
+          return false;
+        }
+      }
+      // 활성 상태 필터
+      if (statusFilter === 'active' && !stock.is_active) return false;
+      if (statusFilter === 'inactive' && stock.is_active) return false;
+      // 보유 상태 필터
+      const hasHolding = stock.purchases.some(p => p.status === 'holding');
+      if (holdingFilter === 'holding' && !hasHolding) return false;
+      if (holdingFilter === 'empty' && hasHolding) return false;
+
+      return true;
+    })
+    .sort((a, b) => {
+      switch (sortOption) {
+        case 'name_asc':
+          return a.name.localeCompare(b.name, 'ko');
+        case 'name_desc':
+          return b.name.localeCompare(a.name, 'ko');
+        case 'profit_desc': {
+          const profitA = calcProfitRate(a) ?? -Infinity;
+          const profitB = calcProfitRate(b) ?? -Infinity;
+          return profitB - profitA;
+        }
+        case 'profit_asc': {
+          const profitA = calcProfitRate(a) ?? Infinity;
+          const profitB = calcProfitRate(b) ?? Infinity;
+          return profitA - profitB;
+        }
+        case 'rounds_desc': {
+          const roundsA = a.purchases.filter(p => p.status === 'holding').length;
+          const roundsB = b.purchases.filter(p => p.status === 'holding').length;
+          return roundsB - roundsA;
+        }
+        case 'rounds_asc': {
+          const roundsA = a.purchases.filter(p => p.status === 'holding').length;
+          const roundsB = b.purchases.filter(p => p.status === 'holding').length;
+          return roundsA - roundsB;
+        }
+        case 'created_asc':
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case 'created_desc':
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+    });
 
   const handleSubmit = async (data: StockFormData) => {
     if (editingStock) {
@@ -2480,6 +2525,22 @@ export function Stocks() {
               미보유
             </button>
           </div>
+
+          {/* 정렬 */}
+          <select
+            value={sortOption}
+            onChange={e => setSortOption(e.target.value as SortOption)}
+            className="px-3 py-1.5 text-xs font-medium bg-gray-800 border border-gray-700 rounded-lg text-gray-300 focus:outline-none focus:border-blue-500"
+          >
+            <option value="created_desc">최신순</option>
+            <option value="created_asc">오래된순</option>
+            <option value="name_asc">이름 ↑</option>
+            <option value="name_desc">이름 ↓</option>
+            <option value="profit_desc">수익률 ↑</option>
+            <option value="profit_asc">수익률 ↓</option>
+            <option value="rounds_desc">차수 ↑</option>
+            <option value="rounds_asc">차수 ↓</option>
+          </select>
 
           {/* 필터 결과 */}
           <span className="text-xs text-gray-500 self-center ml-auto">
