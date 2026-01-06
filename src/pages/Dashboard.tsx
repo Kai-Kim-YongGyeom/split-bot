@@ -748,27 +748,23 @@ export function Dashboard() {
                     dot={(props) => {
                       const { cx, cy, index, payload } = props;
                       if (cy === undefined || cx === undefined) return null;
-                      const isFirst = index === 0;
-                      const isLast = index === snapshots.length - 1;
-                      // 첫/마지막 포인트만 라벨 표시
-                      if (isFirst || isLast) {
-                        return (
-                          <g key={`dot-asset-${index}`}>
-                            <circle cx={cx} cy={cy} r={5} fill="#3B82F6" />
-                            <text
-                              x={cx}
-                              y={cy - 15}
-                              textAnchor="middle"
-                              fill="#3B82F6"
-                              fontSize={11}
-                              fontWeight={600}
-                            >
-                              {`${(payload.총자산 / 10000).toFixed(0)}만`}
-                            </text>
-                          </g>
-                        );
-                      }
-                      return <circle key={`dot-asset-${index}`} cx={cx} cy={cy} r={4} fill="#3B82F6" />;
+                      // 홀수는 위, 짝수는 아래로 라벨 표시
+                      const labelY = index % 2 === 0 ? cy - 15 : cy - 28;
+                      return (
+                        <g key={`dot-asset-${index}`}>
+                          <circle cx={cx} cy={cy} r={4} fill="#3B82F6" />
+                          <text
+                            x={cx}
+                            y={labelY}
+                            textAnchor="middle"
+                            fill="#3B82F6"
+                            fontSize={10}
+                            fontWeight={600}
+                          >
+                            {`${(payload.총자산 / 10000).toFixed(0)}만`}
+                          </text>
+                        </g>
+                      );
                     }}
                     activeDot={{ r: 6 }}
                     isAnimationActive={false}
@@ -792,27 +788,23 @@ export function Dashboard() {
                     dot={(props) => {
                       const { cx, cy, index, payload } = props;
                       if (cy === undefined || cx === undefined) return null;
-                      const isFirst = index === 0;
-                      const isLast = index === snapshots.length - 1;
-                      // 첫/마지막 포인트만 라벨 표시
-                      if (isFirst || isLast) {
-                        return (
-                          <g key={`dot-rate-${index}`}>
-                            <circle cx={cx} cy={cy} r={5} fill="#22C55E" />
-                            <text
-                              x={cx}
-                              y={cy + 20}
-                              textAnchor="middle"
-                              fill="#22C55E"
-                              fontSize={11}
-                              fontWeight={600}
-                            >
-                              {`${payload.수익률?.toFixed(1) || 0}%`}
-                            </text>
-                          </g>
-                        );
-                      }
-                      return <circle key={`dot-rate-${index}`} cx={cx} cy={cy} r={4} fill="#22C55E" />;
+                      // 홀수는 아래, 짝수는 더 아래로 라벨 표시
+                      const labelY = index % 2 === 0 ? cy + 18 : cy + 30;
+                      return (
+                        <g key={`dot-rate-${index}`}>
+                          <circle cx={cx} cy={cy} r={4} fill="#22C55E" />
+                          <text
+                            x={cx}
+                            y={labelY}
+                            textAnchor="middle"
+                            fill="#22C55E"
+                            fontSize={10}
+                            fontWeight={600}
+                          >
+                            {`${payload.수익률?.toFixed(1) || 0}%`}
+                          </text>
+                        </g>
+                      );
                     }}
                     activeDot={{ r: 6 }}
                     isAnimationActive={false}
