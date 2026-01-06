@@ -615,7 +615,21 @@ interface CumulativeKPI {
 // 트리맵 커스텀 컨텐츠
 const TreemapContent = (props: any) => {
   const { x, y, width, height, name, profit, profitRate } = props;
-  if (width < 50 || height < 30) return null;
+  if (width < 40 || height < 25) return null;
+
+  // profit이 undefined일 경우 0으로 처리
+  const profitValue = profit ?? 0;
+  const profitRateValue = profitRate ?? 0;
+  const isProfit = profitValue >= 0;
+
+  // 금액 포맷
+  const formatProfit = (val: number) => {
+    const absVal = Math.abs(val);
+    if (absVal >= 10000) {
+      return `${(val / 10000).toFixed(1)}만`;
+    }
+    return val.toLocaleString();
+  };
 
   return (
     <g>
@@ -625,10 +639,10 @@ const TreemapContent = (props: any) => {
         width={width}
         height={height}
         style={{
-          fill: profit >= 0 ? '#10B981' : '#EF4444',
+          fill: isProfit ? '#10B981' : '#EF4444',
           stroke: '#1F2937',
           strokeWidth: 2,
-          opacity: 0.8,
+          opacity: 0.85,
         }}
       />
       <text
@@ -636,20 +650,31 @@ const TreemapContent = (props: any) => {
         y={y + height / 2 - 8}
         textAnchor="middle"
         fill="#fff"
-        fontSize={width < 80 ? 10 : 12}
+        fontSize={width < 70 ? 9 : 11}
         fontWeight="bold"
       >
-        {name?.length > 8 ? name.substring(0, 8) + '...' : name}
+        {name?.length > 6 ? name.substring(0, 6) + '..' : name}
       </text>
       <text
         x={x + width / 2}
-        y={y + height / 2 + 10}
+        y={y + height / 2 + 8}
         textAnchor="middle"
         fill="#fff"
-        fontSize={width < 80 ? 9 : 11}
+        fontSize={width < 70 ? 8 : 10}
       >
-        {profitRate >= 0 ? '+' : ''}{profitRate?.toFixed(1)}%
+        {isProfit ? '+' : ''}{formatProfit(profitValue)}원
       </text>
+      {height > 45 && (
+        <text
+          x={x + width / 2}
+          y={y + height / 2 + 22}
+          textAnchor="middle"
+          fill="rgba(255,255,255,0.7)"
+          fontSize={width < 70 ? 7 : 9}
+        >
+          ({profitRateValue >= 0 ? '+' : ''}{profitRateValue.toFixed(1)}%)
+        </text>
+      )}
     </g>
   );
 };
@@ -723,18 +748,35 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
     </div>
   );
 
-  // 파이차트 렌더링 (모바일 최적화 - 라벨 제거, 범례 사용)
-  const renderProfitPieChart = (height: number, showLegend = false) => (
+  // 파이차트 라벨 포맷 (짧게)
+  const renderProfitLabel = ({ name, profit }: any) => {
+    const shortName = name?.length > 4 ? name.substring(0, 4) + '..' : name;
+    const profitStr = profit >= 10000 ? `${(profit / 10000).toFixed(0)}만` : `${Math.round(profit / 1000)}천`;
+    return `${shortName} +${profitStr}`;
+  };
+
+  const renderTradeLabel = ({ name, value }: any) => {
+    const shortName = name?.length > 4 ? name.substring(0, 4) + '..' : name;
+    return `${shortName} ${value}회`;
+  };
+
+  // 파이차트 렌더링 (라벨 + 라인)
+  const renderProfitPieChart = (height: number, isExpanded = false) => (
     <ResponsiveContainer width="100%" height={height}>
       <PieChart>
         <Pie
           data={profitPieData}
           cx="50%"
           cy="50%"
-          innerRadius={height > 300 ? 60 : 35}
-          outerRadius={height > 300 ? 100 : 60}
+          innerRadius={isExpanded ? 50 : 25}
+          outerRadius={isExpanded ? 90 : 45}
           paddingAngle={2}
           dataKey="value"
+          label={isExpanded
+            ? ({ name, profit }: any) => `${name} +${profit.toLocaleString()}원`
+            : renderProfitLabel
+          }
+          labelLine={{ stroke: '#6B7280', strokeWidth: 1 }}
         >
           {profitPieData.map((entry, index) => (
             <Cell
@@ -754,22 +796,26 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
             props.payload.name
           ]}
         />
-        {showLegend && <Legend />}
       </PieChart>
     </ResponsiveContainer>
   );
 
-  const renderTradePieChart = (height: number, showLegend = false) => (
+  const renderTradePieChart = (height: number, isExpanded = false) => (
     <ResponsiveContainer width="100%" height={height}>
       <PieChart>
         <Pie
           data={tradePieData}
           cx="50%"
           cy="50%"
-          innerRadius={height > 300 ? 60 : 35}
-          outerRadius={height > 300 ? 100 : 60}
+          innerRadius={isExpanded ? 50 : 25}
+          outerRadius={isExpanded ? 90 : 45}
           paddingAngle={2}
           dataKey="value"
+          label={isExpanded
+            ? ({ name, value }: any) => `${name} ${value}회`
+            : renderTradeLabel
+          }
+          labelLine={{ stroke: '#6B7280', strokeWidth: 1 }}
         >
           {tradePieData.map((_, index) => (
             <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
@@ -783,7 +829,6 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
           }}
           formatter={(value) => [`${value}회`, '거래 횟수']}
         />
-        {showLegend && <Legend />}
       </PieChart>
     </ResponsiveContainer>
   );
@@ -818,51 +863,21 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
       {/* 확대 모달 */}
       {expandedChart === 'profit' && (
         <ChartModal onClose={() => setExpandedChart(null)} title="종목별 수익 비중">
-          <div className="h-96">
+          <div className="h-[400px]">
             {renderProfitPieChart(400, true)}
-          </div>
-          <div className="mt-4 space-y-2">
-            {profitPieData.map((item, index) => (
-              <div key={item.name} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: item.profit >= 0 ? CHART_COLORS[index % CHART_COLORS.length] : '#EF4444' }}
-                  />
-                  <span>{item.name}</span>
-                </div>
-                <span className={item.profit >= 0 ? 'text-green-400' : 'text-red-400'}>
-                  {item.profit >= 0 ? '+' : ''}{item.profit.toLocaleString()}원
-                </span>
-              </div>
-            ))}
           </div>
         </ChartModal>
       )}
       {expandedChart === 'trade' && (
         <ChartModal onClose={() => setExpandedChart(null)} title="종목별 거래 횟수">
-          <div className="h-96">
+          <div className="h-[400px]">
             {renderTradePieChart(400, true)}
-          </div>
-          <div className="mt-4 space-y-2">
-            {tradePieData.map((item, index) => (
-              <div key={item.name} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
-                  />
-                  <span>{item.name}</span>
-                </div>
-                <span>{item.value}회</span>
-              </div>
-            ))}
           </div>
         </ChartModal>
       )}
       {expandedChart === 'treemap' && (
         <ChartModal onClose={() => setExpandedChart(null)} title="종목별 수익률 트리맵">
-          <div className="h-96">
+          <div className="h-[400px]">
             {renderTreemap(400)}
           </div>
           <p className="text-xs text-gray-500 mt-2">* 박스 크기: 매도금액, 색상: 초록=수익/빨강=손실</p>
