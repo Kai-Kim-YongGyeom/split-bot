@@ -223,6 +223,10 @@ class SplitBot:
                 if elapsed < 5:
                     return  # 매도 직후 5초 내에는 매수 체크 스킵
 
+            # 주문가능금액 부족 시 매수 체크 스킵 (불필요한 로그 방지)
+            if self._available_amount is not None and self._available_amount < self.MIN_AVAILABLE_AMOUNT:
+                return
+
             # 매수 조건 체크
             buy_result = strategy.check_buy_condition(code, price)
             if buy_result.get("action") == "buy":
