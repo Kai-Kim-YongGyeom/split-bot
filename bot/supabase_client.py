@@ -891,11 +891,13 @@ class SupabaseClient:
             return 0
 
         url = f"{self.url}/rest/v1/stock_names"
+
+        # Supabase upsert: Prefer 헤더에 resolution=merge-duplicates 사용
         headers = {
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
             "Content-Type": "application/json",
-            "Prefer": "return=minimal",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
         }
 
         success_count = 0
@@ -906,16 +908,16 @@ class SupabaseClient:
             batch_num = i // batch_size + 1
 
             try:
-                # upsert: on_conflict=code
-                upsert_url = f"{url}?on_conflict=code"
-                response = requests.post(upsert_url, json=batch, headers=headers, timeout=30)
+                response = requests.post(url, json=batch, headers=headers, timeout=30)
 
                 if response.status_code in (200, 201):
                     success_count += len(batch)
                     if batch_num % 10 == 0 or batch_num == total_batches:
                         print(f"[Supabase] 배치 {batch_num}/{total_batches}: {success_count}개 완료")
                 else:
-                    print(f"[Supabase] 배치 {batch_num} 오류: {response.status_code}")
+                    # 상세 에러 로그
+                    error_text = response.text[:300] if response.text else "No response body"
+                    print(f"[Supabase] 배치 {batch_num} 오류: {response.status_code} - {error_text}")
 
             except Exception as e:
                 print(f"[Supabase] 배치 {batch_num} 예외: {e}")
