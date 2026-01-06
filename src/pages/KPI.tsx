@@ -13,7 +13,8 @@ import {
   Legend,
 } from 'recharts';
 import { supabase } from '../lib/supabase';
-import { getCurrentUserId } from '../lib/api';
+import { getCurrentUserId, getDailySnapshots } from '../lib/api';
+import type { DailySnapshot } from '../lib/api';
 import { formatDate, getTodayKST, getDateDaysAgoKST } from '../lib/dateUtils';
 import type { Purchase } from '../types';
 
@@ -34,6 +35,10 @@ interface DailySummary {
   profitRate: number;
   buyCount: number;
   sellCount: number;
+  totalAssets: number;  // 해당일 총자산
+  realizedReturnRate: number;  // 실현수익률 (실현손익/총자산)
+  cumulativeProfit: number;  // 누적 실현손익
+  cumulativeReturnRate: number;  // 누적 실현수익률
 }
 
 interface MonthlySummary {
@@ -44,6 +49,10 @@ interface MonthlySummary {
   profitRate: number;
   buyCount: number;
   sellCount: number;
+  totalAssets: number;
+  realizedReturnRate: number;
+  cumulativeProfit: number;
+  cumulativeReturnRate: number;
 }
 
 type TabType = 'current' | 'daily' | 'monthly';
@@ -223,7 +232,7 @@ function DailyChart({ data }: { data: DailySummary[] }) {
         </div>
       </div>
 
-      {/* 실현손익 추이 차트 */}
+      {/* 실현손익 추이 차트 (일별 + 누적) */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
         <h3 className="text-sm font-medium text-gray-400 mb-4">일자별 실현손익 추이</h3>
         <div className="h-64">
@@ -247,18 +256,78 @@ function DailyChart({ data }: { data: DailySummary[] }) {
                   border: '1px solid #374151',
                   borderRadius: '8px',
                 }}
-                formatter={(value) => {
+                formatter={(value, name) => {
                   const num = Number(value);
-                  return [`${num >= 0 ? '+' : ''}${num.toLocaleString()}원`, '실현손익'];
+                  const label = name === 'cumulativeProfit' ? '누적 손익' : '일별 손익';
+                  return [`${num >= 0 ? '+' : ''}${num.toLocaleString()}원`, label];
                 }}
                 labelFormatter={(label) => `${label}`}
+              />
+              <Legend formatter={(value) => value === 'cumulativeProfit' ? '누적 손익' : '일별 손익'} />
+              <Line
+                type="monotone"
+                dataKey="cumulativeProfit"
+                stroke="#10B981"
+                strokeWidth={2}
+                dot={{ fill: '#10B981', strokeWidth: 2, r: 3 }}
               />
               <Line
                 type="monotone"
                 dataKey="profit"
-                stroke="#10B981"
+                stroke="#F59E0B"
                 strokeWidth={2}
-                dot={{ fill: '#10B981', strokeWidth: 2 }}
+                dot={{ fill: '#F59E0B', strokeWidth: 2, r: 3 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* 실현수익률 추이 차트 (별도 카드) */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+        <h3 className="text-sm font-medium text-gray-400 mb-4">일자별 실현수익률 추이 (총자산 대비)</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis
+                dataKey="date"
+                stroke="#9CA3AF"
+                fontSize={12}
+                tickFormatter={(value) => value.slice(5)}
+              />
+              <YAxis
+                stroke="#9CA3AF"
+                fontSize={12}
+                tickFormatter={(value) => `${value.toFixed(2)}%`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1F2937',
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                }}
+                formatter={(value, name) => {
+                  const num = Number(value);
+                  const label = name === 'cumulativeReturnRate' ? '누적 수익률' : '일별 수익률';
+                  return [`${num >= 0 ? '+' : ''}${num.toFixed(3)}%`, label];
+                }}
+                labelFormatter={(label) => `${label}`}
+              />
+              <Legend formatter={(value) => value === 'cumulativeReturnRate' ? '누적 수익률' : '일별 수익률'} />
+              <Line
+                type="monotone"
+                dataKey="cumulativeReturnRate"
+                stroke="#3B82F6"
+                strokeWidth={2}
+                dot={{ fill: '#3B82F6', strokeWidth: 2, r: 3 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="realizedReturnRate"
+                stroke="#EC4899"
+                strokeWidth={2}
+                dot={{ fill: '#EC4899', strokeWidth: 2, r: 3 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -276,7 +345,9 @@ function DailyChart({ data }: { data: DailySummary[] }) {
                 <th className="text-right py-2 px-3">매수금액</th>
                 <th className="text-right py-2 px-3">매도금액</th>
                 <th className="text-right py-2 px-3">실현손익</th>
+                <th className="text-right py-2 px-3">누적손익</th>
                 <th className="text-right py-2 px-3">수익률</th>
+                <th className="text-right py-2 px-3">누적수익률</th>
               </tr>
             </thead>
             <tbody>
@@ -297,9 +368,19 @@ function DailyChart({ data }: { data: DailySummary[] }) {
                     {row.profit !== 0 ? `${row.profit >= 0 ? '+' : ''}${row.profit.toLocaleString()}원` : '-'}
                   </td>
                   <td className={`py-2 px-3 text-right ${
-                    row.profitRate === 0 ? 'text-gray-500' : row.profitRate > 0 ? 'text-green-400' : 'text-red-400'
+                    row.cumulativeProfit === 0 ? 'text-gray-500' : row.cumulativeProfit > 0 ? 'text-green-400' : 'text-red-400'
                   }`}>
-                    {row.profitRate !== 0 ? `${row.profitRate >= 0 ? '+' : ''}${row.profitRate.toFixed(2)}%` : '-'}
+                    {row.cumulativeProfit !== 0 ? `${row.cumulativeProfit >= 0 ? '+' : ''}${row.cumulativeProfit.toLocaleString()}원` : '-'}
+                  </td>
+                  <td className={`py-2 px-3 text-right ${
+                    row.realizedReturnRate === 0 ? 'text-gray-500' : row.realizedReturnRate > 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {row.realizedReturnRate !== 0 ? `${row.realizedReturnRate >= 0 ? '+' : ''}${row.realizedReturnRate.toFixed(3)}%` : '-'}
+                  </td>
+                  <td className={`py-2 px-3 text-right ${
+                    row.cumulativeReturnRate === 0 ? 'text-gray-500' : row.cumulativeReturnRate > 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {row.cumulativeReturnRate !== 0 ? `${row.cumulativeReturnRate >= 0 ? '+' : ''}${row.cumulativeReturnRate.toFixed(3)}%` : '-'}
                   </td>
                 </tr>
               ))}
@@ -319,19 +400,6 @@ function MonthlyChart({ data }: { data: MonthlySummary[] }) {
       </div>
     );
   }
-
-  // 누적 수익 계산
-  const cumulativeData = data.reduce<(MonthlySummary & { cumulativeProfit: number })[]>(
-    (acc, item) => {
-      const lastCumulative = acc.length > 0 ? acc[acc.length - 1].cumulativeProfit : 0;
-      acc.push({
-        ...item,
-        cumulativeProfit: lastCumulative + item.profit,
-      });
-      return acc;
-    },
-    []
-  );
 
   return (
     <div className="space-y-6">
@@ -362,10 +430,10 @@ function MonthlyChart({ data }: { data: MonthlySummary[] }) {
 
       {/* 월별 누적 수익 추이 */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-        <h3 className="text-sm font-medium text-gray-400 mb-4">월별 누적 실현손익 추이</h3>
+        <h3 className="text-sm font-medium text-gray-400 mb-4">월별 실현손익 추이</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={cumulativeData}>
+            <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis dataKey="month" stroke="#9CA3AF" fontSize={12} />
               <YAxis stroke="#9CA3AF" fontSize={12} tickFormatter={formatAmount} />
@@ -387,14 +455,59 @@ function MonthlyChart({ data }: { data: MonthlySummary[] }) {
                 dataKey="cumulativeProfit"
                 stroke="#10B981"
                 strokeWidth={2}
-                dot={{ fill: '#10B981', strokeWidth: 2 }}
+                dot={{ fill: '#10B981', strokeWidth: 2, r: 3 }}
               />
               <Line
                 type="monotone"
                 dataKey="profit"
                 stroke="#F59E0B"
                 strokeWidth={2}
-                dot={{ fill: '#F59E0B', strokeWidth: 2 }}
+                dot={{ fill: '#F59E0B', strokeWidth: 2, r: 3 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* 월별 실현수익률 추이 차트 (별도 카드) */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+        <h3 className="text-sm font-medium text-gray-400 mb-4">월별 실현수익률 추이 (총자산 대비)</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
+              <XAxis dataKey="month" stroke="#9CA3AF" fontSize={12} />
+              <YAxis
+                stroke="#9CA3AF"
+                fontSize={12}
+                tickFormatter={(value) => `${value.toFixed(2)}%`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#1F2937',
+                  border: '1px solid #374151',
+                  borderRadius: '8px',
+                }}
+                formatter={(value, name) => {
+                  const num = Number(value);
+                  const label = name === 'cumulativeReturnRate' ? '누적 수익률' : '월별 수익률';
+                  return [`${num >= 0 ? '+' : ''}${num.toFixed(3)}%`, label];
+                }}
+              />
+              <Legend formatter={(value) => value === 'cumulativeReturnRate' ? '누적 수익률' : '월별 수익률'} />
+              <Line
+                type="monotone"
+                dataKey="cumulativeReturnRate"
+                stroke="#3B82F6"
+                strokeWidth={2}
+                dot={{ fill: '#3B82F6', strokeWidth: 2, r: 3 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="realizedReturnRate"
+                stroke="#EC4899"
+                strokeWidth={2}
+                dot={{ fill: '#EC4899', strokeWidth: 2, r: 3 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -412,7 +525,9 @@ function MonthlyChart({ data }: { data: MonthlySummary[] }) {
                 <th className="text-right py-2 px-3">매수금액</th>
                 <th className="text-right py-2 px-3">매도금액</th>
                 <th className="text-right py-2 px-3">실현손익</th>
+                <th className="text-right py-2 px-3">누적손익</th>
                 <th className="text-right py-2 px-3">수익률</th>
+                <th className="text-right py-2 px-3">누적수익률</th>
               </tr>
             </thead>
             <tbody>
@@ -433,9 +548,19 @@ function MonthlyChart({ data }: { data: MonthlySummary[] }) {
                     {row.profit !== 0 ? `${row.profit >= 0 ? '+' : ''}${row.profit.toLocaleString()}원` : '-'}
                   </td>
                   <td className={`py-2 px-3 text-right ${
-                    row.profitRate === 0 ? 'text-gray-500' : row.profitRate > 0 ? 'text-green-400' : 'text-red-400'
+                    row.cumulativeProfit === 0 ? 'text-gray-500' : row.cumulativeProfit > 0 ? 'text-green-400' : 'text-red-400'
                   }`}>
-                    {row.profitRate !== 0 ? `${row.profitRate >= 0 ? '+' : ''}${row.profitRate.toFixed(2)}%` : '-'}
+                    {row.cumulativeProfit !== 0 ? `${row.cumulativeProfit >= 0 ? '+' : ''}${row.cumulativeProfit.toLocaleString()}원` : '-'}
+                  </td>
+                  <td className={`py-2 px-3 text-right ${
+                    row.realizedReturnRate === 0 ? 'text-gray-500' : row.realizedReturnRate > 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {row.realizedReturnRate !== 0 ? `${row.realizedReturnRate >= 0 ? '+' : ''}${row.realizedReturnRate.toFixed(3)}%` : '-'}
+                  </td>
+                  <td className={`py-2 px-3 text-right ${
+                    row.cumulativeReturnRate === 0 ? 'text-gray-500' : row.cumulativeReturnRate > 0 ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {row.cumulativeReturnRate !== 0 ? `${row.cumulativeReturnRate >= 0 ? '+' : ''}${row.cumulativeReturnRate.toFixed(3)}%` : '-'}
                   </td>
                 </tr>
               ))}
@@ -450,6 +575,7 @@ function MonthlyChart({ data }: { data: MonthlySummary[] }) {
 export function KPI() {
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [snapshots, setSnapshots] = useState<DailySnapshot[]>([]);
   const [activeTab, setActiveTab] = useState<TabType>('current');
   const [startDate, setStartDate] = useState(() => getDateDaysAgoKST(30));
   const [endDate, setEndDate] = useState(() => getTodayKST());
@@ -461,6 +587,19 @@ export function KPI() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // 스냅샷 데이터 로드 (기간 변경 시)
+  useEffect(() => {
+    const loadSnapshots = async () => {
+      try {
+        const data = await getDailySnapshots('daily', startDate, endDate);
+        setSnapshots(data);
+      } catch (e) {
+        console.error('Error loading snapshots:', e);
+      }
+    };
+    loadSnapshots();
+  }, [startDate, endDate]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -539,9 +678,18 @@ export function KPI() {
     };
   }, [purchases, startDate, endDate]);
 
+  // 스냅샷 데이터를 날짜별 맵으로 변환
+  const snapshotByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    snapshots.forEach(s => {
+      map[s.date] = s.total_asset;
+    });
+    return map;
+  }, [snapshots]);
+
   // 일자별 데이터 집계
   const dailySummary = useMemo<DailySummary[]>(() => {
-    const byDate: Record<string, DailySummary> = {};
+    const byDate: Record<string, Omit<DailySummary, 'cumulativeProfit' | 'cumulativeReturnRate'>> = {};
 
     // 기간 내 모든 매수 건 집계
     purchases.forEach(p => {
@@ -557,6 +705,8 @@ export function KPI() {
           profitRate: 0,
           buyCount: 0,
           sellCount: 0,
+          totalAssets: snapshotByDate[date] || 0,
+          realizedReturnRate: 0,
         };
       }
       byDate[date].buyAmount += p.price * p.quantity;
@@ -578,6 +728,8 @@ export function KPI() {
           profitRate: 0,
           buyCount: 0,
           sellCount: 0,
+          totalAssets: snapshotByDate[soldDate] || 0,
+          realizedReturnRate: 0,
         };
       }
       const sellAmount = p.sold_price * p.quantity;
@@ -595,14 +747,45 @@ export function KPI() {
         const buyCost = day.sellAmount - day.profit;
         day.profitRate = buyCost > 0 ? (day.profit / buyCost) * 100 : 0;
       }
+      // 총자산 대비 실현수익률
+      if (!day.totalAssets) {
+        day.totalAssets = snapshotByDate[day.date] || 0;
+      }
+      if (day.totalAssets > 0 && day.profit !== 0) {
+        day.realizedReturnRate = (day.profit / day.totalAssets) * 100;
+      }
     });
 
-    return Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
-  }, [purchases, startDate, endDate]);
+    // 날짜순 정렬 후 누적 계산
+    const sorted = Object.values(byDate).sort((a, b) => a.date.localeCompare(b.date));
+
+    let cumulativeProfit = 0;
+    const firstTotalAssets = sorted.length > 0 ? (sorted[0].totalAssets || snapshots[0]?.total_asset || 0) : 0;
+
+    return sorted.map(day => {
+      cumulativeProfit += day.profit;
+      const cumulativeReturnRate = firstTotalAssets > 0 ? (cumulativeProfit / firstTotalAssets) * 100 : 0;
+      return {
+        ...day,
+        cumulativeProfit,
+        cumulativeReturnRate,
+      };
+    });
+  }, [purchases, startDate, endDate, snapshotByDate, snapshots]);
+
+  // 월별 스냅샷 (해당 월 마지막 날 총자산)
+  const monthlySnapshotMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    snapshots.forEach(s => {
+      const month = s.date.slice(0, 7);
+      map[month] = s.total_asset; // 마지막 날짜 값이 덮어씀
+    });
+    return map;
+  }, [snapshots]);
 
   // 월별 데이터 집계
   const monthlySummary = useMemo<MonthlySummary[]>(() => {
-    const byMonth: Record<string, MonthlySummary> = {};
+    const byMonth: Record<string, Omit<MonthlySummary, 'cumulativeProfit' | 'cumulativeReturnRate'>> = {};
 
     // 기간 내 모든 매수 건 집계
     purchases.forEach(p => {
@@ -619,6 +802,8 @@ export function KPI() {
           profitRate: 0,
           buyCount: 0,
           sellCount: 0,
+          totalAssets: monthlySnapshotMap[month] || 0,
+          realizedReturnRate: 0,
         };
       }
       byMonth[month].buyAmount += p.price * p.quantity;
@@ -641,6 +826,8 @@ export function KPI() {
           profitRate: 0,
           buyCount: 0,
           sellCount: 0,
+          totalAssets: monthlySnapshotMap[month] || 0,
+          realizedReturnRate: 0,
         };
       }
       const sellAmount = p.sold_price * p.quantity;
@@ -658,10 +845,31 @@ export function KPI() {
         const buyCost = m.sellAmount - m.profit;
         m.profitRate = buyCost > 0 ? (m.profit / buyCost) * 100 : 0;
       }
+      // 총자산 대비 실현수익률
+      if (!m.totalAssets) {
+        m.totalAssets = monthlySnapshotMap[m.month] || 0;
+      }
+      if (m.totalAssets > 0 && m.profit !== 0) {
+        m.realizedReturnRate = (m.profit / m.totalAssets) * 100;
+      }
     });
 
-    return Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month));
-  }, [purchases, startDate, endDate]);
+    // 월순 정렬 후 누적 계산
+    const sorted = Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month));
+
+    let cumulativeProfit = 0;
+    const firstTotalAssets = sorted.length > 0 ? (sorted[0].totalAssets || snapshots[0]?.total_asset || 0) : 0;
+
+    return sorted.map(m => {
+      cumulativeProfit += m.profit;
+      const cumulativeReturnRate = firstTotalAssets > 0 ? (cumulativeProfit / firstTotalAssets) * 100 : 0;
+      return {
+        ...m,
+        cumulativeProfit,
+        cumulativeReturnRate,
+      };
+    });
+  }, [purchases, startDate, endDate, monthlySnapshotMap, snapshots]);
 
   // 종목별 실현손익
   const stockProfits = useMemo(() => {
