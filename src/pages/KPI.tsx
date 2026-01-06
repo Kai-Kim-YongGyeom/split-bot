@@ -612,14 +612,13 @@ interface CumulativeKPI {
   stockData: CumulativeStockData[];
 }
 
-// 트리맵 커스텀 컨텐츠
+// 트리맵 커스텀 컨텐츠 (가로형)
 const TreemapContent = (props: any) => {
-  const { x, y, width, height, name, profit, profitRate } = props;
-  if (width < 40 || height < 25) return null;
+  const { x, y, width, height, name, profit } = props;
+  if (width < 60 || height < 20) return null;
 
   // profit이 undefined일 경우 0으로 처리
   const profitValue = profit ?? 0;
-  const profitRateValue = profitRate ?? 0;
   const isProfit = profitValue >= 0;
 
   // 금액 포맷
@@ -642,39 +641,19 @@ const TreemapContent = (props: any) => {
           fill: isProfit ? '#10B981' : '#EF4444',
           stroke: '#1F2937',
           strokeWidth: 2,
-          opacity: 0.85,
         }}
       />
       <text
         x={x + width / 2}
-        y={y + height / 2 - 8}
+        y={y + height / 2}
         textAnchor="middle"
+        dominantBaseline="middle"
         fill="#fff"
-        fontSize={width < 70 ? 9 : 11}
+        fontSize={10}
         fontWeight="bold"
       >
-        {name?.length > 6 ? name.substring(0, 6) + '..' : name}
+        {name} {isProfit ? '+' : ''}{formatProfit(profitValue)}
       </text>
-      <text
-        x={x + width / 2}
-        y={y + height / 2 + 8}
-        textAnchor="middle"
-        fill="#fff"
-        fontSize={width < 70 ? 8 : 10}
-      >
-        {isProfit ? '+' : ''}{formatProfit(profitValue)}원
-      </text>
-      {height > 45 && (
-        <text
-          x={x + width / 2}
-          y={y + height / 2 + 22}
-          textAnchor="middle"
-          fill="rgba(255,255,255,0.7)"
-          fontSize={width < 70 ? 7 : 9}
-        >
-          ({profitRateValue >= 0 ? '+' : ''}{profitRateValue.toFixed(1)}%)
-        </text>
-      )}
     </g>
   );
 };
@@ -758,14 +737,13 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
   // 파이차트 커스텀 라벨 (2줄, 작은 폰트)
   const renderProfitLabel = ({ cx, cy, midAngle, outerRadius, name, profit }: any) => {
     const RADIAN = Math.PI / 180;
-    const radius = outerRadius + 20;
+    const radius = outerRadius + 18;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    const shortName = name?.length > 5 ? name.substring(0, 5) + '..' : name;
 
     return (
-      <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={9} fill="#9CA3AF">
-        <tspan x={x} dy="-0.4em">{shortName}</tspan>
+      <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={8} fill="#9CA3AF">
+        <tspan x={x} dy="-0.4em">{name}</tspan>
         <tspan x={x} dy="1.1em" fill="#10B981">+{shortAmount(profit)}</tspan>
       </text>
     );
@@ -773,14 +751,13 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
 
   const renderTradeLabel = ({ cx, cy, midAngle, outerRadius, name, value }: any) => {
     const RADIAN = Math.PI / 180;
-    const radius = outerRadius + 20;
+    const radius = outerRadius + 18;
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
-    const shortName = name?.length > 5 ? name.substring(0, 5) + '..' : name;
 
     return (
-      <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={9} fill="#9CA3AF">
-        <tspan x={x} dy="-0.4em">{shortName}</tspan>
+      <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={8} fill="#9CA3AF">
+        <tspan x={x} dy="-0.4em">{name}</tspan>
         <tspan x={x} dy="1.1em" fill="#8B5CF6">{value}회</tspan>
       </text>
     );
@@ -858,7 +835,7 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
       <Treemap
         data={treemapData}
         dataKey="size"
-        aspectRatio={4 / 3}
+        aspectRatio={3}
         stroke="#1F2937"
         content={<TreemapContent />}
       >
