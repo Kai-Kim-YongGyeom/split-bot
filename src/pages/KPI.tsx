@@ -600,10 +600,12 @@ interface CumulativeStockData {
 }
 
 interface CumulativeKPI {
-  totalTrades: number;
+  totalBuyCount: number;      // 총 매수 건수
+  totalBuyAmount: number;     // 총 매수 금액
+  totalSellCount: number;     // 총 매도 건수
+  totalSellAmount: number;    // 총 매도 금액
   totalProfit: number;
   totalProfitRate: number;
-  winRate: number;
   avgProfitPerTrade: number;
   bestStock: CumulativeStockData | null;
   worstStock: CumulativeStockData | null;
@@ -653,7 +655,12 @@ const TreemapContent = (props: any) => {
 };
 
 function CumulativeChart({ data }: { data: CumulativeKPI }) {
-  const { stockData, totalTrades, totalProfit, totalProfitRate, winRate, avgProfitPerTrade, bestStock, worstStock } = data;
+  const {
+    stockData, totalBuyCount, totalBuyAmount, totalSellCount, totalSellAmount,
+    totalProfit, totalProfitRate, avgProfitPerTrade, bestStock, worstStock
+  } = data;
+
+  const [expandedChart, setExpandedChart] = useState<'profit' | 'trade' | 'treemap' | null>(null);
 
   if (stockData.length === 0) {
     return (
@@ -695,178 +702,318 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
       profitRate: s.profitRate,
     }));
 
-  return (
-    <div className="space-y-6">
-      {/* 누적 KPI 요약 카드 */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs mb-1">총 거래 횟수</p>
-          <p className="text-2xl font-bold text-white">{totalTrades}회</p>
+  // 확대 모달
+  const ChartModal = ({ onClose, children, title }: { onClose: () => void; children: React.ReactNode; title: string }) => (
+    <div
+      className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-4xl max-h-[90vh] overflow-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center p-4 border-b border-gray-700">
+          <h3 className="text-lg font-bold">{title}</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">&times;</button>
         </div>
-        <div className={`rounded-lg p-4 border ${totalProfit >= 0 ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
+        <div className="p-4">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+
+  // 파이차트 렌더링 (모바일 최적화 - 라벨 제거, 범례 사용)
+  const renderProfitPieChart = (height: number, showLegend = false) => (
+    <ResponsiveContainer width="100%" height={height}>
+      <PieChart>
+        <Pie
+          data={profitPieData}
+          cx="50%"
+          cy="50%"
+          innerRadius={height > 300 ? 60 : 35}
+          outerRadius={height > 300 ? 100 : 60}
+          paddingAngle={2}
+          dataKey="value"
+        >
+          {profitPieData.map((entry, index) => (
+            <Cell
+              key={`cell-${index}`}
+              fill={entry.profit >= 0 ? CHART_COLORS[index % CHART_COLORS.length] : '#EF4444'}
+            />
+          ))}
+        </Pie>
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#1F2937',
+            border: '1px solid #374151',
+            borderRadius: '8px',
+          }}
+          formatter={(_value, _name, props: any) => [
+            `${props.payload.profit >= 0 ? '+' : ''}${props.payload.profit.toLocaleString()}원 (${props.payload.profitRate >= 0 ? '+' : ''}${props.payload.profitRate.toFixed(2)}%)`,
+            props.payload.name
+          ]}
+        />
+        {showLegend && <Legend />}
+      </PieChart>
+    </ResponsiveContainer>
+  );
+
+  const renderTradePieChart = (height: number, showLegend = false) => (
+    <ResponsiveContainer width="100%" height={height}>
+      <PieChart>
+        <Pie
+          data={tradePieData}
+          cx="50%"
+          cy="50%"
+          innerRadius={height > 300 ? 60 : 35}
+          outerRadius={height > 300 ? 100 : 60}
+          paddingAngle={2}
+          dataKey="value"
+        >
+          {tradePieData.map((_, index) => (
+            <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#1F2937',
+            border: '1px solid #374151',
+            borderRadius: '8px',
+          }}
+          formatter={(value) => [`${value}회`, '거래 횟수']}
+        />
+        {showLegend && <Legend />}
+      </PieChart>
+    </ResponsiveContainer>
+  );
+
+  const renderTreemap = (height: number) => (
+    <ResponsiveContainer width="100%" height={height}>
+      <Treemap
+        data={treemapData}
+        dataKey="size"
+        aspectRatio={4 / 3}
+        stroke="#1F2937"
+        content={<TreemapContent />}
+      >
+        <Tooltip
+          contentStyle={{
+            backgroundColor: '#1F2937',
+            border: '1px solid #374151',
+            borderRadius: '8px',
+          }}
+          formatter={(_value, _name, props: any) => [
+            `${props.payload.profit >= 0 ? '+' : ''}${props.payload.profit.toLocaleString()}원`,
+            '실현손익'
+          ]}
+          labelFormatter={(label) => label}
+        />
+      </Treemap>
+    </ResponsiveContainer>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* 확대 모달 */}
+      {expandedChart === 'profit' && (
+        <ChartModal onClose={() => setExpandedChart(null)} title="종목별 수익 비중">
+          <div className="h-96">
+            {renderProfitPieChart(400, true)}
+          </div>
+          <div className="mt-4 space-y-2">
+            {profitPieData.map((item, index) => (
+              <div key={item.name} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: item.profit >= 0 ? CHART_COLORS[index % CHART_COLORS.length] : '#EF4444' }}
+                  />
+                  <span>{item.name}</span>
+                </div>
+                <span className={item.profit >= 0 ? 'text-green-400' : 'text-red-400'}>
+                  {item.profit >= 0 ? '+' : ''}{item.profit.toLocaleString()}원
+                </span>
+              </div>
+            ))}
+          </div>
+        </ChartModal>
+      )}
+      {expandedChart === 'trade' && (
+        <ChartModal onClose={() => setExpandedChart(null)} title="종목별 거래 횟수">
+          <div className="h-96">
+            {renderTradePieChart(400, true)}
+          </div>
+          <div className="mt-4 space-y-2">
+            {tradePieData.map((item, index) => (
+              <div key={item.name} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
+                  />
+                  <span>{item.name}</span>
+                </div>
+                <span>{item.value}회</span>
+              </div>
+            ))}
+          </div>
+        </ChartModal>
+      )}
+      {expandedChart === 'treemap' && (
+        <ChartModal onClose={() => setExpandedChart(null)} title="종목별 수익률 트리맵">
+          <div className="h-96">
+            {renderTreemap(400)}
+          </div>
+          <p className="text-xs text-gray-500 mt-2">* 박스 크기: 매도금액, 색상: 초록=수익/빨강=손실</p>
+        </ChartModal>
+      )}
+
+      {/* KPI 요약 카드 - 3x2 그리드 (모바일 2x3) */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
+        {/* 총 매수 */}
+        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+          <p className="text-gray-400 text-xs mb-1">총 매수</p>
+          <p className="text-lg md:text-xl font-bold text-blue-400">{totalBuyCount}건</p>
+          <p className="text-xs text-gray-500">{totalBuyAmount.toLocaleString()}원</p>
+        </div>
+        {/* 총 매도 */}
+        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+          <p className="text-gray-400 text-xs mb-1">총 매도</p>
+          <p className="text-lg md:text-xl font-bold text-purple-400">{totalSellCount}건</p>
+          <p className="text-xs text-gray-500">{totalSellAmount.toLocaleString()}원</p>
+        </div>
+        {/* 총 실현손익 */}
+        <div className={`rounded-lg p-3 border ${totalProfit >= 0 ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
           <p className="text-gray-400 text-xs mb-1">총 실현손익</p>
-          <p className={`text-2xl font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <p className={`text-lg md:text-xl font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {totalProfit >= 0 ? '+' : ''}{totalProfit.toLocaleString()}원
           </p>
-          <p className={`text-sm ${totalProfitRate >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <p className={`text-xs ${totalProfitRate >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             ({totalProfitRate >= 0 ? '+' : ''}{totalProfitRate.toFixed(2)}%)
           </p>
         </div>
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs mb-1">승률</p>
-          <p className={`text-2xl font-bold ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-            {winRate.toFixed(1)}%
-          </p>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs mb-1">건당 평균 수익</p>
-          <p className={`text-2xl font-bold ${avgProfitPerTrade >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+        {/* 건당 평균 수익 */}
+        <div className="bg-gray-800 rounded-lg p-3 border border-gray-700">
+          <p className="text-gray-400 text-xs mb-1">건당 평균</p>
+          <p className={`text-lg md:text-xl font-bold ${avgProfitPerTrade >= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {avgProfitPerTrade >= 0 ? '+' : ''}{Math.round(avgProfitPerTrade).toLocaleString()}원
           </p>
         </div>
-      </div>
-
-      {/* 최고/최저 종목 */}
-      <div className="grid grid-cols-2 gap-3">
+        {/* 최고 수익 종목 */}
         {bestStock && (
-          <div className="bg-green-900/20 rounded-lg p-4 border border-green-800">
-            <p className="text-gray-400 text-xs mb-2">🏆 최고 수익 종목</p>
-            <p className="font-bold text-white">{bestStock.name}</p>
-            <p className="text-green-400 text-lg font-bold">
-              +{bestStock.profit.toLocaleString()}원 (+{bestStock.profitRate.toFixed(2)}%)
+          <div className="bg-green-900/20 rounded-lg p-3 border border-green-800">
+            <p className="text-gray-400 text-xs mb-1">🏆 최고 수익</p>
+            <p className="font-bold text-white text-sm truncate">{bestStock.name}</p>
+            <p className="text-green-400 text-sm font-bold">
+              +{bestStock.profit.toLocaleString()}원
             </p>
-            <p className="text-xs text-gray-500 mt-1">{bestStock.tradeCount}회 거래</p>
           </div>
         )}
+        {/* 최저 수익 종목 */}
         {worstStock && (
-          <div className="bg-red-900/20 rounded-lg p-4 border border-red-800">
-            <p className="text-gray-400 text-xs mb-2">📉 최저 수익 종목</p>
-            <p className="font-bold text-white">{worstStock.name}</p>
-            <p className={`text-lg font-bold ${worstStock.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {worstStock.profit >= 0 ? '+' : ''}{worstStock.profit.toLocaleString()}원 ({worstStock.profitRate >= 0 ? '+' : ''}{worstStock.profitRate.toFixed(2)}%)
+          <div className="bg-red-900/20 rounded-lg p-3 border border-red-800">
+            <p className="text-gray-400 text-xs mb-1">📉 최저 수익</p>
+            <p className="font-bold text-white text-sm truncate">{worstStock.name}</p>
+            <p className={`text-sm font-bold ${worstStock.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {worstStock.profit >= 0 ? '+' : ''}{worstStock.profit.toLocaleString()}원
             </p>
-            <p className="text-xs text-gray-500 mt-1">{worstStock.tradeCount}회 거래</p>
           </div>
         )}
       </div>
 
-      {/* 파이차트: 종목별 수익 비중 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-          <h3 className="text-sm font-medium text-gray-400 mb-4">종목별 수익 비중</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={profitPieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={40}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {profitPieData.map((entry, index) => (
-                    <Cell
-                      key={`cell-${index}`}
-                      fill={entry.profit >= 0 ? CHART_COLORS[index % CHART_COLORS.length] : '#EF4444'}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1F2937',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                  }}
-                  formatter={(_value, _name, props: any) => [
-                    `${props.payload.profit >= 0 ? '+' : ''}${props.payload.profit.toLocaleString()}원 (${props.payload.profitRate >= 0 ? '+' : ''}${props.payload.profitRate.toFixed(2)}%)`,
-                    props.payload.name
-                  ]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+      {/* 차트들 - 클릭 시 확대 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* 종목별 수익 비중 */}
+        <div
+          className="bg-gray-800 rounded-lg border border-gray-700 p-3 cursor-pointer hover:border-gray-600 transition"
+          onClick={() => setExpandedChart('profit')}
+        >
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-medium text-gray-400">종목별 수익 비중</h3>
+            <span className="text-xs text-gray-500">터치하여 확대</span>
+          </div>
+          <div className="h-48">
+            {renderProfitPieChart(192)}
           </div>
         </div>
 
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-          <h3 className="text-sm font-medium text-gray-400 mb-4">종목별 거래 횟수</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={tradePieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={40}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                  label={({ name, value }) => `${name} ${value}회`}
-                  labelLine={false}
-                >
-                  {tradePieData.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1F2937',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                  }}
-                  formatter={(value) => [`${value}회`, '거래 횟수']}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+        {/* 종목별 거래 횟수 */}
+        <div
+          className="bg-gray-800 rounded-lg border border-gray-700 p-3 cursor-pointer hover:border-gray-600 transition"
+          onClick={() => setExpandedChart('trade')}
+        >
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-medium text-gray-400">종목별 거래 횟수</h3>
+            <span className="text-xs text-gray-500">터치하여 확대</span>
+          </div>
+          <div className="h-48">
+            {renderTradePieChart(192)}
           </div>
         </div>
       </div>
 
-      {/* 트리맵: 종목별 수익률 */}
+      {/* 트리맵 */}
       {treemapData.length > 0 && (
-        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-          <h3 className="text-sm font-medium text-gray-400 mb-4">종목별 수익률 트리맵 (매도금액 기준)</h3>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <Treemap
-                data={treemapData}
-                dataKey="size"
-                aspectRatio={4 / 3}
-                stroke="#1F2937"
-                content={<TreemapContent />}
-              >
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1F2937',
-                    border: '1px solid #374151',
-                    borderRadius: '8px',
-                  }}
-                  formatter={(_value, _name, props: any) => [
-                    `${props.payload.profit >= 0 ? '+' : ''}${props.payload.profit.toLocaleString()}원`,
-                    '실현손익'
-                  ]}
-                  labelFormatter={(label) => label}
-                />
-              </Treemap>
-            </ResponsiveContainer>
+        <div
+          className="bg-gray-800 rounded-lg border border-gray-700 p-3 cursor-pointer hover:border-gray-600 transition"
+          onClick={() => setExpandedChart('treemap')}
+        >
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-medium text-gray-400">종목별 수익률 트리맵</h3>
+            <span className="text-xs text-gray-500">터치하여 확대</span>
+          </div>
+          <div className="h-56">
+            {renderTreemap(224)}
           </div>
           <p className="text-xs text-gray-500 mt-2">* 박스 크기: 매도금액, 색상: 초록=수익/빨강=손실</p>
         </div>
       )}
 
       {/* 종목별 상세 테이블 */}
-      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
-        <h3 className="text-sm font-medium text-gray-400 mb-4">종목별 누적 실적</h3>
-        <div className="overflow-x-auto">
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-3">
+        <h3 className="text-sm font-medium text-gray-400 mb-3">종목별 누적 실적</h3>
+        {/* 모바일 카드 뷰 */}
+        <div className="md:hidden space-y-2">
+          {stockData
+            .sort((a, b) => b.profit - a.profit)
+            .map(stock => (
+              <div key={stock.code} className="bg-gray-700/50 rounded p-3">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <p className="font-bold text-sm">{stock.name}</p>
+                    <p className="text-xs text-gray-500">{stock.code}</p>
+                  </div>
+                  <span className={`text-sm font-bold ${stock.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {stock.profit >= 0 ? '+' : ''}{stock.profit.toLocaleString()}원
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <p className="text-gray-500">거래</p>
+                    <p>{stock.tradeCount}회</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">매수</p>
+                    <p className="text-blue-400">{formatAmount(stock.buyAmount)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">수익률</p>
+                    <p className={stock.profitRate >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      {stock.profitRate >= 0 ? '+' : ''}{stock.profitRate.toFixed(2)}%
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+        </div>
+        {/* 데스크탑 테이블 뷰 */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-gray-400 border-b border-gray-700">
                 <th className="text-left py-2 px-3">종목</th>
                 <th className="text-right py-2 px-3">거래수</th>
-                <th className="text-right py-2 px-3">승률</th>
                 <th className="text-right py-2 px-3">매수금액</th>
                 <th className="text-right py-2 px-3">매도금액</th>
                 <th className="text-right py-2 px-3">실현손익</th>
@@ -883,9 +1030,6 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
                       <span className="text-gray-500 text-xs ml-2">{stock.code}</span>
                     </td>
                     <td className="py-2 px-3 text-right">{stock.tradeCount}회</td>
-                    <td className={`py-2 px-3 text-right ${stock.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                      {stock.winRate.toFixed(0)}%
-                    </td>
                     <td className="py-2 px-3 text-right text-blue-400">
                       {stock.buyAmount.toLocaleString()}원
                     </td>
@@ -1293,21 +1437,31 @@ export function KPI() {
     });
 
     const stockData = Object.values(byStock);
-    const totalTrades = stockData.reduce((sum, s) => sum + s.tradeCount, 0);
+    const totalSellCount = stockData.reduce((sum, s) => sum + s.tradeCount, 0);
     const totalProfit = stockData.reduce((sum, s) => sum + s.profit, 0);
     const totalBuyAmt = stockData.reduce((sum, s) => sum + s.buyAmount, 0);
-    const totalWins = stockData.reduce((sum, s) => sum + s.winCount, 0);
+    const totalSellAmt = stockData.reduce((sum, s) => sum + s.sellAmount, 0);
+
+    // 매수 건수 계산 (기간 내 매수)
+    const buyInPeriod = purchases.filter(p => {
+      const date = formatDate(p.date);
+      return date >= startDate && date <= endDate;
+    });
+    const totalBuyCount = buyInPeriod.length;
+    const totalBuyAmount = buyInPeriod.reduce((sum, p) => sum + p.price * p.quantity, 0);
 
     const sortedByProfit = [...stockData].sort((a, b) => b.profit - a.profit);
     const bestStock = sortedByProfit[0] || null;
     const worstStock = sortedByProfit[sortedByProfit.length - 1] || null;
 
     return {
-      totalTrades,
+      totalBuyCount,
+      totalBuyAmount,
+      totalSellCount,
+      totalSellAmount: totalSellAmt,
       totalProfit,
       totalProfitRate: totalBuyAmt > 0 ? (totalProfit / totalBuyAmt) * 100 : 0,
-      winRate: totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0,
-      avgProfitPerTrade: totalTrades > 0 ? totalProfit / totalTrades : 0,
+      avgProfitPerTrade: totalSellCount > 0 ? totalProfit / totalSellCount : 0,
       bestStock,
       worstStock,
       stockData,
