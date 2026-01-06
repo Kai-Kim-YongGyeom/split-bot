@@ -601,9 +601,8 @@ class SplitBot:
                 print("[Bot] 스냅샷 스킵 - KIS 계좌정보 조회 실패")
                 return
 
-            # user_settings에서 순입금 조회
-            settings = supabase.get_user_settings(Config.USER_ID)
-            net_deposit = settings.get("net_deposit", 0) if settings else 0
+            # deposit_history에서 순입금 계산 (입금 - 출금)
+            net_deposit = supabase.get_net_deposit(Config.USER_ID)
 
             # BOT 보유 정보 계산 (차수별 투자금)
             bot_total_holding = 0

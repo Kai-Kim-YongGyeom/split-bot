@@ -1265,6 +1265,37 @@ class SupabaseClient:
             return result
         return []
 
+    # ==================== 입출금 내역 (deposit_history) ====================
+
+    def get_net_deposit(self, user_id: str) -> int:
+        """순입금 조회 (입금 - 출금)
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            순입금 금액
+        """
+        if not self.is_configured or not user_id:
+            return 0
+
+        result = self._request(
+            "GET",
+            "deposit_history",
+            params={
+                "user_id": f"eq.{user_id}",
+                "select": "type,amount",
+            },
+        )
+
+        if not isinstance(result, list):
+            return 0
+
+        total_deposit = sum(r.get("amount", 0) for r in result if r.get("type") == "deposit")
+        total_withdrawal = sum(r.get("amount", 0) for r in result if r.get("type") == "withdrawal")
+
+        return total_deposit - total_withdrawal
+
 
 # 싱글톤 인스턴스
 supabase = SupabaseClient()
