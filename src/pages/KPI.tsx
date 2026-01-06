@@ -690,22 +690,35 @@ export function KPI() {
 
   // 필터된 거래 내역
   const filteredPurchases = useMemo(() => {
-    let filtered = purchases.filter(p => {
-      // 날짜만 추출해서 비교 (TIMESTAMPTZ 형식 대응)
-      const pDate = formatDate(p.date);
-      return pDate >= startDate && pDate <= endDate;
-    });
+    let filtered: Purchase[] = [];
 
-    // 매수/매도 필터
+    // 매수/매도 필터에 따라 다른 날짜 기준 적용
     if (tradeFilter === 'buy') {
-      // 보유중인 것만 (매수만 보기)
-      filtered = filtered.filter(p => p.status === 'holding');
+      // 보유중인 것만 (매수일 기준)
+      filtered = purchases.filter(p => {
+        if (p.status !== 'holding') return false;
+        const pDate = formatDate(p.date);
+        return pDate >= startDate && pDate <= endDate;
+      });
     } else if (tradeFilter === 'sell') {
-      // 매도된 것만 (해당 기간에 매도된 것)
-      filtered = filtered.filter(p => {
+      // 매도된 것만 (매도일 기준)
+      filtered = purchases.filter(p => {
         if (p.status !== 'sold' || !p.sold_date) return false;
         const soldDate = p.sold_date.split('T')[0].split(' ')[0];
         return soldDate >= startDate && soldDate <= endDate;
+      });
+    } else {
+      // 전체: 매수일 또는 매도일이 기간 내인 것
+      filtered = purchases.filter(p => {
+        const buyDate = formatDate(p.date);
+        const isBuyInPeriod = buyDate >= startDate && buyDate <= endDate;
+
+        if (p.status === 'sold' && p.sold_date) {
+          const soldDate = p.sold_date.split('T')[0].split(' ')[0];
+          const isSellInPeriod = soldDate >= startDate && soldDate <= endDate;
+          return isBuyInPeriod || isSellInPeriod;
+        }
+        return isBuyInPeriod;
       });
     }
 

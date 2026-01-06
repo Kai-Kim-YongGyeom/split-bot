@@ -719,10 +719,11 @@ export function Dashboard() {
                       border: '1px solid #374151',
                       borderRadius: '8px',
                       fontSize: '14px',
+                      zIndex: 100,
                     }}
                     labelStyle={{ color: '#9CA3AF' }}
                     labelFormatter={(_, payload) => {
-                      if (payload && payload[0]) {
+                      if (payload && payload.length > 0 && payload[0]?.payload?.fullDate) {
                         return payload[0].payload.fullDate;
                       }
                       return '';
@@ -732,6 +733,7 @@ export function Dashboard() {
                       if (name === '수익률') return [`${numValue.toFixed(2)}%`, name];
                       return [`${numValue.toLocaleString()}원`, name];
                     }}
+                    isAnimationActive={false}
                   />
                   <Legend
                     wrapperStyle={{ fontSize: '14px' }}
@@ -745,12 +747,14 @@ export function Dashboard() {
                     strokeWidth={3}
                     dot={{ r: 4, fill: '#3B82F6' }}
                     activeDot={{ r: 6 }}
+                    isAnimationActive={false}
                   >
                     <LabelList
                       dataKey="총자산"
                       position="top"
+                      offset={12}
                       formatter={(v) => typeof v === 'number' ? `${(v / 10000).toFixed(0)}만` : ''}
-                      style={{ fill: '#3B82F6', fontSize: '10px' }}
+                      style={{ fill: '#3B82F6', fontSize: '10px', fontWeight: 500 }}
                     />
                   </Line>
                   <Line
@@ -761,6 +765,7 @@ export function Dashboard() {
                     strokeWidth={2}
                     strokeDasharray="5 5"
                     dot={{ r: 3, fill: '#6B7280' }}
+                    isAnimationActive={false}
                   />
                   <Line
                     yAxisId="right"
@@ -770,12 +775,14 @@ export function Dashboard() {
                     strokeWidth={3}
                     dot={{ r: 4, fill: '#22C55E' }}
                     activeDot={{ r: 6 }}
+                    isAnimationActive={false}
                   >
                     <LabelList
                       dataKey="수익률"
-                      position="bottom"
+                      position="insideBottomRight"
+                      offset={8}
                       formatter={(v) => typeof v === 'number' ? `${v.toFixed(1)}%` : ''}
-                      style={{ fill: '#22C55E', fontSize: '10px' }}
+                      style={{ fill: '#22C55E', fontSize: '10px', fontWeight: 500 }}
                     />
                   </Line>
                 </LineChart>
