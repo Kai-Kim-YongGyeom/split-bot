@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx --no-install tsc:*)",
+      "Bash(node_modules/.bin/tsc:*)",
+      "Bash(npm install)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: 종목 일괄 수정 UI 추가\n\n- 선택 모드 및 체크박스로 여러 종목 선택 기능\n- BulkEditModal 컴포넌트로 일괄 설정 변경\n- 매수 방식, 최대 차수, 물타기/목표 수익률, 손절 비율 일괄 수정 지원\n- 전체 선택/해제 기능 추가\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: 종목 정렬 기능 추가\n\n- 정렬 옵션: 최신순, 오래된순, 이름순, 수익률순, 차수순\n- 드롭다운으로 정렬 기준 선택 가능\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(pip show:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: KRX 종목 동기화 오류 수정\n\n- pykrx 라이브러리 사용하여 안정적인 KRX 데이터 수집\n- pykrx 미설치 시 개선된 헤더로 fallback\n- 동기화 실패 시 상세 에러 메시지 표시\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "WebSearch",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: pykrx API 호출 방식 수정\n\n- get_market_ticker_list에서 날짜 파라미터 제거 \\(자동 계산\\)\n- get_etf_ticker_list에서 날짜 파라미터 제거\n- 개별 종목 이름 조회 시 예외 처리 추가\n- 디버그 로그 추가\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git commit:*)",
+      "WebFetch(domain:apiportal.koreainvestment.com)",
+      "WebFetch(domain:finance.naver.com)"
+    ]
+  }
+}

@@ -890,7 +890,8 @@ class SupabaseClient:
         if not self.is_configured or not stocks:
             return 0
 
-        url = f"{self.url}/rest/v1/stock_names"
+        # on_conflict=code 파라미터로 upsert 지정
+        url = f"{self.url}/rest/v1/stock_names?on_conflict=code"
 
         headers = {
             "apikey": self.key,
@@ -906,10 +907,9 @@ class SupabaseClient:
             batch = stocks[i:i + batch_size]
             batch_num = i // batch_size + 1
 
-            # user_id를 null로 명시적 설정
+            # user_id 필드 제거 (code만 UNIQUE로 사용)
             for item in batch:
-                if "user_id" not in item:
-                    item["user_id"] = None
+                item.pop("user_id", None)
 
             try:
                 response = requests.post(url, json=batch, headers=headers, timeout=30)
