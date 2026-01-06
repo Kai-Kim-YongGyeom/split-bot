@@ -885,69 +885,43 @@ class SupabaseClient:
 
         return "error" not in result
 
-    def get_existing_stock_codes(self) -> set[str]:
-        """stock_names 테이블에서 기존 종목 코드 조회"""
-        if not self.is_configured:
-            return set()
-
-        url = f"{self.url}/rest/v1/stock_names?select=code"
-        headers = {
-            "apikey": self.key,
-            "Authorization": f"Bearer {self.key}",
-        }
-
-        try:
-            response = requests.get(url, headers=headers, timeout=30)
-            if response.status_code == 200:
-                data = response.json()
-                return {item["code"] for item in data}
-        except Exception as e:
-            print(f"[Supabase] 기존 종목 조회 오류: {e}")
-
-        return set()
-
     def upsert_stock_names(self, stocks: list[dict], batch_size: int = 100) -> int:
-        """stock_names 테이블에 종목 추가 (신규만 insert)"""
+        """stock_names 테이블에 종목 upsert (code 기준)"""
         if not self.is_configured or not stocks:
             return 0
 
-        # 1. 기존 종목 코드 조회
-        print("[Supabase] 기존 종목 코드 조회 중...")
-        existing_codes = self.get_existing_stock_codes()
-        print(f"[Supabase] 기존 종목: {len(existing_codes)}개")
-
-        # 2. 신규 종목만 필터링
-        new_stocks = [s for s in stocks if s["code"] not in existing_codes]
-        skip_count = len(stocks) - len(new_stocks)
-        print(f"[Supabase] 신규 종목: {len(new_stocks)}개, 기존 종목: {skip_count}개")
-
-        if not new_stocks:
-            print("[Supabase] 신규 종목 없음 - 완료")
-            return len(stocks)
-
-        # 3. 신규 종목만 배치 insert
         url = f"{self.url}/rest/v1/stock_names"
         headers = {
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
             "Content-Type": "application/json",
+            "Prefer": "return=minimal",
         }
 
         success_count = 0
-        for i in range(0, len(new_stocks), batch_size):
-            batch = new_stocks[i:i + batch_size]
+        total_batches = (len(stocks) + batch_size - 1) // batch_size
+
+        for i in range(0, len(stocks), batch_size):
+            batch = stocks[i:i + batch_size]
+            batch_num = i // batch_size + 1
+
             try:
-                response = requests.post(url, json=batch, headers=headers, timeout=30)
+                # upsert: on_conflict=code
+                upsert_url = f"{url}?on_conflict=code"
+                response = requests.post(upsert_url, json=batch, headers=headers, timeout=30)
+
                 if response.status_code in (200, 201):
                     success_count += len(batch)
-                    print(f"[Supabase] 배치 {i//batch_size + 1}: {len(batch)}개 저장")
+                    if batch_num % 10 == 0 or batch_num == total_batches:
+                        print(f"[Supabase] 배치 {batch_num}/{total_batches}: {success_count}개 완료")
                 else:
-                    print(f"[Supabase] 배치 오류: {response.status_code}")
-            except Exception as e:
-                print(f"[Supabase] 배치 예외: {e}")
+                    print(f"[Supabase] 배치 {batch_num} 오류: {response.status_code}")
 
-        print(f"[Supabase] 완료: 신규 {success_count}개 저장, 기존 {skip_count}개 스킵")
-        return success_count + skip_count
+            except Exception as e:
+                print(f"[Supabase] 배치 {batch_num} 예외: {e}")
+
+        print(f"[Supabase] 완료: 총 {success_count}/{len(stocks)}개 저장")
+        return success_count
 
     # ==================== 종목 분석 요청 (stock_analysis_requests) ====================
 
