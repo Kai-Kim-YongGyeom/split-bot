@@ -5,7 +5,7 @@ import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare,
 import { useBotStatus } from '../contexts/BotStatusContext';
 import { requestBalanceRefresh, getDailySnapshots } from '../lib/api';
 import type { DailySnapshot, SnapshotPeriod } from '../lib/api';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, LabelList } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 export function Dashboard() {
   const { stocks, loading, error } = useStocks();
@@ -745,18 +745,34 @@ export function Dashboard() {
                     dataKey="총자산"
                     stroke="#3B82F6"
                     strokeWidth={3}
-                    dot={{ r: 4, fill: '#3B82F6' }}
+                    dot={(props) => {
+                      const { cx, cy, index, payload } = props;
+                      if (cy === undefined || cx === undefined) return null;
+                      const isFirst = index === 0;
+                      const isLast = index === snapshots.length - 1;
+                      // 첫/마지막 포인트만 라벨 표시
+                      if (isFirst || isLast) {
+                        return (
+                          <g key={`dot-asset-${index}`}>
+                            <circle cx={cx} cy={cy} r={5} fill="#3B82F6" />
+                            <text
+                              x={cx}
+                              y={cy - 15}
+                              textAnchor="middle"
+                              fill="#3B82F6"
+                              fontSize={11}
+                              fontWeight={600}
+                            >
+                              {`${(payload.총자산 / 10000).toFixed(0)}만`}
+                            </text>
+                          </g>
+                        );
+                      }
+                      return <circle key={`dot-asset-${index}`} cx={cx} cy={cy} r={4} fill="#3B82F6" />;
+                    }}
                     activeDot={{ r: 6 }}
                     isAnimationActive={false}
-                  >
-                    <LabelList
-                      dataKey="총자산"
-                      position="top"
-                      offset={12}
-                      formatter={(v) => typeof v === 'number' ? `${(v / 10000).toFixed(0)}만` : ''}
-                      style={{ fill: '#3B82F6', fontSize: '10px', fontWeight: 500 }}
-                    />
-                  </Line>
+                  />
                   <Line
                     yAxisId="left"
                     type="monotone"
@@ -773,18 +789,34 @@ export function Dashboard() {
                     dataKey="수익률"
                     stroke="#22C55E"
                     strokeWidth={3}
-                    dot={{ r: 4, fill: '#22C55E' }}
+                    dot={(props) => {
+                      const { cx, cy, index, payload } = props;
+                      if (cy === undefined || cx === undefined) return null;
+                      const isFirst = index === 0;
+                      const isLast = index === snapshots.length - 1;
+                      // 첫/마지막 포인트만 라벨 표시
+                      if (isFirst || isLast) {
+                        return (
+                          <g key={`dot-rate-${index}`}>
+                            <circle cx={cx} cy={cy} r={5} fill="#22C55E" />
+                            <text
+                              x={cx}
+                              y={cy + 20}
+                              textAnchor="middle"
+                              fill="#22C55E"
+                              fontSize={11}
+                              fontWeight={600}
+                            >
+                              {`${payload.수익률?.toFixed(1) || 0}%`}
+                            </text>
+                          </g>
+                        );
+                      }
+                      return <circle key={`dot-rate-${index}`} cx={cx} cy={cy} r={4} fill="#22C55E" />;
+                    }}
                     activeDot={{ r: 6 }}
                     isAnimationActive={false}
-                  >
-                    <LabelList
-                      dataKey="수익률"
-                      position="insideBottomRight"
-                      offset={8}
-                      formatter={(v) => typeof v === 'number' ? `${v.toFixed(1)}%` : ''}
-                      style={{ fill: '#22C55E', fontSize: '10px', fontWeight: 500 }}
-                    />
-                  </Line>
+                  />
                 </LineChart>
               </ResponsiveContainer>
             )}
