@@ -163,8 +163,14 @@ class KisAPI:
             print(f"[KIS] 해시키 생성 실패: {e}")
             return ""
 
+    def clear_token_cache(self) -> None:
+        """토큰 캐시 초기화 (메모리만) - DB에서 다시 로드하도록 유도"""
+        self._access_token = None
+        self._token_expires = None
+        print("[KIS] 토큰 캐시 초기화됨 (메모리만, DB 토큰 유지)")
+
     def invalidate_token(self) -> None:
-        """토큰 무효화 (강제 재발급 유도) - 메모리 + DB 모두 삭제"""
+        """토큰 완전 무효화 (메모리 + DB 모두 삭제) - 토큰 자체가 잘못된 경우에만 사용"""
         self._access_token = None
         self._token_expires = None
 
@@ -210,12 +216,12 @@ class KisAPI:
         try:
             response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
 
-            # 500 에러 시 토큰 문제일 수 있으므로 토큰 무효화 후 재시도 (쿨다운 체크)
+            # 500 에러 시 토큰 캐시만 초기화 후 DB에서 다시 로드 시도
             if response.status_code >= 500:
                 if self._can_refresh_token():
-                    print(f"[KIS] 서버 오류 {response.status_code}, 토큰 무효화 후 재시도...")
-                    self.invalidate_token()
-                    # 새 토큰으로 재시도
+                    print(f"[KIS] 서버 오류 {response.status_code}, 토큰 캐시 초기화 후 재시도...")
+                    self.clear_token_cache()
+                    # DB 토큰으로 재시도
                     headers = self._get_headers("FHKST01010100")
                     response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
                 else:
@@ -674,11 +680,11 @@ class KisAPI:
         try:
             response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
 
-            # 500 에러 시 토큰 문제일 수 있으므로 토큰 무효화 후 재시도
+            # 500 에러 시 토큰 캐시만 초기화 후 DB에서 다시 로드 시도
             if response.status_code >= 500:
                 if self._can_refresh_token():
-                    print(f"[KIS] 배치조회 서버 오류 {response.status_code}, 토큰 무효화 후 재시도...")
-                    self.invalidate_token()
+                    print(f"[KIS] 배치조회 서버 오류 {response.status_code}, 토큰 캐시 초기화 후 재시도...")
+                    self.clear_token_cache()
                     headers = self._get_headers("FHKST11300006")
                     response = requests.get(url, headers=headers, params=params, timeout=KIS_API_TIMEOUT)
                 else:
