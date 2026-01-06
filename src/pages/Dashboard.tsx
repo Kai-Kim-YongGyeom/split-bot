@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useStocks } from '../hooks/useStocks';
 import { useDepositHistory } from '../hooks/useDepositHistory';
-import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare, RefreshCw, BarChart2, Maximize2, X } from 'lucide-react';
+import { Activity, Package, Server, TrendingUp, Briefcase, PackageX, GitCompare, RefreshCw, BarChart2, Maximize2, X, AlertTriangle } from 'lucide-react';
 import { useBotStatus } from '../contexts/BotStatusContext';
 import { requestBalanceRefresh, getDailySnapshots } from '../lib/api';
 import type { DailySnapshot, SnapshotPeriod } from '../lib/api';
@@ -24,6 +24,7 @@ export function Dashboard() {
     return new Date().toISOString().split('T')[0];
   });
   const [chartExpanded, setChartExpanded] = useState(false);
+  const [pendingBuyModalOpen, setPendingBuyModalOpen] = useState(false);
 
   // 스냅샷 데이터 로드
   useEffect(() => {
@@ -138,6 +139,81 @@ export function Dashboard() {
   const netDeposit = depositSummary.netDeposit;
   const investmentProfit = netDeposit > 0 ? kisTotalAsset - netDeposit : 0;
   const investmentReturnRate = netDeposit > 0 ? (investmentProfit / netDeposit) * 100 : 0;
+
+  // 매수 대기 종목 계산 (잔액 부족으로 물타기 못하는 종목)
+  interface PendingBuyStock {
+    name: string;
+    code: string;
+    currentPrice: number;
+    nextSplitPrice: number;
+    currentRound: number;
+    maxRound: number;
+    buyAmount: number;
+    requiredAmount: number;
+    reason: string;
+  }
+
+  const pendingBuyStocks: PendingBuyStock[] = stocks
+    .filter(s => {
+      if (!s.is_active) return false;
+      const holdings = s.purchases.filter(p => p.status === 'holding');
+      if (holdings.length === 0) return false; // 1차 매수 없음
+      if (holdings.length >= s.max_rounds) return false; // 최대 차수 도달
+      if (!s.current_price) return false; // 현재가 없음
+
+      // 다음 물타기 가격 계산
+      const lastPurchase = holdings[holdings.length - 1];
+      const nextRoundIdx = holdings.length; // 다음 차수 인덱스
+      const rateIdx = Math.min(nextRoundIdx - 1, s.split_rates.length - 1);
+      const splitRate = s.split_rates[rateIdx] || 10;
+      const nextSplitPrice = Math.floor(lastPurchase.price * (1 - splitRate / 100));
+
+      // 현재가가 물타기 가격 이하인지 체크
+      if (s.current_price > nextSplitPrice) return false;
+
+      // 주문 금액 계산
+      let requiredAmount = 0;
+      if (s.buy_mode === 'amount') {
+        requiredAmount = s.buy_amount;
+      } else {
+        requiredAmount = s.current_price * s.buy_quantity;
+      }
+
+      // 잔액 부족인지 체크
+      const available = availableAmount || 0;
+      return requiredAmount > available;
+    })
+    .map(s => {
+      const holdings = s.purchases.filter(p => p.status === 'holding');
+      const lastPurchase = holdings[holdings.length - 1];
+      const nextRoundIdx = holdings.length;
+      const rateIdx = Math.min(nextRoundIdx - 1, s.split_rates.length - 1);
+      const splitRate = s.split_rates[rateIdx] || 10;
+      const nextSplitPrice = Math.floor(lastPurchase.price * (1 - splitRate / 100));
+
+      let requiredAmount = 0;
+      if (s.buy_mode === 'amount') {
+        requiredAmount = s.buy_amount;
+      } else {
+        requiredAmount = (s.current_price || 0) * s.buy_quantity;
+      }
+
+      const dropRate = lastPurchase.price > 0
+        ? ((lastPurchase.price - (s.current_price || 0)) / lastPurchase.price * 100).toFixed(1)
+        : '0';
+
+      return {
+        name: s.name,
+        code: s.code,
+        currentPrice: s.current_price || 0,
+        nextSplitPrice,
+        currentRound: holdings.length,
+        maxRound: s.max_rounds,
+        buyAmount: s.buy_mode === 'amount' ? s.buy_amount : s.buy_quantity,
+        requiredAmount,
+        reason: `현재가 ${(s.current_price || 0).toLocaleString()}원 ≤ 물타기가 ${nextSplitPrice.toLocaleString()}원 (${dropRate}% 하락)`,
+      };
+    });
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -854,8 +930,8 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Row 5: 보유, 미보유 */}
-      <div className="grid grid-cols-2 gap-2 md:gap-3">
+      {/* Row 5: 보유, 미보유, 매수대기 */}
+      <div className="grid grid-cols-3 gap-2 md:gap-3">
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-purple-900/50 rounded-lg">
@@ -878,6 +954,28 @@ export function Dashboard() {
             </div>
           </div>
         </div>
+        {/* 매수 대기 (잔액 부족) */}
+        <button
+          onClick={() => pendingBuyStocks.length > 0 && setPendingBuyModalOpen(true)}
+          className={`bg-gray-800 rounded-lg p-3 md:p-4 border transition-colors text-left ${
+            pendingBuyStocks.length > 0
+              ? 'border-orange-700 hover:border-orange-500 cursor-pointer'
+              : 'border-gray-700 cursor-default'
+          }`}
+          disabled={pendingBuyStocks.length === 0}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${pendingBuyStocks.length > 0 ? 'bg-orange-900/50' : 'bg-gray-700'}`}>
+              <AlertTriangle className={`w-5 h-5 ${pendingBuyStocks.length > 0 ? 'text-orange-400' : 'text-gray-400'}`} />
+            </div>
+            <div>
+              <p className="text-gray-400 text-xs md:text-sm">매수대기</p>
+              <p className={`text-xl md:text-2xl font-bold ${pendingBuyStocks.length > 0 ? 'text-orange-400' : 'text-gray-400'}`}>
+                {pendingBuyStocks.length}
+              </p>
+            </div>
+          </div>
+        </button>
       </div>
 
       {/* Row 6: 서버, 봇 */}
@@ -909,6 +1007,96 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* 매수 대기 종목 모달 */}
+      {pendingBuyModalOpen && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-700">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-orange-400" />
+                <h3 className="text-lg font-bold">매수 대기 종목</h3>
+                <span className="text-sm text-gray-400">({pendingBuyStocks.length}개)</span>
+              </div>
+              <button
+                onClick={() => setPendingBuyModalOpen(false)}
+                className="p-1 hover:bg-gray-700 rounded transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-gray-700 bg-orange-900/20">
+              <p className="text-sm text-orange-300">
+                잔액이 부족하여 물타기 조건에 도달했지만 매수하지 못하고 있는 종목입니다.
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                현재 매수가능금액: <span className="text-yellow-400 font-medium">{(availableAmount || 0).toLocaleString()}원</span>
+              </p>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {pendingBuyStocks.map((stock) => (
+                <div key={stock.code} className="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold text-white">{stock.name}</p>
+                      <p className="text-xs text-gray-400">{stock.code}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-orange-400 font-medium">
+                        {stock.currentRound}차 → {stock.currentRound + 1}차 대기
+                      </p>
+                      <p className="text-xs text-gray-500">최대 {stock.maxRound}차</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm mt-3">
+                    <div className="bg-gray-800/50 rounded p-2">
+                      <p className="text-xs text-gray-400 mb-1">매수 조건</p>
+                      <p className="text-orange-300">{stock.reason}</p>
+                    </div>
+                    <div className="bg-gray-800/50 rounded p-2">
+                      <p className="text-xs text-gray-400 mb-1">필요 금액</p>
+                      <p className="text-red-400 font-medium">{stock.requiredAmount.toLocaleString()}원</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        부족: {Math.max(0, stock.requiredAmount - (availableAmount || 0)).toLocaleString()}원
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-gray-600/50">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-gray-400">현재가</span>
+                      <span className="text-white">{stock.currentPrice.toLocaleString()}원</span>
+                    </div>
+                    <div className="flex justify-between text-xs mt-1">
+                      <span className="text-gray-400">물타기 트리거가</span>
+                      <span className="text-blue-400">{stock.nextSplitPrice.toLocaleString()}원</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-gray-700 bg-gray-900/50">
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-gray-400">
+                  총 필요 금액: <span className="text-red-400 font-medium">
+                    {pendingBuyStocks.reduce((sum, s) => sum + s.requiredAmount, 0).toLocaleString()}원
+                  </span>
+                </div>
+                <button
+                  onClick={() => setPendingBuyModalOpen(false)}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

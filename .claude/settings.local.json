@@ -16,7 +16,8 @@
       "Bash(git commit -m \"$\\(cat <<''EOF''\nfix: pykrx API 호출 방식 수정\n\n- get_market_ticker_list에서 날짜 파라미터 제거 \\(자동 계산\\)\n- get_etf_ticker_list에서 날짜 파라미터 제거\n- 개별 종목 이름 조회 시 예외 처리 추가\n- 디버그 로그 추가\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git commit:*)",
       "WebFetch(domain:apiportal.koreainvestment.com)",
-      "WebFetch(domain:finance.naver.com)"
+      "WebFetch(domain:finance.naver.com)",
+      "Bash(find:*)"
     ]
   }
 }
