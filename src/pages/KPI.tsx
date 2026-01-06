@@ -11,6 +11,10 @@ import {
   BarChart,
   Bar,
   Legend,
+  PieChart,
+  Pie,
+  Cell,
+  Treemap,
 } from 'recharts';
 import { supabase } from '../lib/supabase';
 import { getCurrentUserId, getDailySnapshots } from '../lib/api';
@@ -55,8 +59,15 @@ interface MonthlySummary {
   cumulativeReturnRate: number;
 }
 
-type TabType = 'current' | 'daily' | 'monthly';
+type TabType = 'current' | 'daily' | 'monthly' | 'cumulative';
 type TradeFilter = 'all' | 'buy' | 'sell';
+
+// 파이차트/트리맵 색상
+const CHART_COLORS = [
+  '#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6',
+  '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#6366F1',
+  '#14B8A6', '#A855F7', '#22C55E', '#0EA5E9', '#FBBF24',
+];
 
 function DateRangePicker({
   startDate,
@@ -572,6 +583,335 @@ function MonthlyChart({ data }: { data: MonthlySummary[] }) {
   );
 }
 
+// 누적 KPI 데이터 인터페이스
+interface CumulativeStockData {
+  name: string;
+  code: string;
+  buyAmount: number;      // 총 매수금액
+  sellAmount: number;     // 총 매도금액
+  profit: number;         // 실현손익
+  profitRate: number;     // 수익률
+  tradeCount: number;     // 거래 횟수
+  winCount: number;       // 수익 횟수
+  lossCount: number;      // 손실 횟수
+  winRate: number;        // 승률
+  avgProfit: number;      // 평균 수익
+  holdingValue: number;   // 현재 보유 평가액
+}
+
+interface CumulativeKPI {
+  totalTrades: number;
+  totalProfit: number;
+  totalProfitRate: number;
+  winRate: number;
+  avgProfitPerTrade: number;
+  bestStock: CumulativeStockData | null;
+  worstStock: CumulativeStockData | null;
+  stockData: CumulativeStockData[];
+}
+
+// 트리맵 커스텀 컨텐츠
+const TreemapContent = (props: any) => {
+  const { x, y, width, height, name, profit, profitRate } = props;
+  if (width < 50 || height < 30) return null;
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        style={{
+          fill: profit >= 0 ? '#10B981' : '#EF4444',
+          stroke: '#1F2937',
+          strokeWidth: 2,
+          opacity: 0.8,
+        }}
+      />
+      <text
+        x={x + width / 2}
+        y={y + height / 2 - 8}
+        textAnchor="middle"
+        fill="#fff"
+        fontSize={width < 80 ? 10 : 12}
+        fontWeight="bold"
+      >
+        {name?.length > 8 ? name.substring(0, 8) + '...' : name}
+      </text>
+      <text
+        x={x + width / 2}
+        y={y + height / 2 + 10}
+        textAnchor="middle"
+        fill="#fff"
+        fontSize={width < 80 ? 9 : 11}
+      >
+        {profitRate >= 0 ? '+' : ''}{profitRate?.toFixed(1)}%
+      </text>
+    </g>
+  );
+};
+
+function CumulativeChart({ data }: { data: CumulativeKPI }) {
+  const { stockData, totalTrades, totalProfit, totalProfitRate, winRate, avgProfitPerTrade, bestStock, worstStock } = data;
+
+  if (stockData.length === 0) {
+    return (
+      <div className="text-center text-gray-500 py-12">
+        매도 데이터가 없습니다.
+      </div>
+    );
+  }
+
+  // 파이차트 데이터 (수익 기준)
+  const profitPieData = stockData
+    .filter(s => s.profit !== 0)
+    .map(s => ({
+      name: s.name,
+      value: Math.abs(s.profit),
+      profit: s.profit,
+      profitRate: s.profitRate,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+
+  // 거래량 파이차트 데이터
+  const tradePieData = stockData
+    .filter(s => s.tradeCount > 0)
+    .map(s => ({
+      name: s.name,
+      value: s.tradeCount,
+    }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 10);
+
+  // 트리맵 데이터 (수익률 기준)
+  const treemapData = stockData
+    .filter(s => s.sellAmount > 0)
+    .map(s => ({
+      name: s.name,
+      size: s.sellAmount,
+      profit: s.profit,
+      profitRate: s.profitRate,
+    }));
+
+  return (
+    <div className="space-y-6">
+      {/* 누적 KPI 요약 카드 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs mb-1">총 거래 횟수</p>
+          <p className="text-2xl font-bold text-white">{totalTrades}회</p>
+        </div>
+        <div className={`rounded-lg p-4 border ${totalProfit >= 0 ? 'bg-green-900/20 border-green-800' : 'bg-red-900/20 border-red-800'}`}>
+          <p className="text-gray-400 text-xs mb-1">총 실현손익</p>
+          <p className={`text-2xl font-bold ${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {totalProfit >= 0 ? '+' : ''}{totalProfit.toLocaleString()}원
+          </p>
+          <p className={`text-sm ${totalProfitRate >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            ({totalProfitRate >= 0 ? '+' : ''}{totalProfitRate.toFixed(2)}%)
+          </p>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs mb-1">승률</p>
+          <p className={`text-2xl font-bold ${winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+            {winRate.toFixed(1)}%
+          </p>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs mb-1">건당 평균 수익</p>
+          <p className={`text-2xl font-bold ${avgProfitPerTrade >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            {avgProfitPerTrade >= 0 ? '+' : ''}{Math.round(avgProfitPerTrade).toLocaleString()}원
+          </p>
+        </div>
+      </div>
+
+      {/* 최고/최저 종목 */}
+      <div className="grid grid-cols-2 gap-3">
+        {bestStock && (
+          <div className="bg-green-900/20 rounded-lg p-4 border border-green-800">
+            <p className="text-gray-400 text-xs mb-2">🏆 최고 수익 종목</p>
+            <p className="font-bold text-white">{bestStock.name}</p>
+            <p className="text-green-400 text-lg font-bold">
+              +{bestStock.profit.toLocaleString()}원 (+{bestStock.profitRate.toFixed(2)}%)
+            </p>
+            <p className="text-xs text-gray-500 mt-1">{bestStock.tradeCount}회 거래</p>
+          </div>
+        )}
+        {worstStock && (
+          <div className="bg-red-900/20 rounded-lg p-4 border border-red-800">
+            <p className="text-gray-400 text-xs mb-2">📉 최저 수익 종목</p>
+            <p className="font-bold text-white">{worstStock.name}</p>
+            <p className={`text-lg font-bold ${worstStock.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {worstStock.profit >= 0 ? '+' : ''}{worstStock.profit.toLocaleString()}원 ({worstStock.profitRate >= 0 ? '+' : ''}{worstStock.profitRate.toFixed(2)}%)
+            </p>
+            <p className="text-xs text-gray-500 mt-1">{worstStock.tradeCount}회 거래</p>
+          </div>
+        )}
+      </div>
+
+      {/* 파이차트: 종목별 수익 비중 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 className="text-sm font-medium text-gray-400 mb-4">종목별 수익 비중</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={profitPieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={40}
+                  outerRadius={80}
+                  paddingAngle={2}
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                  labelLine={false}
+                >
+                  {profitPieData.map((entry, index) => (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={entry.profit >= 0 ? CHART_COLORS[index % CHART_COLORS.length] : '#EF4444'}
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1F2937',
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(_value, _name, props: any) => [
+                    `${props.payload.profit >= 0 ? '+' : ''}${props.payload.profit.toLocaleString()}원 (${props.payload.profitRate >= 0 ? '+' : ''}${props.payload.profitRate.toFixed(2)}%)`,
+                    props.payload.name
+                  ]}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 className="text-sm font-medium text-gray-400 mb-4">종목별 거래 횟수</h3>
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={tradePieData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={40}
+                  outerRadius={80}
+                  paddingAngle={2}
+                  dataKey="value"
+                  label={({ name, value }) => `${name} ${value}회`}
+                  labelLine={false}
+                >
+                  {tradePieData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1F2937',
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(value) => [`${value}회`, '거래 횟수']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* 트리맵: 종목별 수익률 */}
+      {treemapData.length > 0 && (
+        <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+          <h3 className="text-sm font-medium text-gray-400 mb-4">종목별 수익률 트리맵 (매도금액 기준)</h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <Treemap
+                data={treemapData}
+                dataKey="size"
+                aspectRatio={4 / 3}
+                stroke="#1F2937"
+                content={<TreemapContent />}
+              >
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#1F2937',
+                    border: '1px solid #374151',
+                    borderRadius: '8px',
+                  }}
+                  formatter={(_value, _name, props: any) => [
+                    `${props.payload.profit >= 0 ? '+' : ''}${props.payload.profit.toLocaleString()}원`,
+                    '실현손익'
+                  ]}
+                  labelFormatter={(label) => label}
+                />
+              </Treemap>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">* 박스 크기: 매도금액, 색상: 초록=수익/빨강=손실</p>
+        </div>
+      )}
+
+      {/* 종목별 상세 테이블 */}
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-4">
+        <h3 className="text-sm font-medium text-gray-400 mb-4">종목별 누적 실적</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-gray-400 border-b border-gray-700">
+                <th className="text-left py-2 px-3">종목</th>
+                <th className="text-right py-2 px-3">거래수</th>
+                <th className="text-right py-2 px-3">승률</th>
+                <th className="text-right py-2 px-3">매수금액</th>
+                <th className="text-right py-2 px-3">매도금액</th>
+                <th className="text-right py-2 px-3">실현손익</th>
+                <th className="text-right py-2 px-3">수익률</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stockData
+                .sort((a, b) => b.profit - a.profit)
+                .map(stock => (
+                  <tr key={stock.code} className="border-b border-gray-700/50 hover:bg-gray-700/30">
+                    <td className="py-2 px-3">
+                      <span className="font-medium">{stock.name}</span>
+                      <span className="text-gray-500 text-xs ml-2">{stock.code}</span>
+                    </td>
+                    <td className="py-2 px-3 text-right">{stock.tradeCount}회</td>
+                    <td className={`py-2 px-3 text-right ${stock.winRate >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                      {stock.winRate.toFixed(0)}%
+                    </td>
+                    <td className="py-2 px-3 text-right text-blue-400">
+                      {stock.buyAmount.toLocaleString()}원
+                    </td>
+                    <td className="py-2 px-3 text-right text-purple-400">
+                      {stock.sellAmount.toLocaleString()}원
+                    </td>
+                    <td className={`py-2 px-3 text-right font-bold ${
+                      stock.profit === 0 ? 'text-gray-500' : stock.profit > 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {stock.profit !== 0 ? `${stock.profit >= 0 ? '+' : ''}${stock.profit.toLocaleString()}원` : '-'}
+                    </td>
+                    <td className={`py-2 px-3 text-right ${
+                      stock.profitRate === 0 ? 'text-gray-500' : stock.profitRate > 0 ? 'text-green-400' : 'text-red-400'
+                    }`}>
+                      {stock.profitRate !== 0 ? `${stock.profitRate >= 0 ? '+' : ''}${stock.profitRate.toFixed(2)}%` : '-'}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function KPI() {
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -896,6 +1236,84 @@ export function KPI() {
     return Object.values(byStock).sort((a, b) => b.profit - a.profit);
   }, [purchases, startDate, endDate]);
 
+  // 누적 KPI 데이터 계산
+  const cumulativeKPI = useMemo<CumulativeKPI>(() => {
+    // 전체 기간 매도 건
+    const soldPurchases = purchases.filter(p => {
+      if (p.status !== 'sold' || !p.sold_date || !p.sold_price) return false;
+      const soldDate = p.sold_date.split('T')[0].split(' ')[0];
+      return soldDate >= startDate && soldDate <= endDate;
+    });
+
+    // 종목별 집계
+    const byStock: Record<string, CumulativeStockData> = {};
+
+    soldPurchases.forEach(p => {
+      const stockInfo = (p as any).bot_stocks;
+      const stockCode = stockInfo?.code || 'UNKNOWN';
+      const stockName = stockInfo?.name || 'Unknown';
+
+      if (!byStock[stockCode]) {
+        byStock[stockCode] = {
+          name: stockName,
+          code: stockCode,
+          buyAmount: 0,
+          sellAmount: 0,
+          profit: 0,
+          profitRate: 0,
+          tradeCount: 0,
+          winCount: 0,
+          lossCount: 0,
+          winRate: 0,
+          avgProfit: 0,
+          holdingValue: 0,
+        };
+      }
+
+      const buyAmt = p.price * p.quantity;
+      const sellAmt = (p.sold_price || 0) * p.quantity;
+      const profit = sellAmt - buyAmt;
+
+      byStock[stockCode].buyAmount += buyAmt;
+      byStock[stockCode].sellAmount += sellAmt;
+      byStock[stockCode].profit += profit;
+      byStock[stockCode].tradeCount += 1;
+      if (profit > 0) {
+        byStock[stockCode].winCount += 1;
+      } else if (profit < 0) {
+        byStock[stockCode].lossCount += 1;
+      }
+    });
+
+    // 각 종목 수익률 및 승률 계산
+    Object.values(byStock).forEach(stock => {
+      stock.profitRate = stock.buyAmount > 0 ? (stock.profit / stock.buyAmount) * 100 : 0;
+      stock.winRate = stock.tradeCount > 0 ? (stock.winCount / stock.tradeCount) * 100 : 0;
+      stock.avgProfit = stock.tradeCount > 0 ? stock.profit / stock.tradeCount : 0;
+    });
+
+    const stockData = Object.values(byStock);
+    const totalTrades = stockData.reduce((sum, s) => sum + s.tradeCount, 0);
+    const totalProfit = stockData.reduce((sum, s) => sum + s.profit, 0);
+    const totalBuyAmt = stockData.reduce((sum, s) => sum + s.buyAmount, 0);
+    const totalWins = stockData.reduce((sum, s) => sum + s.winCount, 0);
+
+    const sortedByProfit = [...stockData].sort((a, b) => b.profit - a.profit);
+    const bestStock = sortedByProfit[0] || null;
+    const worstStock = sortedByProfit[sortedByProfit.length - 1] || null;
+
+    return {
+      totalTrades,
+      totalProfit,
+      totalProfitRate: totalBuyAmt > 0 ? (totalProfit / totalBuyAmt) * 100 : 0,
+      winRate: totalTrades > 0 ? (totalWins / totalTrades) * 100 : 0,
+      avgProfitPerTrade: totalTrades > 0 ? totalProfit / totalTrades : 0,
+      bestStock,
+      worstStock,
+      stockData,
+    };
+  }, [purchases, startDate, endDate]);
+
   // 필터된 거래 내역
   const filteredPurchases = useMemo(() => {
     let filtered: Purchase[] = [];
@@ -973,6 +1391,9 @@ export function KPI() {
         </TabButton>
         <TabButton active={activeTab === 'monthly'} onClick={() => setActiveTab('monthly')}>
           월별
+        </TabButton>
+        <TabButton active={activeTab === 'cumulative'} onClick={() => setActiveTab('cumulative')}>
+          누적
         </TabButton>
       </div>
 
@@ -1212,6 +1633,7 @@ export function KPI() {
 
       {activeTab === 'daily' && <DailyChart data={dailySummary} />}
       {activeTab === 'monthly' && <MonthlyChart data={monthlySummary} />}
+      {activeTab === 'cumulative' && <CumulativeChart data={cumulativeKPI} />}
     </div>
   );
 }
