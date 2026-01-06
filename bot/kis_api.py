@@ -60,6 +60,9 @@ class KisAPI:
             if datetime.now() < self._token_expires - timedelta(hours=1):
                 return self._access_token
 
+        # 토큰 발급 사유 추적
+        refresh_reason = "알 수 없음"
+
         # 2. DB에서 토큰 조회 (kis_tokens 테이블)
         if self._user_id:
             from supabase_client import supabase
@@ -78,21 +81,27 @@ class KisAPI:
                             print(f"[KIS] DB 토큰 사용! (만료: {self._token_expires})")
                             return self._access_token
                         else:
+                            refresh_reason = f"DB 토큰 만료 (만료: {token_expiry.strftime('%m/%d %H:%M')})"
                             print(f"[KIS] DB 토큰 만료됨 (만료: {token_expiry})")
                     except (ValueError, TypeError) as e:
+                        refresh_reason = f"토큰 만료시간 파싱 오류: {e}"
                         print(f"[KIS] 토큰 만료시간 파싱 오류: {e}")
+                else:
+                    refresh_reason = "DB 토큰 만료시간 없음"
             else:
+                refresh_reason = "DB에 저장된 토큰 없음"
                 print("[KIS] DB에 저장된 토큰 없음")
         else:
+            refresh_reason = "user_id 없음 (최초 실행)"
             print("[KIS] user_id 없음 - DB 토큰 조회 스킵")
 
         # 3. 새 토큰 발급
         print("[KIS] 새 토큰 발급 중...")
-        self._refresh_token()
+        self._refresh_token(reason=refresh_reason)
         return self._access_token
 
-    def _refresh_token(self) -> None:
-        """토큰 발급/갱신 후 DB 저장"""
+    def _refresh_token(self, reason: str = "알 수 없음") -> None:
+        """토큰 발급/갱신 후 DB 저장 및 텔레그램 알림"""
         # 쿨다운 체크용 시간 기록
         self._last_token_refresh = datetime.now()
 
@@ -127,6 +136,9 @@ class KisAPI:
                         self._token_expires.isoformat()
                     )
                     print(f"[KIS] 토큰 DB 저장 완료")
+
+                # 텔레그램 알림 전송
+                self._send_token_notification(reason)
             else:
                 self._token_refresh_failures += 1
                 raise Exception(f"토큰 발급 실패: {result}")
@@ -136,6 +148,28 @@ class KisAPI:
         except requests.exceptions.RequestException as e:
             self._token_refresh_failures += 1
             raise Exception(f"토큰 발급 네트워크 오류: {e}")
+
+    def _send_token_notification(self, reason: str) -> None:
+        """토큰 발급 시 텔레그램 알림 전송"""
+        try:
+            from telegram_bot import TelegramNotifier
+            notifier = TelegramNotifier()
+
+            now = datetime.now()
+            expires_str = self._token_expires.strftime("%m/%d %H:%M") if self._token_expires else "알 수 없음"
+
+            message = (
+                f"🔑 <b>KIS 토큰 발급</b>\n"
+                f"━━━━━━━━━━━━━━━\n"
+                f"📅 발급시간: {now.strftime('%m/%d %H:%M:%S')}\n"
+                f"⏰ 만료시간: {expires_str}\n"
+                f"📝 사유: {reason}\n"
+                f"━━━━━━━━━━━━━━━"
+            )
+
+            notifier.send_sync(message)
+        except Exception as e:
+            print(f"[KIS] 토큰 알림 전송 실패: {e}")
 
     def _get_headers(self, tr_id: str) -> dict:
         """API 요청 헤더"""
