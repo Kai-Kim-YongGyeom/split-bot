@@ -240,9 +240,15 @@ class SplitBot:
         round_num = result["round"]
         prev_price = result.get("prev_price", 0)
 
-        # 주문가능금액 체크
+        # 주문가능금액 체크 (최소 금액)
         if self._available_amount is not None and self._available_amount < self.MIN_AVAILABLE_AMOUNT:
             log(f"[Bot] 매수 스킵: 주문가능금액 부족 ({self._available_amount:,}원 < {self.MIN_AVAILABLE_AMOUNT:,}원)")
+            return
+
+        # 주문금액 vs 잔액 체크 (실제 주문 전 검증)
+        estimated_order_amount = trigger_price * quantity
+        if self._available_amount is not None and estimated_order_amount > self._available_amount:
+            log(f"[Bot] 매수 스킵: 주문금액 초과 (주문: {estimated_order_amount:,}원 > 잔액: {self._available_amount:,}원)")
             return
 
         # 주문 처리 중 플래그 설정 (중복 주문 방지)
