@@ -886,13 +886,14 @@ class SupabaseClient:
         return "error" not in result
 
     def upsert_stock_names(self, stocks: list[dict], batch_size: int = 100) -> int:
-        """stock_names 테이블에 종목 upsert (code 기준)"""
+        """stock_names 테이블에 종목 upsert (user_id, code 기준)"""
         if not self.is_configured or not stocks:
             return 0
 
         url = f"{self.url}/rest/v1/stock_names"
 
-        # Supabase upsert: Prefer 헤더에 resolution=merge-duplicates 사용
+        # Supabase upsert: on_conflict로 인덱스 지정
+        # idx_stock_names_user_code는 (COALESCE(user_id, '00000000...'), code) 복합 인덱스
         headers = {
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
@@ -907,8 +908,15 @@ class SupabaseClient:
             batch = stocks[i:i + batch_size]
             batch_num = i // batch_size + 1
 
+            # user_id를 null로 명시적 설정 (기존 데이터와 매칭)
+            for item in batch:
+                if "user_id" not in item:
+                    item["user_id"] = None
+
             try:
-                response = requests.post(url, json=batch, headers=headers, timeout=30)
+                # on_conflict로 user_id, code 복합키 지정
+                upsert_url = f"{url}?on_conflict=user_id,code"
+                response = requests.post(upsert_url, json=batch, headers=headers, timeout=30)
 
                 if response.status_code in (200, 201):
                     success_count += len(batch)
