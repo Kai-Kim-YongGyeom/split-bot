@@ -886,7 +886,7 @@ class SupabaseClient:
         return "error" not in result
 
     def upsert_stock_names(self, stocks: list[dict], batch_size: int = 100) -> int:
-        """stock_names 테이블에 종목 upsert (code 기준)"""
+        """stock_names 테이블에 종목 upsert (code 기준 UNIQUE)"""
         if not self.is_configured or not stocks:
             return 0
 
@@ -896,7 +896,7 @@ class SupabaseClient:
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
             "Content-Type": "application/json",
-            "Prefer": "return=minimal",
+            "Prefer": "resolution=merge-duplicates,return=minimal",
         }
 
         success_count = 0
@@ -912,30 +912,15 @@ class SupabaseClient:
                     item["user_id"] = None
 
             try:
-                # 개별 upsert: 존재하면 update, 없으면 insert
-                batch_success = 0
-                for item in batch:
-                    code = item.get("code")
+                response = requests.post(url, json=batch, headers=headers, timeout=30)
 
-                    # 먼저 존재 여부 확인
-                    check_url = f"{url}?code=eq.{code}&select=id"
-                    check_resp = requests.get(check_url, headers=headers, timeout=10)
-
-                    if check_resp.status_code == 200 and check_resp.json():
-                        # 존재하면 update
-                        update_url = f"{url}?code=eq.{code}"
-                        update_data = {"name": item.get("name"), "market": item.get("market")}
-                        resp = requests.patch(update_url, json=update_data, headers=headers, timeout=10)
-                    else:
-                        # 없으면 insert
-                        resp = requests.post(url, json=[item], headers=headers, timeout=10)
-
-                    if resp.status_code in (200, 201, 204):
-                        batch_success += 1
-
-                success_count += batch_success
-                if batch_num % 10 == 0 or batch_num == total_batches:
-                    print(f"[Supabase] 배치 {batch_num}/{total_batches}: {success_count}개 완료")
+                if response.status_code in (200, 201):
+                    success_count += len(batch)
+                    if batch_num % 10 == 0 or batch_num == total_batches:
+                        print(f"[Supabase] 배치 {batch_num}/{total_batches}: {success_count}개 완료")
+                else:
+                    error_text = response.text[:200] if response.text else ""
+                    print(f"[Supabase] 배치 {batch_num} 오류: {response.status_code} - {error_text}")
 
             except Exception as e:
                 print(f"[Supabase] 배치 {batch_num} 예외: {e}")
