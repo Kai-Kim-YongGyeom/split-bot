@@ -323,17 +323,24 @@ class SplitBot:
                         log(f"[Bot] 장 시작 시간 오류 감지 → {next_time.strftime('%H:%M')} 이후 재시도")
 
             # 텔레그램 알림 (체결가 사용)
-            alert_price = executed_price if order["success"] else trigger_price
-            await notifier.send_buy_alert(
-                stock_name=stock.name,
-                stock_code=stock.code,
-                price=alert_price,
-                quantity=quantity,
-                round_num=round_num,
-                success=order["success"],
-                order_no=order.get("order_no", ""),
-                error_message=order.get("message", "") if not order["success"] else "",
-            )
+            # 잔액 부족 오류는 알림 스킵 (조용히 처리)
+            error_msg = order.get("message", "")
+            is_balance_error = "주문가능금액" in error_msg or "잔액" in error_msg or "잔고" in error_msg
+
+            if order["success"] or not is_balance_error:
+                alert_price = executed_price if order["success"] else trigger_price
+                await notifier.send_buy_alert(
+                    stock_name=stock.name,
+                    stock_code=stock.code,
+                    price=alert_price,
+                    quantity=quantity,
+                    round_num=round_num,
+                    success=order["success"],
+                    order_no=order.get("order_no", ""),
+                    error_message=error_msg if not order["success"] else "",
+                )
+            else:
+                log(f"[Bot] 잔액 부족 오류 - 텔레그램 알림 스킵: {error_msg}")
         finally:
             # 주문 처리 완료 (성공/실패 무관)
             stock.clear_order_pending()
