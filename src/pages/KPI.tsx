@@ -734,31 +734,33 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
     return val.toString();
   };
 
-  // 파이차트 커스텀 라벨 (2줄, 작은 폰트)
-  const renderProfitLabel = ({ cx, cy, midAngle, outerRadius, name, profit }: any) => {
+  // 파이차트 커스텀 라벨 (2줄)
+  const createProfitLabel = (isExpanded: boolean) => ({ cx, cy, midAngle, outerRadius, name, profit }: any) => {
     const RADIAN = Math.PI / 180;
-    const radius = outerRadius + 18;
+    const radius = outerRadius + (isExpanded ? 25 : 18);
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    const fontSize = isExpanded ? 12 : 8;
 
     return (
-      <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={8} fill="#9CA3AF">
-        <tspan x={x} dy="-0.4em">{name}</tspan>
-        <tspan x={x} dy="1.1em" fill="#10B981">+{shortAmount(profit)}</tspan>
+      <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={fontSize} fill="#9CA3AF">
+        <tspan x={x} dy="-0.5em">{name}</tspan>
+        <tspan x={x} dy="1.2em" fill="#10B981">+{shortAmount(profit)}</tspan>
       </text>
     );
   };
 
-  const renderTradeLabel = ({ cx, cy, midAngle, outerRadius, name, value }: any) => {
+  const createTradeLabel = (isExpanded: boolean) => ({ cx, cy, midAngle, outerRadius, name, value }: any) => {
     const RADIAN = Math.PI / 180;
-    const radius = outerRadius + 18;
+    const radius = outerRadius + (isExpanded ? 25 : 18);
     const x = cx + radius * Math.cos(-midAngle * RADIAN);
     const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    const fontSize = isExpanded ? 12 : 8;
 
     return (
-      <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={8} fill="#9CA3AF">
-        <tspan x={x} dy="-0.4em">{name}</tspan>
-        <tspan x={x} dy="1.1em" fill="#8B5CF6">{value}회</tspan>
+      <text x={x} y={y} textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize={fontSize} fill="#9CA3AF">
+        <tspan x={x} dy="-0.5em">{name}</tspan>
+        <tspan x={x} dy="1.2em" fill="#8B5CF6">{value}회</tspan>
       </text>
     );
   };
@@ -771,11 +773,11 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
           data={profitPieData}
           cx="50%"
           cy="50%"
-          innerRadius={isExpanded ? 40 : 20}
-          outerRadius={isExpanded ? 80 : 40}
+          innerRadius={isExpanded ? 45 : 20}
+          outerRadius={isExpanded ? 90 : 40}
           paddingAngle={2}
           dataKey="value"
-          label={renderProfitLabel}
+          label={createProfitLabel(isExpanded)}
           labelLine={{ stroke: '#4B5563', strokeWidth: 1 }}
         >
           {profitPieData.map((entry, index) => (
@@ -807,11 +809,11 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
           data={tradePieData}
           cx="50%"
           cy="50%"
-          innerRadius={isExpanded ? 40 : 20}
-          outerRadius={isExpanded ? 80 : 40}
+          innerRadius={isExpanded ? 45 : 20}
+          outerRadius={isExpanded ? 90 : 40}
           paddingAngle={2}
           dataKey="value"
-          label={renderTradeLabel}
+          label={createTradeLabel(isExpanded)}
           labelLine={{ stroke: '#4B5563', strokeWidth: 1 }}
         >
           {tradePieData.map((_, index) => (
