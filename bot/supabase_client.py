@@ -886,19 +886,17 @@ class SupabaseClient:
         return "error" not in result
 
     def upsert_stock_names(self, stocks: list[dict], batch_size: int = 100) -> int:
-        """stock_names 테이블에 종목 upsert (user_id, code 기준)"""
+        """stock_names 테이블에 종목 upsert (code 기준)"""
         if not self.is_configured or not stocks:
             return 0
 
         url = f"{self.url}/rest/v1/stock_names"
 
-        # Supabase upsert: on_conflict로 인덱스 지정
-        # idx_stock_names_user_code는 (COALESCE(user_id, '00000000...'), code) 복합 인덱스
         headers = {
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
             "Content-Type": "application/json",
-            "Prefer": "resolution=merge-duplicates,return=minimal",
+            "Prefer": "return=minimal",
         }
 
         success_count = 0
@@ -908,24 +906,36 @@ class SupabaseClient:
             batch = stocks[i:i + batch_size]
             batch_num = i // batch_size + 1
 
-            # user_id를 null로 명시적 설정 (기존 데이터와 매칭)
+            # user_id를 null로 명시적 설정
             for item in batch:
                 if "user_id" not in item:
                     item["user_id"] = None
 
             try:
-                # on_conflict로 user_id, code 복합키 지정
-                upsert_url = f"{url}?on_conflict=user_id,code"
-                response = requests.post(upsert_url, json=batch, headers=headers, timeout=30)
+                # 개별 upsert: 존재하면 update, 없으면 insert
+                batch_success = 0
+                for item in batch:
+                    code = item.get("code")
 
-                if response.status_code in (200, 201):
-                    success_count += len(batch)
-                    if batch_num % 10 == 0 or batch_num == total_batches:
-                        print(f"[Supabase] 배치 {batch_num}/{total_batches}: {success_count}개 완료")
-                else:
-                    # 상세 에러 로그
-                    error_text = response.text[:300] if response.text else "No response body"
-                    print(f"[Supabase] 배치 {batch_num} 오류: {response.status_code} - {error_text}")
+                    # 먼저 존재 여부 확인
+                    check_url = f"{url}?code=eq.{code}&select=id"
+                    check_resp = requests.get(check_url, headers=headers, timeout=10)
+
+                    if check_resp.status_code == 200 and check_resp.json():
+                        # 존재하면 update
+                        update_url = f"{url}?code=eq.{code}"
+                        update_data = {"name": item.get("name"), "market": item.get("market")}
+                        resp = requests.patch(update_url, json=update_data, headers=headers, timeout=10)
+                    else:
+                        # 없으면 insert
+                        resp = requests.post(url, json=[item], headers=headers, timeout=10)
+
+                    if resp.status_code in (200, 201, 204):
+                        batch_success += 1
+
+                success_count += batch_success
+                if batch_num % 10 == 0 or batch_num == total_batches:
+                    print(f"[Supabase] 배치 {batch_num}/{total_batches}: {success_count}개 완료")
 
             except Exception as e:
                 print(f"[Supabase] 배치 {batch_num} 예외: {e}")
