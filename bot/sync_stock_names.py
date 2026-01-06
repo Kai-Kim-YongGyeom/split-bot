@@ -70,15 +70,44 @@ def get_naver_etf() -> list:
     """네이버 금융에서 ETF 리스트 가져오기"""
     etfs = []
 
+    # ETF 시세 페이지 - 한 페이지에 모든 ETF가 있음
+    url = "https://finance.naver.com/api/sise/etfItemList.nhn"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://finance.naver.com/sise/etf.naver",
+    }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=30)
+        data = response.json()
+
+        items = data.get("result", {}).get("etfItemList", [])
+
+        for item in items:
+            code = item.get("itemcode", "")
+            name = item.get("itemname", "")
+
+            if code and name and len(code) == 6:
+                etfs.append({
+                    "code": code,
+                    "name": name.strip(),
+                    "market": "ETF",
+                })
+
+        print(f"[Naver API] ETF: {len(etfs)}개")
+        return etfs
+
+    except Exception as e:
+        print(f"[Naver API] ETF 조회 실패: {e}")
+
+    # fallback: HTML 파싱
+    print("[Naver] API 실패, HTML 파싱 시도...")
     page = 1
-    max_pages = 30  # ETF는 약 800개 정도
+    max_pages = 30
 
     while page <= max_pages:
         url = f"https://finance.naver.com/sise/etf.naver?page={page}"
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        }
 
         try:
             response = requests.get(url, headers=headers, timeout=30)
@@ -87,17 +116,24 @@ def get_naver_etf() -> list:
 
             import re
 
-            # ETF 종목 코드와 이름 추출
-            # /item/main.naver?code=069500" class="tltle">KODEX 200</a>
-            pattern = r'/item/main\.naver\?code=(\d{6})"[^>]*>([^<]+)</a>'
-            matches = re.findall(pattern, html)
+            # 여러 패턴 시도
+            patterns = [
+                r'href="/item/main\.naver\?code=(\d{6})"[^>]*>([^<]+)</a>',
+                r'code=(\d{6})"[^>]*title="([^"]+)"',
+                r'/item/main\.naver\?code=(\d{6})"[^>]*>([^<]+)</a>',
+            ]
+
+            matches = []
+            for pattern in patterns:
+                matches = re.findall(pattern, html)
+                if matches:
+                    break
 
             if not matches:
                 break
 
             for code, name in matches:
                 if code and name and len(code) == 6:
-                    # 중복 제거
                     if not any(e["code"] == code for e in etfs):
                         etfs.append({
                             "code": code,
@@ -268,12 +304,6 @@ def upsert_to_supabase(stocks: list) -> int:
         return 0
 
     url = f"{Config.SUPABASE_URL}/rest/v1/stock_names"
-    headers = {
-        "apikey": Config.SUPABASE_KEY,
-        "Authorization": f"Bearer {Config.SUPABASE_KEY}",
-        "Content-Type": "application/json",
-        "Prefer": "resolution=merge-duplicates",  # upsert
-    }
 
     # 배치로 나눠서 처리 (100개씩)
     batch_size = 100
@@ -283,13 +313,37 @@ def upsert_to_supabase(stocks: list) -> int:
         batch = stocks[i:i + batch_size]
 
         try:
-            response = requests.post(url, json=batch, headers=headers, timeout=30)
+            # upsert: on_conflict=code 지정
+            headers = {
+                "apikey": Config.SUPABASE_KEY,
+                "Authorization": f"Bearer {Config.SUPABASE_KEY}",
+                "Content-Type": "application/json",
+                "Prefer": "return=minimal",
+            }
+
+            # POST with upsert using on_conflict parameter
+            upsert_url = f"{url}?on_conflict=code"
+            response = requests.post(upsert_url, json=batch, headers=headers, timeout=30)
 
             if response.status_code < 400:
                 success_count += len(batch)
                 print(f"  [Supabase] Batch {i//batch_size + 1}: {len(batch)} stocks uploaded")
             else:
-                print(f"  [Supabase] Error: {response.status_code} - {response.text[:200]}")
+                # 409 에러시 개별 upsert 시도
+                if response.status_code == 409:
+                    individual_success = 0
+                    for stock in batch:
+                        try:
+                            single_url = f"{url}?on_conflict=code"
+                            single_resp = requests.post(single_url, json=[stock], headers=headers, timeout=10)
+                            if single_resp.status_code < 400:
+                                individual_success += 1
+                        except Exception:
+                            pass
+                    success_count += individual_success
+                    print(f"  [Supabase] Batch {i//batch_size + 1}: {individual_success}/{len(batch)} (개별 처리)")
+                else:
+                    print(f"  [Supabase] Error: {response.status_code} - {response.text[:200]}")
 
         except Exception as e:
             print(f"  [Supabase] Exception: {e}")
