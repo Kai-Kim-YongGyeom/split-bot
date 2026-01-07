@@ -614,8 +614,10 @@ interface CumulativeKPI {
 
 // 트리맵 커스텀 컨텐츠 (가로형)
 const TreemapContent = (props: any) => {
-  const { x, y, width, height, name, profit } = props;
-  if (width < 60 || height < 20) return null;
+  const { x, y, width, height, name, profit, index } = props;
+
+  // 너무 작은 박스는 표시 안함
+  if (width < 50 || height < 30) return null;
 
   // profit이 undefined일 경우 0으로 처리
   const profitValue = profit ?? 0;
@@ -630,8 +632,22 @@ const TreemapContent = (props: any) => {
     return val.toLocaleString();
   };
 
+  // 박스 크기에 따른 폰트 크기 조절
+  const fontSize = Math.min(Math.max(width / 12, 8), 12);
+
+  // 종목명 줄임 (박스 폭에 따라)
+  const maxChars = Math.floor(width / (fontSize * 0.7));
+  const displayName = name.length > maxChars ? name.slice(0, maxChars - 1) + '..' : name;
+
+  const clipId = `clip-${index}`;
+
   return (
     <g>
+      <defs>
+        <clipPath id={clipId}>
+          <rect x={x + 2} y={y + 2} width={width - 4} height={height - 4} />
+        </clipPath>
+      </defs>
       <rect
         x={x}
         y={y}
@@ -643,17 +659,29 @@ const TreemapContent = (props: any) => {
           strokeWidth: 2,
         }}
       />
-      <text
-        x={x + width / 2}
-        y={y + height / 2}
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="#fff"
-        fontSize={10}
-        fontWeight="bold"
-      >
-        {name} {isProfit ? '+' : ''}{formatProfit(profitValue)}
-      </text>
+      <g clipPath={`url(#${clipId})`}>
+        <text
+          x={x + width / 2}
+          y={y + height / 2 - fontSize * 0.5}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#fff"
+          fontSize={fontSize}
+          fontWeight="bold"
+        >
+          {displayName}
+        </text>
+        <text
+          x={x + width / 2}
+          y={y + height / 2 + fontSize * 0.7}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="#fff"
+          fontSize={fontSize * 0.9}
+        >
+          {isProfit ? '+' : ''}{formatProfit(profitValue)}
+        </text>
+      </g>
     </g>
   );
 };
