@@ -14,7 +14,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Treemap,
 } from 'recharts';
 import { supabase } from '../lib/supabase';
 import { getCurrentUserId, getDailySnapshots } from '../lib/api';
@@ -612,78 +611,105 @@ interface CumulativeKPI {
   stockData: CumulativeStockData[];
 }
 
-// 트리맵 커스텀 컨텐츠 (가로형)
-const TreemapContent = (props: any) => {
-  const { x, y, width, height, name, profit, index } = props;
+// Squarified Treemap 레이아웃 계산
+interface TreemapRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  data: { name: string; value: number; profit: number; isProfit: boolean };
+}
 
-  // 너무 작은 박스는 표시 안함
-  if (width < 50 || height < 30) return null;
+const calculateTreemapLayout = (
+  data: { name: string; value: number; profit: number; isProfit: boolean }[],
+  width: number,
+  height: number
+): TreemapRect[] => {
+  if (data.length === 0) return [];
 
-  // profit이 undefined일 경우 0으로 처리
-  const profitValue = profit ?? 0;
-  const isProfit = profitValue >= 0;
+  const total = data.reduce((sum, d) => sum + d.value, 0);
+  if (total === 0) return [];
 
-  // 금액 포맷
-  const formatProfit = (val: number) => {
-    const absVal = Math.abs(val);
-    if (absVal >= 10000) {
-      return `${(val / 10000).toFixed(1)}만`;
+  const rects: TreemapRect[] = [];
+  let remaining = [...data];
+  let currentX = 0;
+  let currentY = 0;
+  let currentWidth = width;
+  let currentHeight = height;
+  let remainingTotal = total;
+
+  while (remaining.length > 0) {
+    const isHorizontal = currentWidth >= currentHeight;
+    const side = isHorizontal ? currentHeight : currentWidth;
+
+    // 현재 행/열에 넣을 아이템들 결정
+    let row: typeof data = [];
+    let rowTotal = 0;
+    let bestAspect = Infinity;
+
+    for (let i = 0; i < remaining.length; i++) {
+      const testRow = [...row, remaining[i]];
+      const testTotal = rowTotal + remaining[i].value;
+      const rowSize = (testTotal / remainingTotal) * (isHorizontal ? currentWidth : currentHeight);
+
+      // aspect ratio 계산
+      let worstAspect = 0;
+      for (const item of testRow) {
+        const itemSize = (item.value / testTotal) * side;
+        const aspect = Math.max(rowSize / itemSize, itemSize / rowSize);
+        worstAspect = Math.max(worstAspect, aspect);
+      }
+
+      if (worstAspect <= bestAspect || row.length === 0) {
+        row = testRow;
+        rowTotal = testTotal;
+        bestAspect = worstAspect;
+      } else {
+        break;
+      }
     }
-    return val.toLocaleString();
-  };
 
-  // 박스 크기에 따른 폰트 크기 조절
-  const fontSize = Math.min(Math.max(width / 12, 8), 12);
+    // 레이아웃 적용
+    const rowSize = (rowTotal / remainingTotal) * (isHorizontal ? currentWidth : currentHeight);
+    let offset = 0;
 
-  // 종목명 줄임 (박스 폭에 따라)
-  const maxChars = Math.floor(width / (fontSize * 0.7));
-  const displayName = name.length > maxChars ? name.slice(0, maxChars - 1) + '..' : name;
+    for (const item of row) {
+      const itemSize = (item.value / rowTotal) * side;
 
-  const clipId = `clip-${index}`;
+      if (isHorizontal) {
+        rects.push({
+          x: currentX,
+          y: currentY + offset,
+          width: rowSize,
+          height: itemSize,
+          data: item,
+        });
+      } else {
+        rects.push({
+          x: currentX + offset,
+          y: currentY,
+          width: itemSize,
+          height: rowSize,
+          data: item,
+        });
+      }
+      offset += itemSize;
+    }
 
-  return (
-    <g>
-      <defs>
-        <clipPath id={clipId}>
-          <rect x={x + 2} y={y + 2} width={width - 4} height={height - 4} />
-        </clipPath>
-      </defs>
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        style={{
-          fill: isProfit ? '#10B981' : '#EF4444',
-          stroke: '#1F2937',
-          strokeWidth: 2,
-        }}
-      />
-      <g clipPath={`url(#${clipId})`}>
-        <text
-          x={x + width / 2}
-          y={y + height / 2 - fontSize * 0.5}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="#fff"
-          fontSize={fontSize}
-          fontWeight="bold"
-        >
-          {displayName}
-        </text>
-        <text
-          x={x + width / 2}
-          y={y + height / 2 + fontSize * 0.7}
-          textAnchor="middle"
-          dominantBaseline="middle"
-          fill="#fff"
-          fontSize={fontSize * 0.9}
-        >
-          {isProfit ? '+' : ''}{formatProfit(profitValue)}
-        </text>
-      </g>
-    </g>
-  );
+    // 다음 영역으로 이동
+    remaining = remaining.slice(row.length);
+    remainingTotal -= rowTotal;
+
+    if (isHorizontal) {
+      currentX += rowSize;
+      currentWidth -= rowSize;
+    } else {
+      currentY += rowSize;
+      currentHeight -= rowSize;
+    }
+  }
+
+  return rects;
 };
 
 function CumulativeChart({ data }: { data: CumulativeKPI }) {
@@ -724,15 +750,16 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
     .sort((a, b) => b.value - a.value)
     .slice(0, 10);
 
-  // 트리맵 데이터 (수익률 기준)
+  // 트리맵 데이터 (매도금액 기준)
   const treemapData = stockData
     .filter(s => s.sellAmount > 0)
     .map(s => ({
       name: s.name,
-      size: s.sellAmount,
+      value: s.sellAmount,
       profit: s.profit,
-      profitRate: s.profitRate,
-    }));
+      isProfit: s.profit >= 0,
+    }))
+    .sort((a, b) => b.value - a.value);
 
   // 확대 모달
   const ChartModal = ({ onClose, children, title }: { onClose: () => void; children: React.ReactNode; title: string }) => (
@@ -860,29 +887,76 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
     </ResponsiveContainer>
   );
 
-  const renderTreemap = (height: number) => (
-    <ResponsiveContainer width="100%" height={height}>
-      <Treemap
-        data={treemapData}
-        dataKey="size"
-        stroke="#1F2937"
-        content={<TreemapContent />}
+  const renderTreemap = (height: number, isExpanded: boolean = false) => {
+    const chartWidth = isExpanded ? 600 : 400;
+    const chartHeight = isExpanded ? 400 : height;
+    const rects = calculateTreemapLayout(treemapData, chartWidth, chartHeight);
+
+    // 금액 포맷
+    const formatProfit = (val: number) => {
+      const absVal = Math.abs(val);
+      if (absVal >= 10000) return `${(val / 10000).toFixed(1)}만`;
+      return val.toLocaleString();
+    };
+
+    return (
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        preserveAspectRatio="xMidYMid meet"
       >
-        <Tooltip
-          contentStyle={{
-            backgroundColor: '#1F2937',
-            border: '1px solid #374151',
-            borderRadius: '8px',
-          }}
-          formatter={(_value, _name, props: any) => [
-            `${props.payload.profit >= 0 ? '+' : ''}${props.payload.profit.toLocaleString()}원`,
-            '실현손익'
-          ]}
-          labelFormatter={(label) => label}
-        />
-      </Treemap>
-    </ResponsiveContainer>
-  );
+        {rects.map((rect, i) => {
+          const color = rect.data.isProfit ? '#10B981' : '#EF4444';
+          const minDimension = Math.min(rect.width, rect.height);
+          const showName = minDimension > 35;
+          const showValue = minDimension > 50;
+          const fontSize = Math.min(Math.max(rect.width / 10, 8), isExpanded ? 14 : 11);
+          const displayName = rect.data.name.length > 8 ? rect.data.name.slice(0, 7) + '..' : rect.data.name;
+
+          return (
+            <g key={i}>
+              <rect
+                x={rect.x}
+                y={rect.y}
+                width={rect.width}
+                height={rect.height}
+                fill={color}
+                stroke="#1F2937"
+                strokeWidth="2"
+                opacity={0.9}
+              />
+              {showName && (
+                <text
+                  x={rect.x + rect.width / 2}
+                  y={rect.y + rect.height / 2 - (showValue ? fontSize * 0.6 : 0)}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill="#fff"
+                  fontSize={fontSize}
+                  fontWeight="bold"
+                >
+                  {displayName}
+                </text>
+              )}
+              {showValue && (
+                <text
+                  x={rect.x + rect.width / 2}
+                  y={rect.y + rect.height / 2 + fontSize * 0.7}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill="rgba(255,255,255,0.9)"
+                  fontSize={fontSize * 0.85}
+                >
+                  {rect.data.isProfit ? '+' : ''}{formatProfit(rect.data.profit)}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -904,7 +978,7 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
       {expandedChart === 'treemap' && (
         <ChartModal onClose={() => setExpandedChart(null)} title="종목별 수익률 트리맵">
           <div className="h-[400px]">
-            {renderTreemap(400)}
+            {renderTreemap(400, true)}
           </div>
           <p className="text-xs text-gray-500 mt-2">* 박스 크기: 매도금액, 색상: 초록=수익/빨강=손실</p>
         </ChartModal>
