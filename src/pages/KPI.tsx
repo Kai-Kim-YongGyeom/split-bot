@@ -718,7 +718,7 @@ function TreemapZoomModal({
   renderTreemap,
 }: {
   onClose: () => void;
-  renderTreemap: (height: number, isExpanded: boolean) => React.ReactNode;
+  renderTreemap: (height: number, isExpanded: boolean, zoomScale: number) => React.ReactNode;
 }) {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -811,7 +811,7 @@ function TreemapZoomModal({
                 transition: initialDistanceRef.current > 0 ? 'none' : 'transform 0.1s ease-out',
               }}
             >
-              {renderTreemap(400, true)}
+              {renderTreemap(400, true, scale)}
             </div>
           </div>
           <div className="flex justify-between items-center mt-2">
@@ -1003,7 +1003,7 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
   const PROFIT_COLORS = ['#10B981', '#059669', '#047857', '#065F46', '#064E3B', '#22C55E', '#16A34A', '#15803D'];
   const LOSS_COLORS = ['#EF4444', '#DC2626', '#B91C1C', '#991B1B', '#7F1D1D', '#F87171', '#F43F5E', '#E11D48'];
 
-  const renderTreemap = (height: number, isExpanded: boolean = false) => {
+  const renderTreemap = (height: number, isExpanded: boolean = false, zoomScale: number = 1) => {
     const chartWidth = isExpanded ? 600 : 400;
     const chartHeight = isExpanded ? 400 : height;
     const rects = calculateTreemapLayout(treemapData, chartWidth, chartHeight);
@@ -1027,8 +1027,10 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
           const colorIndex = i % 8;
           const color = rect.data.isProfit ? PROFIT_COLORS[colorIndex] : LOSS_COLORS[colorIndex];
           const minDimension = Math.min(rect.width, rect.height);
-          const showName = minDimension > 35;
-          const showValue = minDimension > 50;
+          // 확대 비율에 따라 라벨 표시 조건 조정
+          const effectiveSize = minDimension * zoomScale;
+          const showName = effectiveSize > 35;
+          const showValue = effectiveSize > 50;
           const fontSize = Math.min(Math.max(rect.width / 10, 8), isExpanded ? 14 : 11);
           const displayName = rect.data.name.length > 8 ? rect.data.name.slice(0, 7) + '..' : rect.data.name;
 
