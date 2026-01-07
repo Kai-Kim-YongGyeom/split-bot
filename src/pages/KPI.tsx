@@ -1029,10 +1029,18 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
           const minDimension = Math.min(rect.width, rect.height);
           // 확대 비율에 따라 라벨 표시 조건 조정
           const effectiveSize = minDimension * zoomScale;
-          const showName = effectiveSize > 35;
-          const showValue = effectiveSize > 50;
-          const fontSize = Math.min(Math.max(rect.width / 10, 8), isExpanded ? 14 : 11);
-          const displayName = rect.data.name.length > 8 ? rect.data.name.slice(0, 7) + '..' : rect.data.name;
+          const showName = effectiveSize > 25;
+          const showValue = effectiveSize > 40;
+
+          // 확대 시 글자 크기 자동 조절 (확대하면 상대적으로 작아짐)
+          const baseFontSize = Math.min(Math.max(minDimension / 4, 6), 14);
+          const fontSize = baseFontSize / zoomScale;
+
+          // 박스 크기에 맞게 종목명 길이 조절
+          const maxChars = Math.floor((rect.width / fontSize) * 1.5);
+          const displayName = rect.data.name.length > maxChars
+            ? rect.data.name.slice(0, maxChars - 1) + '..'
+            : rect.data.name;
 
           return (
             <g key={i}>
@@ -1043,12 +1051,12 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
                 height={rect.height}
                 fill={color}
                 stroke="#1F2937"
-                strokeWidth="2"
+                strokeWidth={2 / zoomScale}
               />
               {showName && (
                 <text
                   x={rect.x + rect.width / 2}
-                  y={rect.y + rect.height / 2 - (showValue ? fontSize * 0.6 : 0)}
+                  y={rect.y + rect.height / 2 - (showValue ? fontSize * 0.7 : 0)}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill="#fff"
@@ -1061,11 +1069,11 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
               {showValue && (
                 <text
                   x={rect.x + rect.width / 2}
-                  y={rect.y + rect.height / 2 + fontSize * 0.7}
+                  y={rect.y + rect.height / 2 + fontSize * 0.8}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fill="rgba(255,255,255,0.9)"
-                  fontSize={fontSize * 0.85}
+                  fontSize={fontSize * 0.9}
                 >
                   {rect.data.isProfit ? '+' : ''}{formatProfit(rect.data.profit)}
                 </text>
