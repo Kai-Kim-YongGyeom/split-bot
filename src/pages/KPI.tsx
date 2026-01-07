@@ -723,7 +723,8 @@ function TreemapZoomModal({
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
-  const lastTouchRef = useRef<{ distance: number; center: { x: number; y: number } } | null>(null);
+  const initialDistanceRef = useRef<number>(0);
+  const initialScaleRef = useRef<number>(1);
   const lastPanRef = useRef<{ x: number; y: number } | null>(null);
 
   const getDistance = (touches: React.TouchList) => {
@@ -732,36 +733,23 @@ function TreemapZoomModal({
     return Math.sqrt(dx * dx + dy * dy);
   };
 
-  const getCenter = (touches: React.TouchList) => ({
-    x: (touches[0].clientX + touches[1].clientX) / 2,
-    y: (touches[0].clientY + touches[1].clientY) / 2,
-  });
-
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      e.preventDefault();
-      lastTouchRef.current = {
-        distance: getDistance(e.touches),
-        center: getCenter(e.touches),
-      };
+      initialDistanceRef.current = getDistance(e.touches);
+      initialScaleRef.current = scale;
       lastPanRef.current = null;
     } else if (e.touches.length === 1 && scale > 1) {
       lastPanRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-      lastTouchRef.current = null;
     }
   }, [scale]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    if (e.touches.length === 2 && lastTouchRef.current) {
+    if (e.touches.length === 2 && initialDistanceRef.current > 0) {
       e.preventDefault();
-      const newDistance = getDistance(e.touches);
-      const scaleChange = newDistance / lastTouchRef.current.distance;
-      const newScale = Math.min(Math.max(scale * scaleChange, 1), 4);
+      const currentDistance = getDistance(e.touches);
+      const scaleRatio = currentDistance / initialDistanceRef.current;
+      const newScale = Math.min(Math.max(initialScaleRef.current * scaleRatio, 1), 4);
       setScale(newScale);
-      lastTouchRef.current = {
-        distance: newDistance,
-        center: getCenter(e.touches),
-      };
     } else if (e.touches.length === 1 && lastPanRef.current && scale > 1) {
       const dx = e.touches[0].clientX - lastPanRef.current.x;
       const dy = e.touches[0].clientY - lastPanRef.current.y;
@@ -775,7 +763,7 @@ function TreemapZoomModal({
   }, [scale]);
 
   const handleTouchEnd = useCallback(() => {
-    lastTouchRef.current = null;
+    initialDistanceRef.current = 0;
     lastPanRef.current = null;
   }, []);
 
@@ -820,7 +808,7 @@ function TreemapZoomModal({
               style={{
                 transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
                 transformOrigin: 'center center',
-                transition: lastTouchRef.current ? 'none' : 'transform 0.1s ease-out',
+                transition: initialDistanceRef.current > 0 ? 'none' : 'transform 0.1s ease-out',
               }}
             >
               {renderTreemap(400, true)}
