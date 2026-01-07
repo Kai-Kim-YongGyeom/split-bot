@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Calendar, TrendingUp, TrendingDown, DollarSign, BarChart3, Search } from 'lucide-react';
 import {
   LineChart,
@@ -712,6 +712,130 @@ const calculateTreemapLayout = (
   return rects;
 };
 
+// 핀치 줌 지원 트리맵 모달
+function TreemapZoomModal({
+  onClose,
+  renderTreemap,
+}: {
+  onClose: () => void;
+  renderTreemap: (height: number, isExpanded: boolean) => React.ReactNode;
+}) {
+  const [scale, setScale] = useState(1);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const lastTouchRef = useRef<{ distance: number; center: { x: number; y: number } } | null>(null);
+  const lastPanRef = useRef<{ x: number; y: number } | null>(null);
+
+  const getDistance = (touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const getCenter = (touches: React.TouchList) => ({
+    x: (touches[0].clientX + touches[1].clientX) / 2,
+    y: (touches[0].clientY + touches[1].clientY) / 2,
+  });
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      lastTouchRef.current = {
+        distance: getDistance(e.touches),
+        center: getCenter(e.touches),
+      };
+      lastPanRef.current = null;
+    } else if (e.touches.length === 1 && scale > 1) {
+      lastPanRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      lastTouchRef.current = null;
+    }
+  }, [scale]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchRef.current) {
+      e.preventDefault();
+      const newDistance = getDistance(e.touches);
+      const scaleChange = newDistance / lastTouchRef.current.distance;
+      const newScale = Math.min(Math.max(scale * scaleChange, 1), 4);
+      setScale(newScale);
+      lastTouchRef.current = {
+        distance: newDistance,
+        center: getCenter(e.touches),
+      };
+    } else if (e.touches.length === 1 && lastPanRef.current && scale > 1) {
+      const dx = e.touches[0].clientX - lastPanRef.current.x;
+      const dy = e.touches[0].clientY - lastPanRef.current.y;
+      const maxOffset = (scale - 1) * 150;
+      setPosition(prev => ({
+        x: Math.min(Math.max(prev.x + dx, -maxOffset), maxOffset),
+        y: Math.min(Math.max(prev.y + dy, -maxOffset), maxOffset),
+      }));
+      lastPanRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+  }, [scale]);
+
+  const handleTouchEnd = useCallback(() => {
+    lastTouchRef.current = null;
+    lastPanRef.current = null;
+  }, []);
+
+  const resetZoom = () => {
+    setScale(1);
+    setPosition({ x: 0, y: 0 });
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-gray-800 rounded-lg border border-gray-700 w-full max-w-4xl max-h-[90vh] overflow-hidden"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center p-4 border-b border-gray-700">
+          <h3 className="text-lg font-bold">종목별 수익률 트리맵</h3>
+          <div className="flex items-center gap-2">
+            {scale > 1 && (
+              <button
+                onClick={resetZoom}
+                className="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded"
+              >
+                초기화
+              </button>
+            )}
+            <span className="text-xs text-gray-400">{Math.round(scale * 100)}%</span>
+            <button onClick={onClose} className="text-gray-400 hover:text-white text-2xl">&times;</button>
+          </div>
+        </div>
+        <div className="p-4">
+          <div
+            ref={containerRef}
+            className="h-[400px] overflow-hidden touch-none"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div
+              style={{
+                transform: `scale(${scale}) translate(${position.x / scale}px, ${position.y / scale}px)`,
+                transformOrigin: 'center center',
+                transition: lastTouchRef.current ? 'none' : 'transform 0.1s ease-out',
+              }}
+            >
+              {renderTreemap(400, true)}
+            </div>
+          </div>
+          <div className="flex justify-between items-center mt-2">
+            <p className="text-xs text-gray-500">* 박스 크기: 매도금액, 색상: 초록=수익/빨강=손실</p>
+            <p className="text-xs text-gray-400">두 손가락으로 확대/축소</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CumulativeChart({ data }: { data: CumulativeKPI }) {
   const {
     stockData, totalBuyCount, totalBuyAmount, totalSellCount, totalSellAmount,
@@ -887,6 +1011,10 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
     </ResponsiveContainer>
   );
 
+  // 종목별 색상 (수익은 녹색 계열, 손실은 빨강 계열로 그라데이션)
+  const PROFIT_COLORS = ['#10B981', '#059669', '#047857', '#065F46', '#064E3B', '#22C55E', '#16A34A', '#15803D'];
+  const LOSS_COLORS = ['#EF4444', '#DC2626', '#B91C1C', '#991B1B', '#7F1D1D', '#F87171', '#F43F5E', '#E11D48'];
+
   const renderTreemap = (height: number, isExpanded: boolean = false) => {
     const chartWidth = isExpanded ? 600 : 400;
     const chartHeight = isExpanded ? 400 : height;
@@ -907,7 +1035,9 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
         preserveAspectRatio="xMidYMid meet"
       >
         {rects.map((rect, i) => {
-          const color = rect.data.isProfit ? '#10B981' : '#EF4444';
+          // 종목별로 다른 색상 (수익/손실 계열 내에서 변화)
+          const colorIndex = i % 8;
+          const color = rect.data.isProfit ? PROFIT_COLORS[colorIndex] : LOSS_COLORS[colorIndex];
           const minDimension = Math.min(rect.width, rect.height);
           const showName = minDimension > 35;
           const showValue = minDimension > 50;
@@ -924,7 +1054,6 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
                 fill={color}
                 stroke="#1F2937"
                 strokeWidth="2"
-                opacity={0.9}
               />
               {showName && (
                 <text
@@ -976,12 +1105,10 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
         </ChartModal>
       )}
       {expandedChart === 'treemap' && (
-        <ChartModal onClose={() => setExpandedChart(null)} title="종목별 수익률 트리맵">
-          <div className="h-[400px]">
-            {renderTreemap(400, true)}
-          </div>
-          <p className="text-xs text-gray-500 mt-2">* 박스 크기: 매도금액, 색상: 초록=수익/빨강=손실</p>
-        </ChartModal>
+        <TreemapZoomModal
+          onClose={() => setExpandedChart(null)}
+          renderTreemap={renderTreemap}
+        />
       )}
 
       {/* KPI 요약 카드 - 3x2 그리드 (모바일 2x3) */}
