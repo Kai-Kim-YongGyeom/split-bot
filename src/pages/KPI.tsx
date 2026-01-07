@@ -865,7 +865,6 @@ function CumulativeChart({ data }: { data: CumulativeKPI }) {
       <Treemap
         data={treemapData}
         dataKey="size"
-        aspectRatio={3}
         stroke="#1F2937"
         content={<TreemapContent />}
       >

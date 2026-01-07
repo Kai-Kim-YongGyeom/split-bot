@@ -17,7 +17,9 @@
       "Bash(git commit:*)",
       "WebFetch(domain:apiportal.koreainvestment.com)",
       "WebFetch(domain:finance.naver.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(dir:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
