@@ -127,13 +127,13 @@ export function Dashboard() {
     ? (totalRealizedProfit / totalSoldCost) * 100
     : 0;
 
-  // 총 자산 계산 (KIS 기준: 현금 + KIS평가금액)
+  // 총 자산 계산 (KIS 기준: 주문가능 + KIS평가금액)
   const kisTotalAsset = kisAccountInfo
-    ? (availableCash || 0) + kisAccountInfo.totalEvalAmt
-    : (availableCash || 0) + totalEvaluation;
+    ? (availableAmount || 0) + kisAccountInfo.totalEvalAmt
+    : (availableAmount || 0) + totalEvaluation;
 
   // BOT 총자산 (참고용)
-  const botTotalAsset = (availableCash || 0) + totalEvaluation;
+  const botTotalAsset = (availableAmount || 0) + totalEvaluation;
 
   // 투자 수익률 계산 (KIS총자산 기준, 순입금액 대비)
   const netDeposit = depositSummary.netDeposit;
@@ -231,9 +231,9 @@ export function Dashboard() {
               </p>
             </div>
             <div className="text-right md:hidden">
-              <p className="text-gray-400 text-xs">현금 + 평가금액</p>
+              <p className="text-gray-400 text-xs">주문가능 + 평가금액</p>
               <p className="text-gray-300 text-sm">
-                {availableCash !== null ? availableCash.toLocaleString() : '-'} + {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
+                {availableAmount !== null ? availableAmount.toLocaleString() : '-'} + {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
               </p>
             </div>
           </div>
@@ -259,15 +259,45 @@ export function Dashboard() {
           )}
 
           <div className="hidden md:block text-right">
-            <p className="text-gray-400 text-xs">현금 + 평가금액</p>
+            <p className="text-gray-400 text-xs">주문가능 + 평가금액</p>
             <p className="text-gray-300 text-sm">
-              {availableCash !== null ? availableCash.toLocaleString() : '-'} + {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
+              {availableAmount !== null ? availableAmount.toLocaleString() : '-'} + {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Row 1: 주문가능, 현금, D+2 */}
+      {/* Row 1: 투입원금, 투자금, 평가금액 */}
+      <div className="grid grid-cols-3 gap-2 md:gap-3">
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            투입원금
+          </p>
+          <p className="text-base md:text-lg font-bold text-green-400 truncate">
+            {netDeposit > 0 ? netDeposit.toLocaleString() : '-'}
+          </p>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            투자금
+            <span className="px-1 py-0.5 bg-cyan-900/50 text-cyan-400 text-[10px] rounded">KIS</span>
+          </p>
+          <p className="text-base md:text-lg font-bold text-purple-400 truncate">
+            {kisAccountInfo?.totalBuyAmt.toLocaleString() || totalHolding.toLocaleString()}
+          </p>
+        </div>
+        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
+          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
+            평가금액
+            <span className="px-1 py-0.5 bg-cyan-900/50 text-cyan-400 text-[10px] rounded">KIS</span>
+          </p>
+          <p className="text-base md:text-lg font-bold text-blue-400 truncate">
+            {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
+          </p>
+        </div>
+      </div>
+
+      {/* Row 2: 주문가능, 현금, D+2 */}
       <div className="grid grid-cols-3 gap-2 md:gap-3">
         <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
           <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
@@ -294,26 +324,6 @@ export function Dashboard() {
           </p>
           <p className="text-base md:text-lg font-bold truncate">
             {d2Deposit !== null ? `${d2Deposit.toLocaleString()}` : '-'}
-          </p>
-        </div>
-      </div>
-
-      {/* Row 2: 투자금, 평가금액 */}
-      <div className="grid grid-cols-2 gap-2 md:gap-3">
-        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
-            투자금
-            <span className="px-1 py-0.5 bg-purple-900/50 text-purple-400 text-[10px] rounded">BOT</span>
-          </p>
-          <p className="text-base md:text-lg font-bold text-purple-400 truncate">{totalHolding.toLocaleString()}</p>
-        </div>
-        <div className="bg-gray-800 rounded-lg p-3 md:p-4 border border-gray-700">
-          <p className="text-gray-400 text-xs md:text-sm flex items-center gap-1">
-            평가금액
-            <span className="px-1 py-0.5 bg-cyan-900/50 text-cyan-400 text-[10px] rounded">KIS</span>
-          </p>
-          <p className="text-base md:text-lg font-bold text-blue-400 truncate">
-            {kisAccountInfo?.totalEvalAmt.toLocaleString() || totalEvaluation.toLocaleString()}
           </p>
         </div>
       </div>
