@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink, Copy, Check, AlertTriangle, Info, Terminal, Globe, Database, Bot, Key, Server, Smartphone } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Copy, Check, AlertTriangle, Info, Terminal, Globe, Database, Key, Server, Smartphone } from 'lucide-react';
 
 interface SectionProps {
   title: string;
@@ -87,17 +87,6 @@ function Step({ number, title, children }: { number: number; title: string; chil
       <div className="ml-11 text-gray-300">
         {children}
       </div>
-    </div>
-  );
-}
-
-function ImagePlaceholder({ alt, src }: { alt: string; src?: string }) {
-  if (src) {
-    return <img src={src} alt={alt} className="rounded-lg border border-gray-700 my-3 max-w-full" />;
-  }
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg p-8 my-3 text-center text-gray-500">
-      [스크린샷: {alt}]
     </div>
   );
 }
