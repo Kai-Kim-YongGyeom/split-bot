@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Stocks } from './pages/Stocks';
@@ -9,20 +9,22 @@ import { KPI } from './pages/KPI';
 import { Deposits } from './pages/Deposits';
 import { Orders } from './pages/Orders';
 import { Settings } from './pages/Settings';
+import { Guide } from './pages/Guide';
 import { AuthModal } from './components/AuthModal';
 import { useAuth } from './hooks/useAuth';
 import { BotStatusProvider } from './contexts/BotStatusContext';
 import { ToastProvider } from './components/Toast';
 import { Loader2 } from 'lucide-react';
 
-function App() {
+// 인증이 필요한 라우트를 처리하는 내부 컴포넌트
+function AuthenticatedRoutes() {
   const { user, loading, signIn, signUp } = useAuth();
+  const location = useLocation();
 
   // 세로모드 고정 시도
   useEffect(() => {
     const lockOrientation = async () => {
       try {
-        // Screen Orientation API로 세로모드 잠금 시도
         const orientation = screen.orientation as ScreenOrientation & { lock?: (orientation: string) => Promise<void> };
         if (orientation?.lock) {
           await orientation.lock('portrait');
@@ -33,6 +35,11 @@ function App() {
     };
     lockOrientation();
   }, []);
+
+  // /guide 경로는 로그인 없이 접근 가능
+  if (location.pathname === '/guide') {
+    return <Guide />;
+  }
 
   // 로딩 중
   if (loading) {
@@ -52,22 +59,28 @@ function App() {
   return (
     <ToastProvider>
       <BotStatusProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="stocks" element={<Stocks />} />
-              <Route path="recommend" element={<StockRecommend />} />
-              <Route path="split-status" element={<SplitStatus />} />
-              <Route path="kpi" element={<KPI />} />
-              <Route path="deposits" element={<Deposits />} />
-              <Route path="orders" element={<Orders />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-          </Routes>
-        </BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Dashboard />} />
+            <Route path="stocks" element={<Stocks />} />
+            <Route path="recommend" element={<StockRecommend />} />
+            <Route path="split-status" element={<SplitStatus />} />
+            <Route path="kpi" element={<KPI />} />
+            <Route path="deposits" element={<Deposits />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+        </Routes>
       </BotStatusProvider>
     </ToastProvider>
+  );
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AuthenticatedRoutes />
+    </BrowserRouter>
   );
 }
 
