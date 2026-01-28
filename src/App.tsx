@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Stocks } from './pages/Stocks';
@@ -16,10 +16,9 @@ import { BotStatusProvider } from './contexts/BotStatusContext';
 import { ToastProvider } from './components/Toast';
 import { Loader2 } from 'lucide-react';
 
-// 인증이 필요한 라우트를 처리하는 내부 컴포넌트
-function AuthenticatedRoutes() {
+// 인증이 필요한 라우트를 처리하는 컴포넌트
+function ProtectedRoutes() {
   const { user, loading, signIn, signUp } = useAuth();
-  const location = useLocation();
 
   // 세로모드 고정 시도
   useEffect(() => {
@@ -35,11 +34,6 @@ function AuthenticatedRoutes() {
     };
     lockOrientation();
   }, []);
-
-  // /guide 경로는 로그인 없이 접근 가능
-  if (location.pathname === '/guide') {
-    return <Guide />;
-  }
 
   // 로딩 중
   if (loading) {
@@ -79,7 +73,12 @@ function AuthenticatedRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <AuthenticatedRoutes />
+      <Routes>
+        {/* 공개 페이지 - 로그인 불필요 */}
+        <Route path="/guide" element={<Guide />} />
+        {/* 나머지 모든 경로 - 로그인 필요 */}
+        <Route path="/*" element={<ProtectedRoutes />} />
+      </Routes>
     </BrowserRouter>
   );
 }
