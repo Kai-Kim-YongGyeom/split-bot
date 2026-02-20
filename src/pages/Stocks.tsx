@@ -7,6 +7,7 @@ import type { StockNameInfo } from '../lib/api';
 import { getTodayKST, formatDate } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
 import { useBotStatus } from '../contexts/BotStatusContext';
+import { AlgoStocksContent } from './AlgoStocks';
 
 // 최소 주문가능금액
 const MIN_AVAILABLE_AMOUNT = 30000;
@@ -2199,7 +2200,7 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 type HoldingFilter = 'all' | 'holding' | 'empty';
 type SortOption = 'created_desc' | 'created_asc' | 'name_asc' | 'name_desc' | 'profit_desc' | 'profit_asc' | 'rounds_desc' | 'rounds_asc';
 
-export function Stocks() {
+function SplitStocksContent() {
   const { stocks, loading, error, addStock, updateStock, removeStock, toggleActive, refetch } = useStocks();
   const [showModal, setShowModal] = useState(false);
   const [editingStock, setEditingStock] = useState<StockWithPurchases | undefined>();
@@ -2634,6 +2635,44 @@ export function Stocks() {
         selectedIds={Array.from(selectedStocks)}
         onSuccess={handleBulkEditSuccess}
       />
+    </div>
+  );
+}
+
+// ==================== 종목 관리 탭 래퍼 ====================
+
+type StocksTabType = 'split' | 'algo';
+
+export function Stocks() {
+  const [activeTab, setActiveTab] = useState<StocksTabType>('split');
+
+  return (
+    <div className="space-y-4 md:space-y-6">
+      {/* 전략 선택 탭 */}
+      <div className="flex border-b border-gray-700">
+        <button
+          onClick={() => setActiveTab('split')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'split'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          세븐스플릿
+        </button>
+        <button
+          onClick={() => setActiveTab('algo')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'algo'
+              ? 'border-blue-500 text-blue-400'
+              : 'border-transparent text-gray-400 hover:text-gray-300'
+          }`}
+        >
+          알고리즘
+        </button>
+      </div>
+
+      {activeTab === 'split' ? <SplitStocksContent /> : <AlgoStocksContent />}
     </div>
   );
 }

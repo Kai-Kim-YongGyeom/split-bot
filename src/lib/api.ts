@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm, DepositHistory, DepositFormData, DepositSummary, CompareRequest, CompareResult } from '../types';
+import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm, DepositHistory, DepositFormData, DepositSummary, CompareRequest, CompareResult, AlgoStock, AlgoPosition, AlgoSignal, AlgoStockFormData, AlgoStockWithPositions, AlgoBuyRequest, AlgoSellRequest } from '../types';
 import { encrypt, decrypt } from '../utils/crypto';
 
 // ==================== 유저 ID 헬퍼 ====================
@@ -1360,4 +1360,206 @@ export async function getYearlySnapshots(): Promise<DailySnapshot[]> {
   }
 
   return Array.from(yearlyMap.values());
+}
+
+// ==================== 알고리즘 종목 (algo_stocks) ====================
+
+export async function getAlgoStocks(): Promise<AlgoStock[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from('algo_stocks')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching algo stocks:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function createAlgoStock(stock: AlgoStockFormData): Promise<AlgoStock | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('algo_stocks')
+    .insert([{ ...stock, is_active: true, user_id: userId }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating algo stock:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function updateAlgoStock(id: string, updates: Partial<AlgoStock>): Promise<boolean> {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+
+  const { error } = await supabase
+    .from('algo_stocks')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error updating algo stock:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteAlgoStock(id: string): Promise<boolean> {
+  const userId = await getCurrentUserId();
+  if (!userId) return false;
+
+  const { error } = await supabase
+    .from('algo_stocks')
+    .delete()
+    .eq('id', id)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('Error deleting algo stock:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function getAllAlgoStocksWithPositions(): Promise<AlgoStockWithPositions[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  const [stocksResult, positionsResult] = await Promise.all([
+    supabase
+      .from('algo_stocks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('algo_positions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false }),
+  ]);
+
+  if (stocksResult.error || positionsResult.error) {
+    console.error('Error fetching algo stocks with positions:', stocksResult.error || positionsResult.error);
+    return [];
+  }
+
+  const stocks = stocksResult.data || [];
+  const allPositions = positionsResult.data || [];
+
+  const positionsByStockId = new Map<string, AlgoPosition[]>();
+  for (const position of allPositions) {
+    const stockId = position.stock_id;
+    if (!positionsByStockId.has(stockId)) {
+      positionsByStockId.set(stockId, []);
+    }
+    positionsByStockId.get(stockId)!.push(position);
+  }
+
+  return stocks.map((stock: AlgoStock) => ({
+    ...stock,
+    positions: positionsByStockId.get(stock.id) || [],
+  }));
+}
+
+// ==================== 알고리즘 시그널 (algo_signals) ====================
+
+export async function getAlgoSignals(stockId?: string, limit: number = 50): Promise<AlgoSignal[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
+  let query = supabase
+    .from('algo_signals')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (stockId) {
+    query = query.eq('stock_id', stockId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error fetching algo signals:', error);
+    return [];
+  }
+  return data || [];
+}
+
+// ==================== 알고리즘 매수/매도 요청 ====================
+
+export async function createAlgoBuyRequest(
+  stockId: string,
+  stockCode: string,
+  stockName: string,
+  buyAmount?: number,
+  quantity?: number
+): Promise<AlgoBuyRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('algo_buy_requests')
+    .insert([{
+      stock_id: stockId,
+      stock_code: stockCode,
+      stock_name: stockName,
+      buy_amount: buyAmount || null,
+      quantity: quantity || null,
+      price: 0,
+      order_type: 'market',
+      status: 'pending',
+      user_id: userId,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating algo buy request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function createAlgoSellRequest(
+  stockId: string,
+  stockCode: string,
+  stockName: string,
+  positionId: string,
+  quantity: number
+): Promise<AlgoSellRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('algo_sell_requests')
+    .insert([{
+      stock_id: stockId,
+      stock_code: stockCode,
+      stock_name: stockName,
+      position_id: positionId,
+      quantity,
+      status: 'pending',
+      user_id: userId,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating algo sell request:', error);
+    return null;
+  }
+  return data;
 }

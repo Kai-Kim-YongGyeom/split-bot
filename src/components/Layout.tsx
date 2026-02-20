@@ -9,6 +9,7 @@ const navItems = [
   { path: '/stocks', label: '종목 관리', emoji: '📋' },
   { path: '/recommend', label: '종목 추천', emoji: '🔍' },
   { path: '/split-status', label: 'Split 현황', emoji: '📉' },
+  { path: '/algo-status', label: 'Algo 현황', emoji: '🤖' },
   { path: '/kpi', label: 'KPI', emoji: '📈' },
   { path: '/deposits', label: '입출금', emoji: '💰' },
   { path: '/orders', label: '주문내역', emoji: '🛒' },

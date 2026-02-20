@@ -355,3 +355,124 @@ export interface CompareResult {
   quantity_diff: number;
   status: 'match' | 'kis_only' | 'bot_only' | 'mismatch';
 }
+
+// ==================== 알고리즘 트레이딩 관련 타입 ====================
+
+// 알고리즘 종목 설정
+export interface AlgoStock {
+  id: string;
+  code: string;
+  name: string;
+  is_active: boolean;
+  // 매수 설정
+  buy_amount: number;
+  max_positions: number;
+  // 모멘텀 파라미터
+  ma_period: number;
+  breakout_period: number;
+  volume_ratio: number;
+  // ATR 트레일링스탑 파라미터
+  atr_period: number;
+  atr_multiplier: number;
+  stop_loss_atr_multiplier: number;
+  // 현재가 정보 (봇이 업데이트)
+  current_price?: number;
+  price_change?: number;
+  price_updated_at?: string;
+  // 기술 지표 (봇이 업데이트)
+  current_ma?: number;
+  current_atr?: number;
+  current_highest_n?: number;
+  indicator_updated_at?: string;
+  //
+  created_at: string;
+  updated_at: string;
+}
+
+// 알고리즘 포지션
+export type AlgoPositionStatus = 'active' | 'closed';
+export type AlgoExitReason = 'trailing_stop' | 'stop_loss' | 'manual';
+
+export interface AlgoPosition {
+  id: string;
+  stock_id: string;
+  entry_price: number;
+  quantity: number;
+  entry_date: string;
+  highest_price: number;
+  trailing_stop_price: number;
+  stop_loss_price: number;
+  status: AlgoPositionStatus;
+  exit_price?: number;
+  exit_date?: string;
+  exit_reason?: AlgoExitReason;
+  profit_loss?: number;
+  profit_loss_rate?: number;
+  created_at: string;
+}
+
+// 알고리즘 시그널
+export interface AlgoSignal {
+  id: string;
+  stock_id: string;
+  signal_type: 'buy' | 'sell';
+  price: number;
+  ma_value?: number;
+  atr_value?: number;
+  highest_n_value?: number;
+  volume_ratio_value?: number;
+  trailing_stop_value?: number;
+  executed: boolean;
+  result_message?: string;
+  position_id?: string;
+  created_at: string;
+}
+
+// 알고리즘 종목 + 포지션 통합
+export interface AlgoStockWithPositions extends AlgoStock {
+  positions: AlgoPosition[];
+}
+
+// 알고리즘 종목 폼 입력용
+export interface AlgoStockFormData {
+  code: string;
+  name: string;
+  buy_amount: number;
+  max_positions: number;
+  ma_period: number;
+  breakout_period: number;
+  volume_ratio: number;
+  atr_period: number;
+  atr_multiplier: number;
+  stop_loss_atr_multiplier: number;
+}
+
+// 알고리즘 매수 요청
+export interface AlgoBuyRequest {
+  id: string;
+  stock_id: string;
+  stock_code: string;
+  stock_name: string;
+  buy_amount: number | null;
+  quantity: number | null;
+  price: number;
+  order_type: 'market' | 'limit';
+  status: 'pending' | 'executed' | 'failed' | 'cancelled';
+  result_message: string | null;
+  created_at: string;
+  executed_at: string | null;
+}
+
+// 알고리즘 매도 요청
+export interface AlgoSellRequest {
+  id: string;
+  stock_id: string;
+  stock_code: string;
+  stock_name: string;
+  position_id: string;
+  quantity: number;
+  status: 'pending' | 'executed' | 'failed' | 'cancelled';
+  result_message: string | null;
+  created_at: string;
+  executed_at: string | null;
+}

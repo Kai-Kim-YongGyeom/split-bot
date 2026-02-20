@@ -5,6 +5,7 @@ import { Dashboard } from './pages/Dashboard';
 import { Stocks } from './pages/Stocks';
 import { StockRecommend } from './pages/StockRecommend';
 import { SplitStatus } from './pages/SplitStatus';
+import { AlgoStatus } from './pages/AlgoStatus';
 import { KPI } from './pages/KPI';
 import { Deposits } from './pages/Deposits';
 import { Orders } from './pages/Orders';
@@ -59,6 +60,7 @@ function ProtectedRoutes() {
             <Route path="stocks" element={<Stocks />} />
             <Route path="recommend" element={<StockRecommend />} />
             <Route path="split-status" element={<SplitStatus />} />
+            <Route path="algo-status" element={<AlgoStatus />} />
             <Route path="kpi" element={<KPI />} />
             <Route path="deposits" element={<Deposits />} />
             <Route path="orders" element={<Orders />} />
