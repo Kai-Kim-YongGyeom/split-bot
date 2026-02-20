@@ -2202,6 +2202,7 @@ type SortOption = 'created_desc' | 'created_asc' | 'name_asc' | 'name_desc' | 'p
 
 function SplitStocksContent() {
   const { stocks, loading, error, addStock, updateStock, removeStock, toggleActive, refetch } = useStocks();
+  const { showToast } = useToast();
   const [showModal, setShowModal] = useState(false);
   const [editingStock, setEditingStock] = useState<StockWithPurchases | undefined>();
   const [purchaseModal, setPurchaseModal] = useState<{ stockId: string; stockName: string } | null>(null);
@@ -2305,6 +2306,48 @@ function SplitStocksContent() {
   const handleDelete = async (id: string) => {
     if (confirm('이 종목을 삭제하시겠습니까? 모든 매수 기록도 삭제됩니다.')) {
       await removeStock(id);
+    }
+  };
+
+  const handleBulkDeactivate = async () => {
+    if (selectedStocks.size === 0) return;
+    if (!confirm(`선택한 ${selectedStocks.size}개 종목을 비활성화하시겠습니까?`)) return;
+    const ids = Array.from(selectedStocks);
+    const ok = await api.bulkUpdateStocks(ids, { is_active: false });
+    if (ok) {
+      showToast(`${ids.length}개 종목 비활성화 완료`, 'success');
+      refetch();
+      handleDeselectAll();
+    } else {
+      showToast('일괄 비활성화 실패', 'error');
+    }
+  };
+
+  const handleBulkBuy = async () => {
+    if (selectedStocks.size === 0) return;
+    if (!confirm(`선택한 ${selectedStocks.size}개 종목에 매수 요청을 보내시겠습니까?`)) return;
+    const selected = stocks.filter(s => selectedStocks.has(s.id));
+    let success = 0, fail = 0;
+    for (const s of selected) {
+      const r = await api.createBuyRequest(s.id, s.code, s.name);
+      if (r) success++; else fail++;
+    }
+    showToast(`매수 요청: 성공 ${success}건${fail ? `, 실패 ${fail}건` : ''}`, success > 0 ? 'success' : 'error');
+    handleDeselectAll();
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedStocks.size === 0) return;
+    if (!confirm(`선택한 ${selectedStocks.size}개 종목을 삭제하시겠습니까?\n모든 매수 기록도 함께 삭제됩니다.`)) return;
+    const ids = Array.from(selectedStocks);
+    const ok = await api.bulkDeleteStocks(ids);
+    if (ok) {
+      showToast(`${ids.length}개 종목 삭제 완료`, 'success');
+      refetch();
+      setSelectionMode(false);
+      setSelectedStocks(new Set());
+    } else {
+      showToast('일괄 삭제 실패', 'error');
     }
   };
 
@@ -2434,6 +2477,30 @@ function SplitStocksContent() {
               className="px-3 py-1.5 text-xs bg-gray-700 rounded hover:bg-gray-600 transition"
             >
               선택해제
+            </button>
+            <button
+              onClick={handleBulkDeactivate}
+              disabled={selectedStocks.size === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-yellow-600 rounded hover:bg-yellow-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Power className="w-3.5 h-3.5" />
+              일괄비활성화
+            </button>
+            <button
+              onClick={handleBulkBuy}
+              disabled={selectedStocks.size === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 rounded hover:bg-green-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              일괄매수
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              disabled={selectedStocks.size === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-red-600 rounded hover:bg-red-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              일괄삭제
             </button>
             <button
               onClick={() => setShowBulkEditModal(true)}

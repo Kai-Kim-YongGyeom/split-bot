@@ -152,6 +152,23 @@ export async function deleteStock(id: string): Promise<boolean> {
   return true;
 }
 
+// 여러 종목 일괄 삭제
+export async function bulkDeleteStocks(ids: string[]): Promise<boolean> {
+  // 먼저 매수기록 일괄 삭제
+  await supabase.from('bot_purchases').delete().in('stock_id', ids);
+
+  const { error } = await supabase
+    .from('bot_stocks')
+    .delete()
+    .in('id', ids);
+
+  if (error) {
+    console.error('Error bulk deleting stocks:', error);
+    return false;
+  }
+  return true;
+}
+
 // ==================== 매수 기록 (bot_purchases) ====================
 
 export async function getPurchases(stockId: string): Promise<Purchase[]> {
