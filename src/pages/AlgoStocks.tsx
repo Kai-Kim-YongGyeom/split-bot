@@ -453,6 +453,18 @@ function AlgoStockCard({
                 {aboveMA ? 'MA↑' : 'MA↓'}
               </span>
             )}
+            {/* 활성/비활성 토글 */}
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleActive(); }}
+              className={`p-2 rounded transition ${
+                stock.is_active
+                  ? 'text-green-400 hover:bg-green-900/30'
+                  : 'text-gray-500 hover:bg-gray-700'
+              }`}
+              title={stock.is_active ? '비활성화' : '활성화'}
+            >
+              <Power className="w-4 h-4" />
+            </button>
             {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </div>
         </div>
