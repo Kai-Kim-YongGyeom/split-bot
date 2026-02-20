@@ -206,6 +206,128 @@ class TelegramNotifier:
 
         await self.send(message.strip())
 
+    async def send_algo_buy_alert(
+        self,
+        stock_name: str,
+        stock_code: str,
+        price: int,
+        quantity: int,
+        success: bool,
+        order_no: str = "",
+        error_message: str = "",
+        indicators: dict = None,
+    ) -> None:
+        """알고리즘 매수 알림"""
+        status = "완료" if success else "실패"
+        emoji = "🟢" if success else "🔴"
+
+        message = f"""
+{emoji} <b>알고 매수 {status}</b>
+
+종목: {stock_name} ({stock_code})
+전략: 모멘텀 돌파
+가격: {price:,}원
+수량: {quantity}주
+금액: {price * quantity:,}원"""
+
+        if indicators and success:
+            ma = indicators.get("ma", 0)
+            atr = indicators.get("atr", 0)
+            highest_n = indicators.get("highest_n", 0)
+            vol_ratio = indicators.get("volume_ratio", 0)
+            message += f"""
+─ 신호 지표 ─
+MA(20): {ma:,.0f}원
+ATR(14): {atr:,.0f}원
+N일 고가: {highest_n:,}원
+거래량 배율: {vol_ratio:.1f}x"""
+
+        message += f"""
+주문번호: {order_no or '-'}
+시간: {datetime.now().strftime('%H:%M:%S')}"""
+
+        if not success and error_message:
+            message += f"\n실패사유: {error_message}"
+
+        await self.send(message.strip())
+
+    async def send_algo_sell_alert(
+        self,
+        stock_name: str,
+        stock_code: str,
+        entry_price: int,
+        exit_price: int,
+        quantity: int,
+        profit: int,
+        profit_rate: float,
+        exit_reason: str,
+        success: bool,
+    ) -> None:
+        """알고리즘 매도 알림"""
+        reason_labels = {
+            "trailing_stop": "추적 손절",
+            "stop_loss": "손절",
+            "manual": "수동 매도",
+        }
+        reason_text = reason_labels.get(exit_reason, exit_reason)
+
+        if not success:
+            emoji = "🔴"
+            status = "실패"
+        elif exit_reason == "stop_loss":
+            emoji = "🚨"
+            status = "손절"
+        elif exit_reason == "trailing_stop":
+            emoji = "🎯"
+            status = "추적손절"
+        else:
+            emoji = "🎯"
+            status = "매도"
+
+        profit_emoji = "📈" if profit >= 0 else "📉"
+
+        message = f"""
+{emoji} <b>알고 매도 {status}</b>
+
+종목: {stock_name} ({stock_code})
+진입가: {entry_price:,}원
+매도가: {exit_price:,}원
+수량: {quantity}주
+{profit_emoji} 손익: {profit:+,}원 ({profit_rate:+.2f}%)
+청산사유: {reason_text}
+시간: {datetime.now().strftime('%H:%M:%S')}"""
+
+        await self.send(message.strip())
+
+    async def send_algo_analysis_complete(
+        self,
+        total_analyzed: int,
+        strong_count: int,
+        good_count: int,
+        top_stocks: list[dict] = None,
+    ) -> None:
+        """알고리즘 종목 분석 완료 알림"""
+        message = f"""
+📊 <b>알고 종목 분석 완료</b>
+
+분석 종목: {total_analyzed}개
+- 강력 추천: {strong_count}개
+- 추천: {good_count}개
+
+"""
+        if top_stocks:
+            message += "🏆 <b>Top 5 종목</b>\n"
+            for i, stock in enumerate(top_stocks[:5], 1):
+                name = stock.get("stock_name", "")
+                score = stock.get("algo_suitability_score", 0)
+                rec = stock.get("recommendation", "")
+                rec_label = {"strong": "강추", "good": "추천", "neutral": "보통", "weak": "비추"}.get(rec, rec)
+                message += f"{i}. {name} ({score:.0f}점, {rec_label})\n"
+
+        message += f"\n웹에서 상세 결과를 확인하세요.\n시간: {datetime.now().strftime('%H:%M:%S')}"
+
+        await self.send(message.strip())
+
     async def send_stop_loss_alert(
         self,
         stock_name: str,

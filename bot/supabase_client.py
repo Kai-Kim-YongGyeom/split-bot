@@ -8,6 +8,7 @@ import requests
 
 from config import Config
 from split_strategy import StockConfig, Purchase
+from algo_strategy import AlgoStockConfig, AlgoPosition
 
 
 class SupabaseClient:
@@ -1295,6 +1296,417 @@ class SupabaseClient:
         total_withdrawal = sum(r.get("amount", 0) for r in result if r.get("type") == "withdrawal")
 
         return total_deposit - total_withdrawal
+
+
+    # ==================== 알고리즘 종목 (algo_stocks) ====================
+
+    def get_algo_stocks(self) -> list[dict]:
+        """활성 알고리즘 종목 목록 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "algo_stocks",
+            params={
+                "is_active": "eq.true",
+                "select": "*",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_algo_stock_price(self, code: str, price: int, change_rate: float = 0.0) -> bool:
+        """알고 종목 현재가 업데이트"""
+        if not self.is_configured:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "algo_stocks",
+            data={
+                "current_price": price,
+                "price_change": change_rate,
+                "price_updated_at": datetime.now().isoformat(),
+            },
+            params={"code": f"eq.{code}"},
+        )
+
+        if "error" in result:
+            return False
+        if isinstance(result, list) and len(result) == 0:
+            return False
+        return True
+
+    def update_algo_stock_indicators(self, code: str, ma: float, atr: float, highest_n: int, avg_volume: int = 0) -> bool:
+        """알고 종목 기술 지표 업데이트"""
+        if not self.is_configured:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "algo_stocks",
+            data={
+                "current_ma": round(ma, 2),
+                "current_atr": round(atr, 2),
+                "current_highest_n": highest_n,
+                "indicator_updated_at": datetime.now().isoformat(),
+            },
+            params={"code": f"eq.{code}"},
+        )
+
+        return "error" not in result
+
+    def load_all_algo_stocks(self) -> list[AlgoStockConfig]:
+        """모든 활성 알고 종목 + 포지션 로드"""
+        stocks_data = self.get_algo_stocks()
+        result = []
+
+        for s in stocks_data:
+            # 해당 종목의 포지션 조회
+            positions_data = self.get_algo_positions(s["id"])
+            positions = [
+                AlgoPosition(
+                    id=p.get("id"),
+                    stock_id=p.get("stock_id"),
+                    entry_price=p.get("entry_price", 0),
+                    quantity=p.get("quantity", 0),
+                    entry_date=p.get("entry_date", ""),
+                    highest_price=p.get("highest_price", 0),
+                    trailing_stop_price=p.get("trailing_stop_price", 0),
+                    stop_loss_price=p.get("stop_loss_price", 0),
+                    status=p.get("status", "active"),
+                    exit_price=p.get("exit_price"),
+                    exit_date=p.get("exit_date"),
+                    exit_reason=p.get("exit_reason"),
+                )
+                for p in positions_data
+            ]
+
+            stock = AlgoStockConfig(
+                id=s["id"],
+                code=s["code"],
+                name=s["name"],
+                is_active=s.get("is_active", True),
+                buy_amount=s.get("buy_amount", 100000),
+                max_positions=s.get("max_positions", 1),
+                ma_period=s.get("ma_period", 20),
+                breakout_period=s.get("breakout_period", 20),
+                volume_ratio=float(s.get("volume_ratio", 1.5)),
+                atr_period=s.get("atr_period", 14),
+                atr_multiplier=float(s.get("atr_multiplier", 2.0)),
+                stop_loss_atr_multiplier=float(s.get("stop_loss_atr_multiplier", 3.0)),
+                current_price=s.get("current_price") or 0,
+                current_ma=float(s.get("current_ma") or 0),
+                current_atr=float(s.get("current_atr") or 0),
+                current_highest_n=s.get("current_highest_n") or 0,
+                positions=positions,
+            )
+            result.append(stock)
+
+        return result
+
+    # ==================== 알고리즘 포지션 (algo_positions) ====================
+
+    def get_algo_positions(self, stock_id: str, status: str = None) -> list[dict]:
+        """종목의 알고 포지션 조회"""
+        if not self.is_configured:
+            return []
+
+        params = {
+            "stock_id": f"eq.{stock_id}",
+            "select": "*",
+            "order": "created_at.asc",
+        }
+        if status:
+            params["status"] = f"eq.{status}"
+
+        result = self._request("GET", "algo_positions", params=params)
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def save_algo_position(self, stock_id: str, position: AlgoPosition) -> Optional[str]:
+        """알고 포지션 저장"""
+        if not self.is_configured:
+            return None
+
+        data = {
+            "stock_id": stock_id,
+            "user_id": Config.USER_ID,
+            "entry_price": position.entry_price,
+            "quantity": position.quantity,
+            "entry_date": position.entry_date,
+            "highest_price": position.highest_price,
+            "trailing_stop_price": position.trailing_stop_price,
+            "stop_loss_price": position.stop_loss_price,
+            "status": position.status,
+        }
+
+        result = self._request("POST", "algo_positions", data=data)
+
+        if isinstance(result, list) and len(result) > 0:
+            pos_id = result[0].get("id")
+            print(f"[Supabase] 알고 포지션 저장: {pos_id}")
+            return pos_id
+        return None
+
+    def update_algo_position(self, position_id: str, data: dict) -> bool:
+        """알고 포지션 업데이트 (highest_price, trailing_stop 등)"""
+        if not self.is_configured:
+            return False
+
+        result = self._request(
+            "PATCH",
+            "algo_positions",
+            data=data,
+            params={"id": f"eq.{position_id}"},
+        )
+
+        return "error" not in result
+
+    def close_algo_position(self, position_id: str, exit_price: int, exit_reason: str) -> bool:
+        """알고 포지션 청산"""
+        if not self.is_configured:
+            return False
+
+        # 포지션 정보 조회 (손익 계산용)
+        pos_result = self._request(
+            "GET",
+            "algo_positions",
+            params={"id": f"eq.{position_id}", "select": "entry_price,quantity"},
+        )
+
+        profit_loss = 0
+        profit_loss_rate = 0.0
+        if isinstance(pos_result, list) and len(pos_result) > 0:
+            entry_price = pos_result[0].get("entry_price", 0)
+            quantity = pos_result[0].get("quantity", 0)
+            if entry_price > 0:
+                profit_loss = (exit_price - entry_price) * quantity
+                profit_loss_rate = (exit_price - entry_price) / entry_price * 100
+
+        result = self._request(
+            "PATCH",
+            "algo_positions",
+            data={
+                "status": "closed",
+                "exit_price": exit_price,
+                "exit_date": datetime.now().strftime("%Y-%m-%d"),
+                "exit_reason": exit_reason,
+                "profit_loss": profit_loss,
+                "profit_loss_rate": round(profit_loss_rate, 2),
+            },
+            params={"id": f"eq.{position_id}"},
+        )
+
+        if "error" not in result:
+            print(f"[Supabase] 알고 포지션 청산: {position_id} ({exit_reason})")
+            return True
+        return False
+
+    # ==================== 알고리즘 시그널 (algo_signals) ====================
+
+    def save_algo_signal(self, stock_id: str, signal_data: dict) -> bool:
+        """알고 시그널 로그 저장"""
+        if not self.is_configured:
+            return False
+
+        data = {
+            "stock_id": stock_id,
+            "user_id": Config.USER_ID,
+            "signal_type": signal_data.get("signal_type", ""),
+            "price": signal_data.get("price", 0),
+            "ma_value": signal_data.get("ma_value"),
+            "atr_value": signal_data.get("atr_value"),
+            "highest_n_value": signal_data.get("highest_n_value"),
+            "volume_ratio_value": signal_data.get("volume_ratio_value"),
+            "trailing_stop_value": signal_data.get("trailing_stop_value"),
+            "executed": signal_data.get("executed", False),
+            "result_message": signal_data.get("result_message", ""),
+            "position_id": signal_data.get("position_id"),
+        }
+
+        result = self._request("POST", "algo_signals", data=data)
+        return "error" not in result
+
+    # ==================== 알고리즘 매수/매도 요청 ====================
+
+    def get_pending_algo_buy_requests(self) -> list[dict]:
+        """대기 중인 알고 매수 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "algo_buy_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_algo_buy_request(self, request_id: str, status: str, message: str = "") -> bool:
+        """알고 매수 요청 상태 업데이트"""
+        if not self.is_configured:
+            return False
+
+        data = {"status": status, "result_message": message}
+        if status in ["executed", "failed"]:
+            data["executed_at"] = datetime.now().isoformat()
+
+        result = self._request(
+            "PATCH",
+            "algo_buy_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
+        )
+
+        return "error" not in result
+
+    def get_pending_algo_sell_requests(self) -> list[dict]:
+        """대기 중인 알고 매도 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "algo_sell_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_algo_sell_request(self, request_id: str, status: str, message: str = "") -> bool:
+        """알고 매도 요청 상태 업데이트"""
+        if not self.is_configured:
+            return False
+
+        data = {"status": status, "result_message": message}
+        if status in ["executed", "failed"]:
+            data["executed_at"] = datetime.now().isoformat()
+
+        result = self._request(
+            "PATCH",
+            "algo_sell_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
+        )
+
+        return "error" not in result
+
+    # ==================== 알고리즘 종목 분석 (algo_analysis) ====================
+
+    def get_pending_algo_analysis_requests(self) -> list[dict]:
+        """대기 중인 알고 종목 분석 요청 조회"""
+        if not self.is_configured:
+            return []
+
+        result = self._request(
+            "GET",
+            "algo_analysis_requests",
+            params={
+                "status": "eq.pending",
+                "select": "*",
+                "order": "created_at.asc",
+                "limit": "1",
+            },
+        )
+
+        if isinstance(result, list):
+            return result
+        return []
+
+    def update_algo_analysis_request(
+        self,
+        request_id: str,
+        status: str,
+        message: str = "",
+        total_analyzed: int = 0,
+    ) -> bool:
+        """알고 분석 요청 상태 업데이트"""
+        if not self.is_configured:
+            return False
+
+        data = {
+            "status": status,
+            "result_message": message,
+            "total_analyzed": total_analyzed,
+        }
+
+        if status in ["completed", "failed"]:
+            data["completed_at"] = datetime.now().isoformat()
+
+        result = self._request(
+            "PATCH",
+            "algo_analysis_requests",
+            data=data,
+            params={"id": f"eq.{request_id}"},
+        )
+
+        return "error" not in result
+
+    def save_algo_analysis_results(self, request_id: str, user_id: str, results: list[dict]) -> bool:
+        """알고 분석 결과 저장"""
+        if not self.is_configured or not results:
+            return False
+
+        # 기존 결과 삭제
+        self._request(
+            "DELETE",
+            "algo_analysis_results",
+            params={"request_id": f"eq.{request_id}"},
+        )
+
+        # 새 결과 저장
+        records = []
+        for r in results:
+            records.append({
+                "request_id": request_id,
+                "user_id": user_id,
+                "stock_code": r.get("stock_code", ""),
+                "stock_name": r.get("stock_name", ""),
+                "market": r.get("market", ""),
+                "market_cap": r.get("market_cap", 0),
+                "current_price": r.get("current_price", 0),
+                "momentum_score": r.get("momentum_score", 0),
+                "volatility_score": r.get("volatility_score", 0),
+                "volume_score": r.get("volume_score", 0),
+                "trend_score": r.get("trend_score", 0),
+                "ma_trend_strength": r.get("ma_trend_strength", 0),
+                "breakout_frequency": r.get("breakout_frequency", 0),
+                "atr_percent": r.get("atr_percent", 0),
+                "avg_volume": r.get("avg_volume", 0),
+                "avg_trading_value": r.get("avg_trading_value", 0),
+                "volume_spike_count": r.get("volume_spike_count", 0),
+                "return_1m": r.get("return_1m", 0),
+                "return_3m": r.get("return_3m", 0),
+                "return_6m": r.get("return_6m", 0),
+                "trend_consistency": r.get("trend_consistency", 0),
+                "algo_suitability_score": r.get("algo_suitability_score", 0),
+                "recommendation": r.get("recommendation", "neutral"),
+                "analysis_detail": r.get("analysis_detail", {}),
+            })
+
+        result = self._request("POST", "algo_analysis_results", data=records)
+        success = "error" not in result
+        if success:
+            print(f"[Supabase] 알고 분석 결과 저장: {len(records)}건")
+        return success
 
 
 # 싱글톤 인스턴스

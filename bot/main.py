@@ -29,6 +29,7 @@ from config import Config
 from kis_api import kis_api
 from kis_websocket import kis_ws
 from split_strategy import strategy, StockConfig, Purchase
+from algo_strategy import algo_strategy, AlgoStockConfig, AlgoPosition
 from supabase_client import supabase
 from telegram_bot import notifier, bot_handler
 
@@ -67,6 +68,12 @@ class SplitBot:
         self._market_open_adjusted_date: Optional[str] = None  # 조정된 날짜
         # 휴장일 체크 날짜 (날짜 변경 시 재체크)
         self._market_status_checked_date: Optional[str] = None
+        # === 알고리즘 트레이딩 ===
+        self._algo_volumes: dict[str, int] = {}  # 종목별 당일 누적 거래량
+        self._algo_last_price_db_update: dict[str, datetime] = {}
+        self._algo_stock_locks: dict[str, asyncio.Lock] = {}
+        self._algo_recent_sells: dict[str, datetime] = {}
+        self._algo_trailing_stop_db_update: dict[str, datetime] = {}  # 트레일링스탑 DB 쓰기 쓰로틀
 
     def _get_market_open_time(self) -> dtime:
         """현재 적용 중인 장 시작 시간 반환 (동적 조정)"""
@@ -166,6 +173,26 @@ class SplitBot:
                 if next_price:
                     print(f"    다음 물타기: {next_price:,}원")
 
+    def load_algo_stocks_from_db(self) -> None:
+        """Supabase에서 알고리즘 종목 로드"""
+        if not Config.validate_supabase():
+            return
+
+        stocks = supabase.load_all_algo_stocks()
+        for stock in stocks:
+            algo_strategy.add_stock(stock)
+
+        print(f"[Bot] 알고 종목 DB에서 {len(algo_strategy.stocks)}개 로드")
+        for code, stock in algo_strategy.stocks.items():
+            active_count = stock.active_position_count
+            print(f"  - {stock.name} ({code}): 포지션 {active_count}/{stock.max_positions}")
+
+    def _get_algo_stock_lock(self, code: str) -> asyncio.Lock:
+        """알고 종목별 Lock 반환"""
+        if code not in self._algo_stock_locks:
+            self._algo_stock_locks[code] = asyncio.Lock()
+        return self._algo_stock_locks[code]
+
     def _get_stock_lock(self, code: str) -> asyncio.Lock:
         """종목별 Lock 반환 (없으면 생성)"""
         if code not in self._stock_locks:
@@ -182,13 +209,40 @@ class SplitBot:
             return
 
         self._prices[code] = price
+        volume = data.get("volume", 0)
+        if volume > 0:
+            self._algo_volumes[code] = volume
 
-        # DB에 현재가 업데이트 (10초마다)
+        # DB에 현재가 업데이트 (10초마다) - split 종목
         now = datetime.now()
-        last_update = self._last_price_db_update.get(code)
-        if not last_update or (now - last_update).total_seconds() >= self._price_db_update_interval:
-            self._last_price_db_update[code] = now
-            supabase.update_stock_price(code, price, change_rate)
+        if code in strategy.stocks:
+            last_update = self._last_price_db_update.get(code)
+            if not last_update or (now - last_update).total_seconds() >= self._price_db_update_interval:
+                self._last_price_db_update[code] = now
+                supabase.update_stock_price(code, price, change_rate)
+
+        # DB에 현재가 업데이트 (10초마다) - algo 종목
+        if code in algo_strategy.stocks:
+            last_update = self._algo_last_price_db_update.get(code)
+            if not last_update or (now - last_update).total_seconds() >= self._price_db_update_interval:
+                self._algo_last_price_db_update[code] = now
+                supabase.update_algo_stock_price(code, price, change_rate)
+
+            # 트레일링스탑 갱신 (매 틱, 인메모리)
+            updated = algo_strategy.update_trailing_stop(code, price)
+            # DB 쓰로틀 (10초마다)
+            if updated:
+                ts_last = self._algo_trailing_stop_db_update.get(code)
+                if not ts_last or (now - ts_last).total_seconds() >= 10:
+                    self._algo_trailing_stop_db_update[code] = now
+                    stock = algo_strategy.stocks.get(code)
+                    if stock:
+                        for pos in stock.active_positions:
+                            if pos.id:
+                                supabase.update_algo_position(pos.id, {
+                                    "highest_price": pos.highest_price,
+                                    "trailing_stop_price": pos.trailing_stop_price,
+                                })
 
         # 봇 활성화 상태 확인 (DB에서)
         if not self.check_bot_enabled():
@@ -198,34 +252,66 @@ class SplitBot:
         if not self.is_market_open():
             return
 
-        # 종목별 Lock으로 동시 처리 방지 (WebSocket + Polling 중복 실행 방지)
-        lock = self._get_stock_lock(code)
-        if lock.locked():
-            # 이미 처리 중이면 스킵 (중복 호출 방지)
-            return
+        # === Split 전략 처리 ===
+        if code in strategy.stocks:
+            lock = self._get_stock_lock(code)
+            if not lock.locked():
+                async with lock:
+                    stock = strategy.stocks.get(code)
+                    if not stock:
+                        pass
+                    else:
+                        # 매도 조건 먼저 체크 (매도 후 매수 방지)
+                        sell_results = strategy.check_sell_condition(code, price)
+                        for sell_result in sell_results:
+                            await self.execute_sell(sell_result)
+                            self._recent_sells[code] = datetime.now()
 
-        async with lock:
-            stock = strategy.stocks.get(code)
-            if not stock:
-                return
+                        # 매도 직후 5초간은 매수 스킵
+                        recent_sell_time = self._recent_sells.get(code)
+                        if recent_sell_time:
+                            elapsed = (datetime.now() - recent_sell_time).total_seconds()
+                            if elapsed < 5:
+                                pass  # 매도 직후 스킵
+                            elif self._available_amount is not None and self._available_amount < self.MIN_AVAILABLE_AMOUNT:
+                                pass  # 잔액 부족
+                            else:
+                                buy_result = strategy.check_buy_condition(code, price)
+                                if buy_result.get("action") == "buy":
+                                    await self.execute_buy(buy_result)
+                        else:
+                            if self._available_amount is None or self._available_amount >= self.MIN_AVAILABLE_AMOUNT:
+                                buy_result = strategy.check_buy_condition(code, price)
+                                if buy_result.get("action") == "buy":
+                                    await self.execute_buy(buy_result)
 
-            # 매도 조건 먼저 체크 (매도 후 매수 방지)
-            sell_results = strategy.check_sell_condition(code, price)
-            for sell_result in sell_results:
-                await self.execute_sell(sell_result)
-                # 매도 후 해당 종목의 매수를 잠시 방지
-                self._recent_sells[code] = datetime.now()
+        # === 알고리즘 전략 처리 ===
+        if code in algo_strategy.stocks:
+            algo_lock = self._get_algo_stock_lock(code)
+            if not algo_lock.locked():
+                async with algo_lock:
+                    # 매도 시그널 체크 (트레일링스탑/손절)
+                    sell_results = algo_strategy.check_sell_signal(code, price)
+                    for sell_result in sell_results:
+                        await self.execute_algo_sell(sell_result)
+                        self._algo_recent_sells[code] = datetime.now()
 
-            # 매도 직후 5초간은 매수 스킵 (상태 동기화 시간 확보)
-            recent_sell_time = self._recent_sells.get(code)
-            if recent_sell_time:
-                elapsed = (datetime.now() - recent_sell_time).total_seconds()
-                if elapsed < 5:
-                    return  # 매도 직후 5초 내에는 매수 체크 스킵
+                    # 매도 직후 5초간은 매수 스킵
+                    recent_sell_time = self._algo_recent_sells.get(code)
+                    if recent_sell_time:
+                        elapsed = (datetime.now() - recent_sell_time).total_seconds()
+                        if elapsed < 5:
+                            return
 
-            # 주문가능금액 부족 시 매수 체크 스킵 (불필요한 로그 방지)
-            if self._available_amount is not None and self._available_amount < self.MIN_AVAILABLE_AMOUNT:
-                return
+                    # 잔액 체크
+                    if self._available_amount is not None and self._available_amount < self.MIN_AVAILABLE_AMOUNT:
+                        return
+
+                    # 매수 시그널 체크
+                    vol = self._algo_volumes.get(code, 0)
+                    buy_result = algo_strategy.check_buy_signal(code, price, vol)
+                    if buy_result.get("action") == "buy":
+                        await self.execute_algo_buy(buy_result)
 
             # 매수 조건 체크
             buy_result = strategy.check_buy_condition(code, price)
@@ -436,6 +522,171 @@ class SplitBot:
             profit_rate=profit_rate,
             success=order["success"],
         )
+
+    async def execute_algo_buy(self, result: dict) -> None:
+        """알고리즘 매수 실행"""
+        stock: AlgoStockConfig = result["stock"]
+        trigger_price = result["price"]
+        quantity = result["quantity"]
+        indicators = result.get("indicators", {})
+
+        # 주문가능금액 체크
+        if self._available_amount is not None and self._available_amount < self.MIN_AVAILABLE_AMOUNT:
+            log(f"[Algo] 매수 스킵: 잔액 부족 ({self._available_amount:,}원)")
+            return
+
+        estimated = trigger_price * quantity
+        if self._available_amount is not None and estimated > self._available_amount:
+            log(f"[Algo] 매수 스킵: 주문금액 초과 ({estimated:,}원 > {self._available_amount:,}원)")
+            return
+
+        stock.set_order_pending("buy")
+        log(f"[Algo] 매수 시도: {stock.name} {quantity}주 @ {trigger_price:,}원")
+
+        try:
+            # 슬리피지 체크
+            current_price = kis_api.get_current_price(stock.code)
+            if current_price > 0:
+                slippage = abs(current_price - trigger_price) / trigger_price * 100
+                if slippage > MAX_SLIPPAGE_RATE:
+                    log(f"[Algo] 슬리피지 초과 ({slippage:.1f}%) - 스킵")
+                    return
+
+            # 시장가 매수
+            order = kis_api.buy_stock(stock.code, quantity, price=0)
+
+            if order["success"]:
+                order_no = order.get("order_no", "")
+                executed_price = kis_api.get_executed_price(stock.code, order_no)
+                if executed_price <= 0:
+                    executed_price = trigger_price
+
+                atr = stock.current_atr
+                # 포지션 생성
+                position = AlgoPosition(
+                    stock_id=stock.id,
+                    entry_price=executed_price,
+                    quantity=quantity,
+                    entry_date=datetime.now().strftime("%Y-%m-%d"),
+                    highest_price=executed_price,
+                    trailing_stop_price=int(executed_price - atr * stock.atr_multiplier) if atr > 0 else 0,
+                    stop_loss_price=int(executed_price - atr * stock.stop_loss_atr_multiplier) if atr > 0 else 0,
+                    status="active",
+                )
+
+                # DB 저장
+                if Config.validate_supabase() and stock.id:
+                    pos_id = supabase.save_algo_position(stock.id, position)
+                    if pos_id:
+                        position.id = pos_id
+                        log(f"[Algo] 포지션 DB 저장: {pos_id}")
+                    else:
+                        log(f"[Algo] ⚠️ 포지션 DB 저장 실패!")
+
+                # 메모리에 추가
+                stock.positions.append(position)
+
+                # 시그널 저장
+                supabase.save_algo_signal(stock.id, {
+                    "signal_type": "buy",
+                    "price": executed_price,
+                    "ma_value": indicators.get("ma"),
+                    "atr_value": indicators.get("atr"),
+                    "highest_n_value": indicators.get("highest_n"),
+                    "volume_ratio_value": indicators.get("volume_ratio"),
+                    "executed": True,
+                    "result_message": f"주문번호: {order_no}",
+                    "position_id": position.id,
+                })
+
+                log(f"[Algo] 매수 성공: {stock.name} {quantity}주 @ {executed_price:,}원")
+            else:
+                log(f"[Algo] 매수 실패: {order['message']}")
+
+                if self._is_market_time_error(order.get("message", "")):
+                    if self._advance_market_open_time():
+                        next_time = self._get_market_open_time()
+                        log(f"[Algo] 장 시작 시간 오류 → {next_time.strftime('%H:%M')} 이후 재시도")
+
+            # 텔레그램 알림 (잔액 부족은 스킵)
+            error_msg = order.get("message", "")
+            is_balance_error = any(kw in error_msg for kw in ["주문가능금액", "잔액", "잔고"])
+
+            if order["success"] or not is_balance_error:
+                alert_price = executed_price if order["success"] else trigger_price
+                await notifier.send_algo_buy_alert(
+                    stock_name=stock.name,
+                    stock_code=stock.code,
+                    price=alert_price,
+                    quantity=quantity,
+                    success=order["success"],
+                    order_no=order.get("order_no", ""),
+                    error_message=error_msg if not order["success"] else "",
+                    indicators=indicators if order["success"] else None,
+                )
+        finally:
+            stock.clear_order_pending()
+
+    async def execute_algo_sell(self, result: dict) -> None:
+        """알고리즘 매도 실행 (트레일링스탑/손절)"""
+        stock: AlgoStockConfig = result["stock"]
+        position: AlgoPosition = result["position"]
+        price = result["price"]
+        quantity = result["quantity"]
+        reason = result["reason"]
+        profit = result["profit"]
+        profit_rate = result["profit_rate"]
+
+        log(f"[Algo] 매도 시도: {stock.name} {quantity}주 @ {price:,}원 ({reason})")
+
+        try:
+            order = kis_api.sell_stock(stock.code, quantity, price=0)
+
+            if order["success"]:
+                # 포지션 청산 (메모리)
+                position.status = "closed"
+                position.exit_price = price
+                position.exit_date = datetime.now().strftime("%Y-%m-%d")
+                position.exit_reason = reason
+
+                # DB 청산
+                if Config.validate_supabase() and position.id:
+                    supabase.close_algo_position(position.id, price, reason)
+
+                log(f"[Algo] 매도 성공: 손익 {profit:+,}원 ({profit_rate:+.2f}%)")
+            else:
+                log(f"[Algo] 매도 실패: {order['message']}")
+
+                if self._is_market_time_error(order.get("message", "")):
+                    if self._advance_market_open_time():
+                        next_time = self._get_market_open_time()
+                        log(f"[Algo] 장 시작 시간 오류 → {next_time.strftime('%H:%M')} 이후 재시도")
+
+            # 시그널 저장
+            supabase.save_algo_signal(stock.id, {
+                "signal_type": "sell",
+                "price": price,
+                "atr_value": stock.current_atr,
+                "trailing_stop_value": position.trailing_stop_price,
+                "executed": order["success"],
+                "result_message": f"{reason}: {order.get('order_no', '')}",
+                "position_id": position.id,
+            })
+
+            # 텔레그램 알림
+            await notifier.send_algo_sell_alert(
+                stock_name=stock.name,
+                stock_code=stock.code,
+                entry_price=position.entry_price,
+                exit_price=price,
+                quantity=quantity,
+                profit=int(profit),
+                profit_rate=profit_rate,
+                exit_reason=reason,
+                success=order["success"],
+            )
+        finally:
+            stock.clear_order_pending()
 
     def get_status(self) -> str:
         """현재 상태 텍스트"""
@@ -663,9 +914,55 @@ class SplitBot:
         except Exception as e:
             print(f"[Bot] 스냅샷 저장 오류: {e}")
 
+    async def update_algo_indicators_periodic(self) -> None:
+        """알고 종목 지표 주기적 갱신 (시작 시 즉시 + 30분마다)"""
+        first_run = True
+        while self._running:
+            if not first_run:
+                await asyncio.sleep(1800)  # 30분
+            first_run = False
+
+            if not algo_strategy.stocks:
+                continue
+
+            log(f"[Algo] 지표 갱신 시작: {len(algo_strategy.stocks)}개 종목")
+
+            for code, stock in algo_strategy.stocks.items():
+                if not self._running:
+                    break
+                try:
+                    chart_data = kis_api.get_daily_chart_extended(code, 60)
+                    if chart_data and len(chart_data) >= 20:
+                        algo_strategy.update_indicators(code, chart_data)
+
+                        # 거래량 정보도 업데이트
+                        volumes = [d["volume"] for d in chart_data if d["volume"] > 0]
+                        if volumes:
+                            stock.avg_volume = int(sum(volumes[:60]) / min(len(volumes), 60))
+
+                        # DB 저장
+                        supabase.update_algo_stock_indicators(
+                            code,
+                            ma=stock.current_ma,
+                            atr=stock.current_atr,
+                            highest_n=stock.current_highest_n,
+                            avg_volume=stock.avg_volume,
+                        )
+
+                        log(f"[Algo] {stock.name}: MA={stock.current_ma:,.0f} ATR={stock.current_atr:,.0f} "
+                            f"High={stock.current_highest_n:,} AvgVol={stock.avg_volume:,}")
+                    else:
+                        log(f"[Algo] {stock.name}: 차트 데이터 부족")
+                except Exception as e:
+                    log(f"[Algo] {stock.name} 지표 갱신 실패: {e}")
+
+                await asyncio.sleep(0.5)
+
+            log(f"[Algo] 지표 갱신 완료")
+
     def _calculate_polling_interval(self) -> int:
         """종목 수에 따른 동적 폴링 간격 계산 (배치 처리 기준)"""
-        num_stocks = len(strategy.stocks)
+        num_stocks = len(strategy.stocks) + len(algo_strategy.stocks)
         # 30종목당 1배치, 최소 1초
         num_batches = (num_stocks + 29) // 30  # 올림 나눗셈
         interval = max(1, num_batches)
@@ -676,7 +973,8 @@ class SplitBot:
         while self._running:
             try:
                 is_market_open = self.is_market_open()
-                stock_codes = list(strategy.stocks.keys())
+                # Split + Algo 종목 합치기 (중복 제거)
+                stock_codes = list(set(strategy.stocks.keys()) | set(algo_strategy.stocks.keys()))
                 num_stocks = len(stock_codes)
 
                 if num_stocks == 0:
@@ -786,6 +1084,9 @@ class SplitBot:
             # KIS vs Bot 비교 요청 처리 (장 운영과 무관)
             await self.process_compare_requests()
 
+            # 알고리즘 종목 분석 요청 처리 (장 운영과 무관)
+            await self.process_algo_analysis_requests()
+
             # 장 운영 시간이 아니면 매수/매도 스킵
             if not is_market_open:
                 continue
@@ -799,6 +1100,10 @@ class SplitBot:
 
             # 매도 요청 처리
             await self.process_sell_requests()
+
+            # 알고 매수/매도 요청 처리
+            await self.process_algo_buy_requests()
+            await self.process_algo_sell_requests()
 
     async def process_sync_requests(self) -> None:
         """대기 중인 동기화 요청 처리"""
@@ -961,6 +1266,258 @@ class SplitBot:
             error_msg = f"오류: {str(e)}"
             supabase.update_compare_request(request_id, "failed", error_msg)
             print(f"[Bot] 비교 실패: {error_msg}")
+
+    # ==================== 알고리즘 요청 처리 ====================
+
+    async def process_algo_buy_requests(self) -> None:
+        """대기 중인 알고 매수 요청 처리"""
+        try:
+            requests_list = supabase.get_pending_algo_buy_requests()
+            for req in requests_list:
+                await self.execute_algo_web_buy_request(req)
+        except Exception as e:
+            print(f"[Algo] 매수 요청 처리 오류: {e}")
+
+    async def execute_algo_web_buy_request(self, req: dict) -> None:
+        """알고 웹 매수 요청 실행"""
+        request_id = req.get("id")
+        stock_code = req.get("stock_code")
+        stock_name = req.get("stock_name")
+        quantity = req.get("quantity")
+        buy_amount = req.get("buy_amount")
+
+        print(f"[Algo] 웹 매수 요청: {stock_name}({stock_code})")
+
+        stock = algo_strategy.stocks.get(stock_code)
+        if not stock:
+            supabase.update_algo_buy_request(request_id, "failed", f"알고 종목 없음: {stock_code}")
+            return
+
+        if not stock.can_open_position:
+            supabase.update_algo_buy_request(request_id, "failed", "최대 포지션 도달")
+            return
+
+        if stock.is_order_pending("buy"):
+            supabase.update_algo_buy_request(request_id, "failed", "이미 매수 처리 중")
+            return
+
+        # 수량 계산
+        if not quantity:
+            target_amount = buy_amount if buy_amount else stock.buy_amount
+            current_price = self._prices.get(stock_code, 0)
+            if current_price <= 0:
+                current_price = kis_api.get_current_price(stock_code)
+            if current_price > 0:
+                quantity = target_amount // current_price
+            else:
+                supabase.update_algo_buy_request(request_id, "failed", "현재가 조회 실패")
+                return
+
+        stock.set_order_pending("buy")
+
+        try:
+            order = kis_api.buy_stock(stock_code, quantity, price=0)
+
+            if order["success"]:
+                executed_price = kis_api.get_executed_price(stock_code, order.get("order_no", ""))
+                if executed_price <= 0:
+                    executed_price = self._prices.get(stock_code, 0)
+
+                atr = stock.current_atr
+                position = AlgoPosition(
+                    stock_id=stock.id,
+                    entry_price=executed_price,
+                    quantity=quantity,
+                    entry_date=datetime.now().strftime("%Y-%m-%d"),
+                    highest_price=executed_price,
+                    trailing_stop_price=int(executed_price - atr * stock.atr_multiplier) if atr > 0 else 0,
+                    stop_loss_price=int(executed_price - atr * stock.stop_loss_atr_multiplier) if atr > 0 else 0,
+                    status="active",
+                )
+
+                if stock.id:
+                    pos_id = supabase.save_algo_position(stock.id, position)
+                    if pos_id:
+                        position.id = pos_id
+
+                stock.positions.append(position)
+
+                message = f"주문번호: {order['order_no']}, {quantity}주 @ {executed_price:,}원"
+                supabase.update_algo_buy_request(request_id, "executed", message)
+
+                await notifier.send_algo_buy_alert(
+                    stock_name=stock.name,
+                    stock_code=stock.code,
+                    price=executed_price,
+                    quantity=quantity,
+                    success=True,
+                    order_no=order.get("order_no", ""),
+                )
+            else:
+                supabase.update_algo_buy_request(request_id, "failed", order["message"])
+        finally:
+            stock.clear_order_pending()
+
+    async def process_algo_sell_requests(self) -> None:
+        """대기 중인 알고 매도 요청 처리"""
+        try:
+            requests_list = supabase.get_pending_algo_sell_requests()
+            for req in requests_list:
+                await self.execute_algo_web_sell_request(req)
+        except Exception as e:
+            print(f"[Algo] 매도 요청 처리 오류: {e}")
+
+    async def execute_algo_web_sell_request(self, req: dict) -> None:
+        """알고 웹 매도 요청 실행"""
+        request_id = req.get("id")
+        stock_code = req.get("stock_code")
+        stock_name = req.get("stock_name")
+        position_id = req.get("position_id")
+        quantity = req.get("quantity")
+
+        print(f"[Algo] 웹 매도 요청: {stock_name}({stock_code}) {quantity}주")
+
+        stock = algo_strategy.stocks.get(stock_code)
+        if not stock:
+            supabase.update_algo_sell_request(request_id, "failed", f"알고 종목 없음: {stock_code}")
+            return
+
+        # 포지션 찾기
+        position = None
+        for pos in stock.active_positions:
+            if pos.id == position_id:
+                position = pos
+                break
+
+        if not position:
+            supabase.update_algo_sell_request(request_id, "failed", f"포지션 없음: {position_id}")
+            return
+
+        current_price = self._prices.get(stock_code, 0)
+        if current_price <= 0:
+            current_price = kis_api.get_current_price(stock_code)
+
+        if current_price <= 0:
+            supabase.update_algo_sell_request(request_id, "failed", "현재가 조회 실패")
+            return
+
+        try:
+            order = kis_api.sell_stock(stock_code, quantity, price=0)
+
+            if order["success"]:
+                profit = (current_price - position.entry_price) * quantity
+                profit_rate = (current_price - position.entry_price) / position.entry_price * 100 if position.entry_price > 0 else 0
+
+                position.status = "closed"
+                position.exit_price = current_price
+                position.exit_date = datetime.now().strftime("%Y-%m-%d")
+                position.exit_reason = "manual"
+
+                if position.id:
+                    supabase.close_algo_position(position.id, current_price, "manual")
+
+                message = f"주문번호: {order['order_no']}, {quantity}주 @ {current_price:,}원, 손익: {profit:+,.0f}원({profit_rate:+.1f}%)"
+                supabase.update_algo_sell_request(request_id, "executed", message)
+
+                await notifier.send_algo_sell_alert(
+                    stock_name=stock.name,
+                    stock_code=stock.code,
+                    entry_price=position.entry_price,
+                    exit_price=current_price,
+                    quantity=quantity,
+                    profit=int(profit),
+                    profit_rate=profit_rate,
+                    exit_reason="manual",
+                    success=True,
+                )
+            else:
+                supabase.update_algo_sell_request(request_id, "failed", order["message"])
+        finally:
+            stock.clear_order_pending()
+
+    async def process_algo_analysis_requests(self) -> None:
+        """대기 중인 알고 종목 분석 요청 처리"""
+        try:
+            requests_list = supabase.get_pending_algo_analysis_requests()
+            for req in requests_list:
+                await self.execute_algo_analysis_request(req)
+        except Exception as e:
+            print(f"[Algo] 분석 요청 처리 오류: {e}")
+
+    async def execute_algo_analysis_request(self, req: dict) -> None:
+        """알고 종목 분석 요청 실행"""
+        request_id = req.get("id")
+        user_id = req.get("user_id")
+        market_input = req.get("market", "kospi200")
+        min_market_cap = req.get("min_market_cap", 0)
+        min_volume = req.get("min_volume", 0)
+        stock_type_input = req.get("stock_type", "common")
+        analysis_period = req.get("analysis_period", 120)
+        min_price = req.get("min_price") or 0
+        max_price = req.get("max_price") or 0
+
+        market_code_map = {
+            "kospi200": "2001",
+            "kospi": "0001",
+            "kosdaq": "1001",
+            "all": "0000",
+        }
+        market = market_code_map.get(market_input, market_input)
+
+        stock_type_map = {
+            "common": "1",
+            "preferred": "2",
+            "all": "0",
+        }
+        stock_type = stock_type_map.get(stock_type_input, stock_type_input)
+
+        print(f"[Algo] 종목 분석 요청: {request_id}")
+        supabase.update_algo_analysis_request(request_id, "processing", "분석 시작...")
+
+        try:
+            from stock_analyzer import algo_analyzer
+
+            def progress_callback(current: int, total: int, stock_name: str):
+                message = f"{current}/{total} 분석 중..."
+                supabase.update_algo_analysis_request(request_id, "processing", message, total_analyzed=current)
+
+            results = algo_analyzer.analyze_algo_market_stocks(
+                market=market,
+                stock_type=stock_type,
+                max_stocks=100,
+                analysis_days=analysis_period,
+                min_market_cap=min_market_cap,
+                min_price=min_price,
+                max_price=max_price,
+                progress_callback=progress_callback,
+            )
+
+            if not results:
+                supabase.update_algo_analysis_request(request_id, "completed", "분석 가능한 종목이 없습니다.", total_analyzed=0)
+                return
+
+            result_dicts = [r.to_dict() for r in results]
+            supabase.save_algo_analysis_results(request_id, user_id, result_dicts)
+
+            strong_count = sum(1 for r in results if r.recommendation == "strong")
+            good_count = sum(1 for r in results if r.recommendation == "good")
+
+            message = f"{len(results)}개 종목 분석 완료 (강추: {strong_count}, 추천: {good_count})"
+            supabase.update_algo_analysis_request(request_id, "completed", message, total_analyzed=len(results))
+            print(f"[Algo] 분석 완료: {message}")
+
+            top_stocks = sorted(result_dicts, key=lambda x: x.get("algo_suitability_score", 0), reverse=True)[:5]
+            await notifier.send_algo_analysis_complete(
+                total_analyzed=len(results),
+                strong_count=strong_count,
+                good_count=good_count,
+                top_stocks=top_stocks,
+            )
+
+        except Exception as e:
+            error_msg = f"오류: {str(e)}"
+            supabase.update_algo_analysis_request(request_id, "failed", error_msg)
+            print(f"[Algo] 분석 실패: {error_msg}")
 
     async def process_analysis_requests(self) -> None:
         """대기 중인 종목 분석 요청 처리"""
@@ -1179,6 +1736,35 @@ class SplitBot:
                         print(f"[Bot] 새 종목 추가: {new_stock.name}")
         except Exception as e:
             print(f"[Bot] 종목 리로드 실패: {e}")
+
+        # 알고 종목 리로드
+        try:
+            algo_stocks = supabase.load_all_algo_stocks()
+
+            if full_reload:
+                algo_strategy.stocks = {s.code: s for s in algo_stocks}
+                print(f"[Bot] 알고 종목 전체 리로드: {len(algo_stocks)}개")
+            else:
+                for new_stock in algo_stocks:
+                    existing = algo_strategy.stocks.get(new_stock.code)
+                    if existing:
+                        existing.is_active = new_stock.is_active
+                        existing.buy_amount = new_stock.buy_amount
+                        existing.max_positions = new_stock.max_positions
+                        existing.ma_period = new_stock.ma_period
+                        existing.breakout_period = new_stock.breakout_period
+                        existing.volume_ratio = new_stock.volume_ratio
+                        existing.atr_period = new_stock.atr_period
+                        existing.atr_multiplier = new_stock.atr_multiplier
+                        existing.stop_loss_atr_multiplier = new_stock.stop_loss_atr_multiplier
+                        # 포지션 동기화
+                        if len(new_stock.positions) > len(existing.positions):
+                            existing.positions = new_stock.positions
+                    else:
+                        algo_strategy.stocks[new_stock.code] = new_stock
+                        print(f"[Bot] 알고 새 종목 추가: {new_stock.name}")
+        except Exception as e:
+            print(f"[Bot] 알고 종목 리로드 실패: {e}")
 
     async def process_buy_requests(self) -> None:
         """대기 중인 매수 요청 처리"""
@@ -1424,23 +2010,27 @@ class SplitBot:
             print(f"[Bot] 계좌: {Config.KIS_ACCOUNT_NO}")
         print()
 
-        # DB에서 종목 로드
+        # DB에서 종목 로드 (Split + Algo)
         self.load_stocks_from_db()
+        self.load_algo_stocks_from_db()
 
-        if not strategy.stocks:
+        total_stocks = len(strategy.stocks) + len(algo_strategy.stocks)
+        if total_stocks == 0:
             print("[Bot] 감시할 종목이 없습니다.")
             print("      웹에서 종목을 추가하고 1차 매수를 해주세요.")
             print("[Bot] 종목이 추가될 때까지 대기합니다... (10초마다 확인)")
             print()
 
             # 종목이 추가될 때까지 대기 (heartbeat, 동기화 요청도 처리)
-            while not strategy.stocks:
-                supabase.update_heartbeat()  # 대기 중에도 heartbeat 전송
-                await self.process_sync_requests()  # 동기화 요청 처리
+            while total_stocks == 0:
+                supabase.update_heartbeat()
+                await self.process_sync_requests()
                 await asyncio.sleep(10)
                 self.load_stocks_from_db()
-                if strategy.stocks:
-                    print(f"[Bot] 종목 감지! {len(strategy.stocks)}개 종목 로드됨")
+                self.load_algo_stocks_from_db()
+                total_stocks = len(strategy.stocks) + len(algo_strategy.stocks)
+                if total_stocks > 0:
+                    print(f"[Bot] 종목 감지! Split {len(strategy.stocks)}개 + Algo {len(algo_strategy.stocks)}개")
                     break
 
         # 초기 봇 상태 확인
@@ -1472,15 +2062,17 @@ class SplitBot:
         await bot_handler.start()
 
         # 시작 알림
-        await notifier.send_startup(len(strategy.stocks))
+        total_count = len(strategy.stocks) + len(algo_strategy.stocks)
+        await notifier.send_startup(total_count)
 
-        # 종목 구독
-        for code in strategy.stocks.keys():
+        # 종목 구독 (Split + Algo 합치기)
+        all_codes = set(strategy.stocks.keys()) | set(algo_strategy.stocks.keys())
+        for code in all_codes:
             await kis_ws.subscribe(code)
             print(f"[WS] 구독: {code}")
 
         print()
-        print("[Bot] 실시간 시세 모니터링 시작...")
+        print(f"[Bot] 실시간 시세 모니터링 시작 (Split {len(strategy.stocks)}개 + Algo {len(algo_strategy.stocks)}개)")
         print("[Bot] 종료하려면 Ctrl+C를 누르세요.")
         print()
 
@@ -1495,10 +2087,16 @@ class SplitBot:
         heartbeat_task = asyncio.create_task(self.send_heartbeat())
         print("[Bot] Heartbeat 활성화 (30초 간격)")
 
+        # 알고 지표 갱신 태스크 (시작 시 즉시 + 30분마다)
+        algo_indicator_task = asyncio.create_task(self.update_algo_indicators_periodic())
+        if algo_strategy.stocks:
+            print(f"[Bot] 알고 지표 갱신 활성화 ({len(algo_strategy.stocks)}개 종목, 30분 간격)")
+
         # 폴링 태스크 (항상 활성화 - WebSocket과 병행, 배치 처리)
         polling_task = asyncio.create_task(self.poll_prices())
-        num_batches = (len(strategy.stocks) + 29) // 30
-        print(f"[Bot] REST API 폴링 활성화 (배치 처리: {len(strategy.stocks)}종목 → {num_batches}배치)")
+        total_stocks = len(strategy.stocks) + len(algo_strategy.stocks)
+        num_batches = (total_stocks + 29) // 30
+        print(f"[Bot] REST API 폴링 활성화 (배치 처리: {total_stocks}종목 → {num_batches}배치)")
 
         try:
             # WebSocket은 백그라운드에서 시도 (실패해도 폴링으로 동작)
@@ -1531,6 +2129,7 @@ class SplitBot:
             web_requests_task.cancel()
             heartbeat_task.cancel()
             polling_task.cancel()
+            algo_indicator_task.cancel()
             kis_ws.stop()
             await bot_handler.stop()
             print("[Bot] 종료 완료")
