@@ -289,6 +289,70 @@ export interface AnalysisRequestForm {
   max_price?: number;  // 최대 현재가 (원)
 }
 
+// ==================== 알고리즘 종목 분석 관련 타입 ====================
+
+// 알고리즘 분석 요청
+export interface AlgoAnalysisRequest {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  market: 'all' | 'kospi' | 'kosdaq' | 'kospi200';
+  min_market_cap: number;
+  min_volume: number;
+  stock_type: 'common' | 'preferred' | 'all';
+  analysis_period: number;
+  min_price?: number;
+  max_price?: number;
+  total_analyzed: number;
+  result_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+// 알고리즘 분석 결과
+export interface AlgoAnalysisResult {
+  id: string;
+  request_id: string;
+  user_id: string;
+  stock_code: string;
+  stock_name: string;
+  market: string;
+  market_cap: number;
+  current_price: number;
+  // 4카테고리 점수
+  momentum_score: number;       // 0~30
+  volatility_score: number;     // 0~25
+  volume_score: number;         // 0~20
+  trend_score: number;          // 0~25
+  // 세부 지표
+  ma_trend_strength: number;
+  breakout_frequency: number;
+  atr_percent: number;
+  avg_volume: number;
+  avg_trading_value: number;
+  volume_spike_count: number;
+  return_1m: number;
+  return_3m: number;
+  return_6m: number;
+  trend_consistency: number;
+  // 종합
+  algo_suitability_score: number;
+  recommendation: 'strong' | 'good' | 'neutral' | 'weak';
+  analysis_detail: Record<string, unknown>;
+  created_at: string;
+}
+
+// 알고리즘 분석 요청 폼
+export interface AlgoAnalysisRequestForm {
+  market: 'all' | 'kospi' | 'kosdaq' | 'kospi200';
+  min_market_cap: number;
+  min_volume: number;
+  stock_type: 'common' | 'preferred' | 'all';
+  analysis_period: number;
+  min_price?: number;
+  max_price?: number;
+}
+
 // ==================== 입출금 관련 타입 ====================
 
 // 입출금 유형

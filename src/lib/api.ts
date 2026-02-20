@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm, DepositHistory, DepositFormData, DepositSummary, CompareRequest, CompareResult, AlgoStock, AlgoPosition, AlgoSignal, AlgoStockFormData, AlgoStockWithPositions, AlgoBuyRequest, AlgoSellRequest } from '../types';
+import type { Stock, Purchase, BotConfig, UserSettings, StockFormData, PurchaseFormData, BuyRequest, SellRequest, SyncRequest, SyncResult, StockAnalysisRequest, StockAnalysisResult, AnalysisRequestForm, DepositHistory, DepositFormData, DepositSummary, CompareRequest, CompareResult, AlgoStock, AlgoPosition, AlgoSignal, AlgoStockFormData, AlgoStockWithPositions, AlgoBuyRequest, AlgoSellRequest, AlgoAnalysisRequest, AlgoAnalysisResult, AlgoAnalysisRequestForm } from '../types';
 import { encrypt, decrypt } from '../utils/crypto';
 
 // ==================== 유저 ID 헬퍼 ====================
@@ -1562,4 +1562,85 @@ export async function createAlgoSellRequest(
     return null;
   }
   return data;
+}
+
+// ==================== 알고리즘 종목 분석 (algo_analysis) ====================
+
+export async function createAlgoAnalysisRequest(
+  form: AlgoAnalysisRequestForm
+): Promise<AlgoAnalysisRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.error('No user logged in');
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('algo_analysis_requests')
+    .insert([{
+      user_id: userId,
+      status: 'pending',
+      market: form.market,
+      min_market_cap: form.min_market_cap,
+      min_volume: form.min_volume,
+      stock_type: form.stock_type,
+      analysis_period: form.analysis_period,
+      min_price: form.min_price || 0,
+      max_price: form.max_price || 0,
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating algo analysis request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getLatestAlgoAnalysisRequest(): Promise<AlgoAnalysisRequest | null> {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
+  const { data, error } = await supabase
+    .from('algo_analysis_requests')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('Error fetching algo analysis request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getAlgoAnalysisRequest(id: string): Promise<AlgoAnalysisRequest | null> {
+  const { data, error } = await supabase
+    .from('algo_analysis_requests')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error) {
+    console.error('Error fetching algo analysis request:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function getAlgoAnalysisResults(requestId: string): Promise<AlgoAnalysisResult[]> {
+  const { data, error } = await supabase
+    .from('algo_analysis_results')
+    .select('*')
+    .eq('request_id', requestId)
+    .order('algo_suitability_score', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching algo analysis results:', error);
+    return [];
+  }
+  return data || [];
 }
