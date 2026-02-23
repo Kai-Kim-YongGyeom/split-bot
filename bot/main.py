@@ -1707,6 +1707,14 @@ class SplitBot:
                 print(f"[Bot] 종목 전체 리로드: {len(stocks)}개")
             else:
                 # purchases만 병합 (메모리의 last_order_time 등 유지)
+                db_codes = {s.code for s in stocks}
+                # DB에서 삭제된 종목을 메모리에서 제거
+                removed_codes = set(strategy.stocks.keys()) - db_codes
+                for code in removed_codes:
+                    removed_name = strategy.stocks[code].name
+                    del strategy.stocks[code]
+                    print(f"[Bot] 종목 제거됨: {removed_name} ({code})")
+
                 for new_stock in stocks:
                     existing = strategy.stocks.get(new_stock.code)
                     if existing:
@@ -1745,6 +1753,14 @@ class SplitBot:
                 algo_strategy.stocks = {s.code: s for s in algo_stocks}
                 print(f"[Bot] 알고 종목 전체 리로드: {len(algo_stocks)}개")
             else:
+                algo_db_codes = {s.code for s in algo_stocks}
+                # DB에서 삭제된 알고 종목을 메모리에서 제거
+                algo_removed_codes = set(algo_strategy.stocks.keys()) - algo_db_codes
+                for code in algo_removed_codes:
+                    removed_name = algo_strategy.stocks[code].name
+                    del algo_strategy.stocks[code]
+                    print(f"[Bot] 알고 종목 제거됨: {removed_name} ({code})")
+
                 for new_stock in algo_stocks:
                     existing = algo_strategy.stocks.get(new_stock.code)
                     if existing:
