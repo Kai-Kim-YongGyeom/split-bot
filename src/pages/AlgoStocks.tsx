@@ -568,6 +568,12 @@ function AlgoStockCard({
                       <span>{formatNumber(stock.current_highest_n)}</span>
                     </div>
                   )}
+                  {stock.avg_volume != null && stock.avg_volume > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">평균거래량</span>
+                      <span>{stock.avg_volume >= 10000 ? `${(stock.avg_volume / 10000).toFixed(1)}만` : formatNumber(stock.avg_volume)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -1352,6 +1352,7 @@ class SupabaseClient:
                 "current_ma": round(ma, 2),
                 "current_atr": round(atr, 2),
                 "current_highest_n": highest_n,
+                "avg_volume": avg_volume,
                 "indicator_updated_at": datetime.now().isoformat(),
             },
             params={"code": f"eq.{code}"},
