@@ -440,7 +440,7 @@ function AlgoStockCard({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {/* 포지션 뱃지 */}
             <span className={`text-xs px-2 py-1 rounded ${
               activePositions.length > 0
@@ -449,7 +449,49 @@ function AlgoStockCard({
             }`}>
               포지션 {activePositions.length}/{stock.max_positions}
             </span>
-            {/* 매수 조건 상태 */}
+            {/* 매수 조건 상태 - 데스크톱에서만 표시 */}
+            <div className="hidden md:flex items-center gap-1.5">
+              {aboveMA !== null && (
+                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  aboveMA ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'
+                }`}>
+                  {aboveMA ? 'MA↑' : 'MA↓'}
+                </span>
+              )}
+              {aboveHighN !== null && (
+                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  aboveHighN ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'
+                }`}>
+                  {aboveHighN ? '신고↑' : '신고↓'}
+                </span>
+              )}
+              {volumeOk !== null && (
+                <span className={`text-xs px-1.5 py-0.5 rounded ${
+                  volumeOk ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'
+                }`}>
+                  {volumeOk ? '거래량↑' : '거래량↓'}
+                </span>
+              )}
+            </div>
+            {/* 활성/비활성 토글 */}
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleActive(); }}
+              className={`p-2 rounded transition ${
+                stock.is_active
+                  ? 'text-green-400 hover:bg-green-900/30'
+                  : 'text-gray-500 hover:bg-gray-700'
+              }`}
+              title={stock.is_active ? '비활성화' : '활성화'}
+            >
+              <Power className="w-4 h-4" />
+            </button>
+            {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+          </div>
+        </div>
+
+        {/* 매수 조건 상태 - 모바일에서만 별도 줄 표시 */}
+        {(aboveMA !== null || aboveHighN !== null || volumeOk !== null) && (
+          <div className="flex md:hidden items-center gap-1.5 mt-1.5">
             {aboveMA !== null && (
               <span className={`text-xs px-1.5 py-0.5 rounded ${
                 aboveMA ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'
@@ -471,21 +513,8 @@ function AlgoStockCard({
                 {volumeOk ? '거래량↑' : '거래량↓'}
               </span>
             )}
-            {/* 활성/비활성 토글 */}
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleActive(); }}
-              className={`p-2 rounded transition ${
-                stock.is_active
-                  ? 'text-green-400 hover:bg-green-900/30'
-                  : 'text-gray-500 hover:bg-gray-700'
-              }`}
-              title={stock.is_active ? '비활성화' : '활성화'}
-            >
-              <Power className="w-4 h-4" />
-            </button>
-            {expanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </div>
-        </div>
+        )}
 
         {/* 미실현 손익 (활성 포지션 있을 때) */}
         {activePositions.length > 0 && stock.current_price && (
