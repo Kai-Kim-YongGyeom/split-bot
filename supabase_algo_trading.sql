@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS algo_stocks (
     current_atr DECIMAL,                         -- 현재 ATR 값
     current_highest_n INTEGER,                   -- 현재 N일 최고가
     avg_volume INTEGER DEFAULT 0,                 -- 평균 거래량 (60일)
+    current_volume INTEGER DEFAULT 0,             -- 당일 누적 거래량 (실시간)
     indicator_updated_at TIMESTAMP WITH TIME ZONE,
     --
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

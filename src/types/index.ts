@@ -448,6 +448,7 @@ export interface AlgoStock {
   current_atr?: number;
   current_highest_n?: number;
   avg_volume?: number;
+  current_volume?: number;
   indicator_updated_at?: string;
   //
   created_at: string;

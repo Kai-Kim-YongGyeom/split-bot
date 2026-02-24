@@ -387,8 +387,12 @@ function AlgoStockCard({
   const unrealizedPL = currentValue - totalInvested;
   const unrealizedRate = totalInvested > 0 ? (unrealizedPL / totalInvested) * 100 : 0;
 
-  // MA 대비 상태
+  // 매수 조건 상태
   const aboveMA = stock.current_price && stock.current_ma ? stock.current_price > stock.current_ma : null;
+  const aboveHighN = stock.current_price && stock.current_highest_n ? stock.current_price > stock.current_highest_n : null;
+  const volumeOk = stock.current_volume && stock.avg_volume && stock.avg_volume > 0
+    ? stock.current_volume > stock.avg_volume * stock.volume_ratio
+    : null;
 
   const handleManualSell = async (position: AlgoPosition) => {
     if (!confirm(`${stock.name} 포지션을 수동 청산하시겠습니까?`)) return;
@@ -445,12 +449,26 @@ function AlgoStockCard({
             }`}>
               포지션 {activePositions.length}/{stock.max_positions}
             </span>
-            {/* MA 상태 */}
+            {/* 매수 조건 상태 */}
             {aboveMA !== null && (
               <span className={`text-xs px-1.5 py-0.5 rounded ${
                 aboveMA ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'
               }`}>
                 {aboveMA ? 'MA↑' : 'MA↓'}
+              </span>
+            )}
+            {aboveHighN !== null && (
+              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                aboveHighN ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'
+              }`}>
+                {aboveHighN ? '신고↑' : '신고↓'}
+              </span>
+            )}
+            {volumeOk !== null && (
+              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                volumeOk ? 'bg-green-900/30 text-green-500' : 'bg-red-900/30 text-red-500'
+              }`}>
+                {volumeOk ? '거래량↑' : '거래량↓'}
               </span>
             )}
             {/* 활성/비활성 토글 */}
@@ -547,32 +565,61 @@ function AlgoStockCard({
               </div>
             </div>
 
-            {/* 현재 지표 값 (봇에서 업데이트) */}
-            {stock.current_ma && (
+            {/* 매수 조건 체크리스트 */}
+            {stock.current_ma && stock.current_price && (
               <div className="mt-2 pt-2 border-t border-gray-700">
-                <h5 className="text-xs font-medium text-gray-400 mb-1">현재 지표</h5>
-                <div className="grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">MA</span>
-                    <span>{formatNumber(Math.round(stock.current_ma))}</span>
+                <h5 className="text-xs font-medium text-gray-400 mb-1.5">매수 조건</h5>
+                <div className="space-y-1 text-xs">
+                  {/* 조건 1: MA */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className={aboveMA ? 'text-green-500' : 'text-red-500'}>{aboveMA ? '✓' : '✗'}</span>
+                      <span className="text-gray-400">가격 {'>'} MA({stock.ma_period})</span>
+                    </div>
+                    <span className={aboveMA ? 'text-green-500' : 'text-red-400'}>
+                      {formatNumber(stock.current_price)} {aboveMA ? '>' : '≤'} {formatNumber(Math.round(stock.current_ma))}
+                    </span>
                   </div>
-                  {stock.current_atr && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">ATR</span>
-                      <span>{formatNumber(Math.round(stock.current_atr))}</span>
-                    </div>
-                  )}
+                  {/* 조건 2: 신고가 돌파 */}
                   {stock.current_highest_n && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">{stock.breakout_period}일高</span>
-                      <span>{formatNumber(stock.current_highest_n)}</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className={aboveHighN ? 'text-green-500' : 'text-red-500'}>{aboveHighN ? '✓' : '✗'}</span>
+                        <span className="text-gray-400">가격 {'>'} {stock.breakout_period}일 최고가</span>
+                      </div>
+                      <span className={aboveHighN ? 'text-green-500' : 'text-red-400'}>
+                        {formatNumber(stock.current_price)} {aboveHighN ? '>' : '≤'} {formatNumber(stock.current_highest_n)}
+                      </span>
                     </div>
                   )}
+                  {/* 조건 3: 거래량 */}
                   {stock.avg_volume != null && stock.avg_volume > 0 && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">평균거래량</span>
-                      <span>{stock.avg_volume >= 10000 ? `${(stock.avg_volume / 10000).toFixed(1)}만` : formatNumber(stock.avg_volume)}</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className={volumeOk !== null ? (volumeOk ? 'text-green-500' : 'text-red-500') : 'text-yellow-500'}>
+                          {volumeOk !== null ? (volumeOk ? '✓' : '✗') : '-'}
+                        </span>
+                        <span className="text-gray-400">거래량 {'>'} 평균×{stock.volume_ratio}</span>
+                      </div>
+                      <span className={volumeOk !== null ? (volumeOk ? 'text-green-500' : 'text-red-400') : 'text-gray-500'}>
+                        {stock.current_volume
+                          ? `${stock.current_volume >= 10000 ? `${(stock.current_volume / 10000).toFixed(1)}만` : formatNumber(stock.current_volume)} / ${stock.avg_volume * stock.volume_ratio >= 10000 ? `${(stock.avg_volume * stock.volume_ratio / 10000).toFixed(1)}만` : formatNumber(Math.round(stock.avg_volume * stock.volume_ratio))}`
+                          : `필요 ${stock.avg_volume * stock.volume_ratio >= 10000 ? `${(stock.avg_volume * stock.volume_ratio / 10000).toFixed(1)}만` : formatNumber(Math.round(stock.avg_volume * stock.volume_ratio))}`
+                        }
+                      </span>
                     </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* 지표 상세 */}
+            {stock.current_atr && (
+              <div className="mt-1.5 text-xs">
+                <div className="flex gap-3 text-gray-500">
+                  <span>ATR {formatNumber(Math.round(stock.current_atr))}</span>
+                  {stock.avg_volume != null && stock.avg_volume > 0 && (
+                    <span>평균거래량 {stock.avg_volume >= 10000 ? `${(stock.avg_volume / 10000).toFixed(1)}만` : formatNumber(stock.avg_volume)}</span>
                   )}
                 </div>
               </div>

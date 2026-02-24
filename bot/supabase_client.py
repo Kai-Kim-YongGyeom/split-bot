@@ -1318,19 +1318,23 @@ class SupabaseClient:
             return result
         return []
 
-    def update_algo_stock_price(self, code: str, price: int, change_rate: float = 0.0) -> bool:
+    def update_algo_stock_price(self, code: str, price: int, change_rate: float = 0.0, current_volume: int = 0) -> bool:
         """알고 종목 현재가 업데이트"""
         if not self.is_configured:
             return False
 
+        data = {
+            "current_price": price,
+            "price_change": change_rate,
+            "price_updated_at": datetime.now().isoformat(),
+        }
+        if current_volume > 0:
+            data["current_volume"] = current_volume
+
         result = self._request(
             "PATCH",
             "algo_stocks",
-            data={
-                "current_price": price,
-                "price_change": change_rate,
-                "price_updated_at": datetime.now().isoformat(),
-            },
+            data=data,
             params={"code": f"eq.{code}"},
         )
 

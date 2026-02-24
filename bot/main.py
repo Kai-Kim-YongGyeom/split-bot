@@ -226,7 +226,8 @@ class SplitBot:
             last_update = self._algo_last_price_db_update.get(code)
             if not last_update or (now - last_update).total_seconds() >= self._price_db_update_interval:
                 self._algo_last_price_db_update[code] = now
-                supabase.update_algo_stock_price(code, price, change_rate)
+                current_volume = self._algo_volumes.get(code, 0)
+                supabase.update_algo_stock_price(code, price, change_rate, current_volume)
 
             # 트레일링스탑 갱신 (매 틱, 인메모리)
             updated = algo_strategy.update_trailing_stop(code, price)
