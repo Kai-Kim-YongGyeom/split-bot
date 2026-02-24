@@ -390,8 +390,8 @@ function AlgoStockCard({
   // 매수 조건 상태
   const aboveMA = stock.current_price && stock.current_ma ? stock.current_price > stock.current_ma : null;
   const aboveHighN = stock.current_price && stock.current_highest_n ? stock.current_price > stock.current_highest_n : null;
-  const volumeOk = stock.current_volume && stock.avg_volume && stock.avg_volume > 0
-    ? stock.current_volume > stock.avg_volume * stock.volume_ratio
+  const volumeOk = stock.avg_volume && stock.avg_volume > 0
+    ? (stock.current_volume || 0) > stock.avg_volume * stock.volume_ratio
     : null;
 
   const handleManualSell = async (position: AlgoPosition) => {
