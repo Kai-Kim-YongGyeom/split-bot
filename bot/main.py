@@ -74,6 +74,10 @@ class SplitBot:
         self._algo_stock_locks: dict[str, asyncio.Lock] = {}
         self._algo_recent_sells: dict[str, datetime] = {}
         self._algo_trailing_stop_db_update: dict[str, datetime] = {}  # 트레일링스탑 DB 쓰기 쓰로틀
+        self._algo_start_time: Optional[datetime] = None  # 봇 시작 시간 (워밍업용)
+        self._algo_warmup_minutes = 30  # 워밍업 시간 (분)
+        self._algo_recent_buys: dict[str, datetime] = {}  # 종목별 마지막 매수 시간 (쿨다운용)
+        self._algo_buy_cooldown_minutes = 30  # 매수 쿨다운 (분)
 
     def _get_market_open_time(self) -> dtime:
         """현재 적용 중인 장 시작 시간 반환 (동적 조정)"""
@@ -297,11 +301,24 @@ class SplitBot:
                         await self.execute_algo_sell(sell_result)
                         self._algo_recent_sells[code] = datetime.now()
 
+                    # 워밍업 체크: 봇 시작 후 일정 시간 동안 매수 금지
+                    if self._algo_start_time:
+                        warmup_elapsed = (datetime.now() - self._algo_start_time).total_seconds() / 60
+                        if warmup_elapsed < self._algo_warmup_minutes:
+                            return
+
                     # 매도 직후 5초간은 매수 스킵
                     recent_sell_time = self._algo_recent_sells.get(code)
                     if recent_sell_time:
                         elapsed = (datetime.now() - recent_sell_time).total_seconds()
                         if elapsed < 5:
+                            return
+
+                    # 매수 쿨다운: 같은 종목 최근 매수 후 일정 시간 대기
+                    recent_buy_time = self._algo_recent_buys.get(code)
+                    if recent_buy_time:
+                        cooldown_elapsed = (datetime.now() - recent_buy_time).total_seconds() / 60
+                        if cooldown_elapsed < self._algo_buy_cooldown_minutes:
                             return
 
                     # 잔액 체크
@@ -586,6 +603,9 @@ class SplitBot:
 
                 # 메모리에 추가
                 stock.positions.append(position)
+
+                # 매수 쿨다운 타이머 기록
+                self._algo_recent_buys[stock.code] = datetime.now()
 
                 # 시그널 저장
                 supabase.save_algo_signal(stock.id, {
@@ -2105,9 +2125,11 @@ class SplitBot:
         print("[Bot] Heartbeat 활성화 (30초 간격)")
 
         # 알고 지표 갱신 태스크 (시작 시 즉시 + 30분마다)
+        self._algo_start_time = datetime.now()
         algo_indicator_task = asyncio.create_task(self.update_algo_indicators_periodic())
         if algo_strategy.stocks:
             print(f"[Bot] 알고 지표 갱신 활성화 ({len(algo_strategy.stocks)}개 종목, 30분 간격)")
+            print(f"[Bot] 알고 워밍업: {self._algo_warmup_minutes}분간 매수 대기")
 
         # 폴링 태스크 (항상 활성화 - WebSocket과 병행, 배치 처리)
         polling_task = asyncio.create_task(self.poll_prices())
