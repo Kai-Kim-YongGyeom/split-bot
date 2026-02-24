@@ -15,6 +15,7 @@ import { AuthModal } from './components/AuthModal';
 import { useAuth } from './hooks/useAuth';
 import { BotStatusProvider } from './contexts/BotStatusContext';
 import { ToastProvider } from './components/Toast';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import { Loader2 } from 'lucide-react';
 
 // 인증이 필요한 라우트를 처리하는 컴포넌트
@@ -53,6 +54,7 @@ function ProtectedRoutes() {
   // 로그인 됨
   return (
     <ToastProvider>
+      <ConfirmProvider>
       <BotStatusProvider>
         <Routes>
           <Route path="/" element={<Layout />}>
@@ -68,6 +70,7 @@ function ProtectedRoutes() {
           </Route>
         </Routes>
       </BotStatusProvider>
+      </ConfirmProvider>
     </ToastProvider>
   );
 }

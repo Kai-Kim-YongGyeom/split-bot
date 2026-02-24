@@ -40,3 +40,28 @@ body {
 .animate-slide-in {
   animation: slide-in 0.3s ease-out;
 }
+
+/* Confirm 모달 애니메이션 */
+@keyframes confirm-backdrop {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes confirm-slide-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-confirm-backdrop {
+  animation: confirm-backdrop 0.2s ease-out;
+}
+
+.animate-confirm-slide-up {
+  animation: confirm-slide-up 0.2s ease-out;
+}

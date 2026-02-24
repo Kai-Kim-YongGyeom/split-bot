@@ -6,6 +6,7 @@ import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';
 import { getTodayKST, formatDate } from '../lib/dateUtils';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 import { useBotStatus } from '../contexts/BotStatusContext';
 import { AlgoStocksContent } from './AlgoStocks';
 
@@ -829,6 +830,7 @@ function StockCard({
   onSelect?: (id: string) => void;
 }) {
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const { availableAmount } = useBotStatus();
   const [expanded, setExpanded] = useState(false);
   const [buying, setBuying] = useState(false);
@@ -845,9 +847,11 @@ function StockCard({
     holdingPurchases.some((p, i) => p.round !== i + 1);
 
   const handleReorderRounds = async () => {
-    if (!confirm(`${stock.name}의 차수를 재정렬하시겠습니까?\n(예: 2차,3차 → 1차,2차)`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: '차수 재정렬',
+      message: `${stock.name}의 차수를 재정렬하시겠습니까?\n(예: 2차,3차 → 1차,2차)`,
+    });
+    if (!ok) return;
     setReordering(true);
     const success = await api.reorderPurchaseRounds(stock.id);
     setReordering(false);
@@ -870,16 +874,25 @@ function StockCard({
   };
 
   const handleDeletePurchase = async (purchaseId: string) => {
-    if (confirm('이 매수 기록을 삭제하시겠습니까?')) {
-      await api.deletePurchase(purchaseId);
-      onRefresh();
-    }
+    const ok = await confirm({
+      title: '매수 기록 삭제',
+      message: '이 매수 기록을 삭제하시겠습니까?',
+      confirmText: '삭제',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    await api.deletePurchase(purchaseId);
+    onRefresh();
   };
 
   const handleSellRequest = async (purchase: Purchase) => {
-    if (!confirm(`${stock.name} ${purchase.round}차 ${purchase.quantity}주를 시장가 매도하시겠습니까?`)) {
-      return;
-    }
+    const ok = await confirm({
+      title: '시장가 매도',
+      message: `${stock.name} ${purchase.round}차 ${purchase.quantity}주를 시장가 매도하시겠습니까?`,
+      confirmText: '매도',
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     setSellingPurchaseId(purchase.id);
     const result = await api.createSellRequest(
@@ -2203,6 +2216,7 @@ type SortOption = 'created_desc' | 'created_asc' | 'name_asc' | 'name_desc' | 'p
 function SplitStocksContent() {
   const { stocks, loading, error, addStock, updateStock, removeStock, toggleActive, refetch } = useStocks();
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
   const [showModal, setShowModal] = useState(false);
   const [editingStock, setEditingStock] = useState<StockWithPurchases | undefined>();
   const [purchaseModal, setPurchaseModal] = useState<{ stockId: string; stockName: string } | null>(null);
@@ -2304,14 +2318,24 @@ function SplitStocksContent() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('이 종목을 삭제하시겠습니까? 모든 매수 기록도 삭제됩니다.')) {
-      await removeStock(id);
-    }
+    const ok = await confirm({
+      title: '종목 삭제',
+      message: '이 종목을 삭제하시겠습니까?\n모든 매수 기록도 삭제됩니다.',
+      confirmText: '삭제',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    await removeStock(id);
   };
 
   const handleBulkDeactivate = async () => {
     if (selectedStocks.size === 0) return;
-    if (!confirm(`선택한 ${selectedStocks.size}개 종목을 비활성화하시겠습니까?`)) return;
+    const confirmed = await confirm({
+      title: '일괄 비활성화',
+      message: `선택한 ${selectedStocks.size}개 종목을 비활성화하시겠습니까?`,
+      confirmText: '비활성화',
+    });
+    if (!confirmed) return;
     const ids = Array.from(selectedStocks);
     const ok = await api.bulkUpdateStocks(ids, { is_active: false });
     if (ok) {
@@ -2325,7 +2349,12 @@ function SplitStocksContent() {
 
   const handleBulkBuy = async () => {
     if (selectedStocks.size === 0) return;
-    if (!confirm(`선택한 ${selectedStocks.size}개 종목에 매수 요청을 보내시겠습니까?`)) return;
+    const ok = await confirm({
+      title: '일괄 매수',
+      message: `선택한 ${selectedStocks.size}개 종목에 매수 요청을 보내시겠습니까?`,
+      confirmText: '매수',
+    });
+    if (!ok) return;
     const selected = stocks.filter(s => selectedStocks.has(s.id));
     let success = 0, fail = 0;
     for (const s of selected) {
@@ -2338,7 +2367,13 @@ function SplitStocksContent() {
 
   const handleBulkDelete = async () => {
     if (selectedStocks.size === 0) return;
-    if (!confirm(`선택한 ${selectedStocks.size}개 종목을 삭제하시겠습니까?\n모든 매수 기록도 함께 삭제됩니다.`)) return;
+    const confirmed = await confirm({
+      title: '일괄 삭제',
+      message: `선택한 ${selectedStocks.size}개 종목을 삭제하시겠습니까?\n모든 매수 기록도 함께 삭제됩니다.`,
+      confirmText: '삭제',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     const ids = Array.from(selectedStocks);
     const ok = await api.bulkDeleteStocks(ids);
     if (ok) {

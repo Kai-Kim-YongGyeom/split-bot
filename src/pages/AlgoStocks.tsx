@@ -5,6 +5,7 @@ import type { AlgoStockWithPositions, AlgoStockFormData, AlgoPosition } from '..
 import * as api from '../lib/api';
 import type { StockNameInfo } from '../lib/api';
 import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/ConfirmDialog';
 
 // 기본값 상수
 const ALGO_DEFAULTS: AlgoStockFormData = {
@@ -376,6 +377,7 @@ function AlgoStockCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
 
   const activePositions = stock.positions.filter(p => p.status === 'active');
   const closedPositions = stock.positions.filter(p => p.status === 'closed');
@@ -395,7 +397,13 @@ function AlgoStockCard({
     : null;
 
   const handleManualSell = async (position: AlgoPosition) => {
-    if (!confirm(`${stock.name} 포지션을 수동 청산하시겠습니까?`)) return;
+    const ok = await confirm({
+      title: '수동 청산',
+      message: `${stock.name} 포지션을 수동 청산하시겠습니까?`,
+      confirmText: '청산',
+      variant: 'danger',
+    });
+    if (!ok) return;
     const result = await api.createAlgoSellRequest(
       stock.id, stock.code, stock.name, position.id, position.quantity
     );
@@ -765,6 +773,7 @@ export function AlgoStocksContent() {
   const [showModal, setShowModal] = useState(false);
   const [editingStock, setEditingStock] = useState<AlgoStockWithPositions | undefined>();
   const { showToast } = useToast();
+  const { confirm } = useConfirm();
 
   // 검색 및 필터
   const [searchQuery, setSearchQuery] = useState('');
@@ -803,7 +812,13 @@ export function AlgoStocksContent() {
     const message = activeCount > 0
       ? `${stock.name}에 활성 포지션 ${activeCount}개가 있습니다. 정말 삭제하시겠습니까?`
       : `${stock.name}을(를) 삭제하시겠습니까?`;
-    if (!confirm(message)) return;
+    const ok = await confirm({
+      title: '종목 삭제',
+      message,
+      confirmText: '삭제',
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     const success = await removeStock(stock.id);
     if (success) {

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { getCurrentUserId } from '../lib/api';
 import { formatDateTime, formatDateTimeShort } from '../lib/dateUtils';
 import type { BuyRequest, SellRequest } from '../types';
+import { useConfirm } from '../components/ConfirmDialog';
 
 type TabType = 'buy' | 'sell';
 type StatusFilter = 'all' | 'pending' | 'executed' | 'failed' | 'cancelled';
@@ -35,6 +36,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export function Orders() {
+  const { confirm } = useConfirm();
   const [tab, setTab] = useState<TabType>('buy');
   const [buyRequests, setBuyRequests] = useState<BuyRequest[]>([]);
   const [sellRequests, setSellRequests] = useState<SellRequest[]>([]);
@@ -84,7 +86,13 @@ export function Orders() {
   }, []);
 
   const handleCancelBuy = async (id: string) => {
-    if (!confirm('매수 요청을 취소하시겠습니까?')) return;
+    const ok = await confirm({
+      title: '매수 취소',
+      message: '매수 요청을 취소하시겠습니까?',
+      confirmText: '취소',
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     await supabase
       .from('bot_buy_requests')
@@ -96,7 +104,13 @@ export function Orders() {
   };
 
   const handleCancelSell = async (id: string) => {
-    if (!confirm('매도 요청을 취소하시겠습니까?')) return;
+    const ok = await confirm({
+      title: '매도 취소',
+      message: '매도 요청을 취소하시겠습니까?',
+      confirmText: '취소',
+      variant: 'danger',
+    });
+    if (!ok) return;
 
     await supabase
       .from('bot_sell_requests')
