@@ -1407,6 +1407,7 @@ class SupabaseClient:
                 current_ma=float(s.get("current_ma") or 0),
                 current_atr=float(s.get("current_atr") or 0),
                 current_highest_n=s.get("current_highest_n") or 0,
+                avg_volume=s.get("avg_volume") or 0,
                 positions=positions,
             )
             result.append(stock)

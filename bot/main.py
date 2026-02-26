@@ -331,11 +331,6 @@ class SplitBot:
                     if buy_result.get("action") == "buy":
                         await self.execute_algo_buy(buy_result)
 
-            # 매수 조건 체크
-            buy_result = strategy.check_buy_condition(code, price)
-            if buy_result.get("action") == "buy":
-                await self.execute_buy(buy_result)
-
     async def execute_buy(self, result: dict) -> None:
         """매수 실행"""
         stock: StockConfig = result["stock"]
@@ -1026,7 +1021,7 @@ class SplitBot:
                                 change_rate = price_data.get("change", 0.0)
                                 if price > 0:
                                     self._prices[code] = price
-                                    valid_prices[code] = {"price": price, "change": change_rate}
+                                    valid_prices[code] = {"price": price, "change": change_rate, "volume": price_data.get("volume", 0)}
 
                             # DB 배치 저장
                             saved_count = supabase.update_stock_prices_batch(valid_prices)
@@ -1041,6 +1036,7 @@ class SplitBot:
                                         "code": code,
                                         "price": price_data["price"],
                                         "change_rate": price_data["change"],
+                                        "volume": price_data.get("volume", 0),
                                     }
                                     await self.on_price_update(data)
                         else:
@@ -1063,7 +1059,7 @@ class SplitBot:
                                         log(f"[Poll] {stock_name}({code}): {price:,}원 ({change_rate:+.2f}%) - DB {status}")
 
                                         if is_market_open and self.check_bot_enabled():
-                                            data = {"code": code, "price": price, "change_rate": change_rate}
+                                            data = {"code": code, "price": price, "change_rate": change_rate, "volume": price_data.get("volume", 0)}
                                             await self.on_price_update(data)
                                 except Exception as e:
                                     log(f"[Bot] {code} 개별 조회 오류: {e}")
